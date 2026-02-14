@@ -1,7 +1,8 @@
 import Link from "next/link";
+import type { Route } from "next";
 import { CalendarDays, Search, Settings, Command } from "lucide-react";
 
-const tabs = [
+const tabs: Array<{ href: Route; label: string; icon: typeof CalendarDays }> = [
   { href: "/calendar", label: "통합 캘린더", icon: CalendarDays },
   { href: "/people", label: "조직도", icon: Search },
   { href: "/settings", label: "설정", icon: Settings }

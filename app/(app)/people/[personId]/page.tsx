@@ -53,8 +53,8 @@ export default async function PersonDetailPage({ params }: PageProps) {
         jobTitle: found.jobTitle,
         department: found.department,
         tenantName: found.tenantName,
-        officeLocation: "Seoul Office",
-        mobilePhone: "010-0000-0000"
+        officeLocation: found.officeLocation,
+        mobilePhone: found.mobilePhone
       };
     }
   } else {

@@ -24,6 +24,8 @@ export type MockPerson = {
   jobTitle: string;
   department: string;
   tenantName: string;
+  officeLocation: string;
+  mobilePhone: string;
 };
 
 export const mockConnections: MockConnection[] = [
@@ -83,7 +85,9 @@ export const mockPeople: MockPerson[] = [
     mail: "minsu@primary.contoso.com",
     jobTitle: "Platform Engineer",
     department: "Platform",
-    tenantName: "Primary Tenant"
+    tenantName: "Primary Tenant",
+    officeLocation: "Seoul Office",
+    mobilePhone: "010-1111-1111"
   },
   {
     id: "p-2",
@@ -91,7 +95,9 @@ export const mockPeople: MockPerson[] = [
     mail: "alex@partner.fabrikam.com",
     jobTitle: "Sales Lead",
     department: "Sales",
-    tenantName: "Partner Tenant"
+    tenantName: "Partner Tenant",
+    officeLocation: "Busan Office",
+    mobilePhone: "010-2222-2222"
   },
   {
     id: "p-3",
@@ -99,7 +105,9 @@ export const mockPeople: MockPerson[] = [
     mail: "arin@primary.contoso.com",
     jobTitle: "Product Ops",
     department: "Product",
-    tenantName: "Primary Tenant"
+    tenantName: "Primary Tenant",
+    officeLocation: "Seoul Office",
+    mobilePhone: "010-3333-3333"
   },
   {
     id: "p-4",
@@ -107,6 +115,8 @@ export const mockPeople: MockPerson[] = [
     mail: "sofia@partner.fabrikam.com",
     jobTitle: "HR Manager",
     department: "People",
-    tenantName: "Partner Tenant"
+    tenantName: "Partner Tenant",
+    officeLocation: "Incheon Office",
+    mobilePhone: "010-4444-4444"
   }
 ];

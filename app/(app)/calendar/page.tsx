@@ -122,8 +122,8 @@ export default async function CalendarPage() {
   const conflictCount = detectConflicts(events);
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
-      <aside className="panel-glass card p-5">
+    <div className="space-y-4">
+      <section className="panel-glass card p-5">
         <p className="text-xs uppercase tracking-[0.18em] text-accent">Calendar Workspace</p>
         <h1 className="mt-2 text-xl font-semibold">통합 캘린더</h1>
         <p className="mt-2 text-sm leading-6 text-muted">
@@ -146,7 +146,7 @@ export default async function CalendarPage() {
           ))}
           {tenants.length === 0 ? <p className="text-sm text-muted">연결된 테넌트가 없습니다.</p> : null}
         </div>
-      </aside>
+      </section>
 
       <section className="panel-glass card p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">

@@ -66,7 +66,7 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
   const [viewMode, setViewMode] = useState<ViewMode>("week");
   const [offsetWeek, setOffsetWeek] = useState(0);
   const [offsetMonth, setOffsetMonth] = useState(0);
-  const [selectedEventId, setSelectedEventId] = useState<string | null>(events[0]?.id ?? null);
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
 
   const weekStart = useMemo(() => {
     const base = startOfWeek(new Date());
@@ -135,9 +135,17 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
     setOffsetMonth((prev) => prev + 1);
   }
 
+  function openEvent(eventId: string) {
+    setSelectedEventId(eventId);
+  }
+
+  function closeEventModal() {
+    setSelectedEventId(null);
+  }
+
   return (
-    <div className="mt-4 grid gap-3 xl:grid-cols-[1fr_280px]">
-      <div className="rounded-2xl border border-line bg-white/70 p-3">
+    <>
+      <div className="mt-4 rounded-2xl border border-line bg-white/70 p-3">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <p className="text-sm font-medium">{label}</p>
           <div className="flex flex-wrap items-center gap-2">
@@ -191,7 +199,7 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
                         <button
                           className="w-full rounded-lg border border-line bg-white p-2 text-left"
                           key={event.id}
-                          onClick={() => setSelectedEventId(event.id)}
+                          onClick={() => openEvent(event.id)}
                           type="button"
                         >
                           <p className="line-clamp-1 text-xs font-semibold">{event.subject}</p>
@@ -239,7 +247,7 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
                           <button
                             className="block w-full truncate rounded-md px-1.5 py-1 text-left text-[11px]"
                             key={event.id}
-                            onClick={() => setSelectedEventId(event.id)}
+                            onClick={() => openEvent(event.id)}
                             style={{ backgroundColor: `${color}1f`, color }}
                             type="button"
                           >
@@ -257,49 +265,55 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
         )}
       </div>
 
-      <aside className="rounded-2xl border border-line bg-white/80 p-4">
-        <p className="text-xs uppercase tracking-[0.14em] text-muted">Event Detail</p>
-        {!selectedEvent ? (
-          <p className="mt-3 text-sm text-muted">이벤트를 클릭하면 상세 정보를 확인할 수 있습니다.</p>
-        ) : (
-          <div className="mt-3 space-y-3">
-            <div>
-              <p className="text-base font-semibold">{selectedEvent.subject}</p>
-              <p className="text-xs text-muted">
-                {new Date(selectedEvent.startAt).toLocaleString("ko-KR")} - {new Date(selectedEvent.endAt).toLocaleTimeString("ko-KR")}
-              </p>
+      {selectedEvent ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-4" role="dialog" aria-modal="true">
+          <button aria-label="닫기" className="absolute inset-0 cursor-default" onClick={closeEventModal} type="button" />
+          <section className="relative z-10 w-full max-w-lg rounded-2xl border border-line bg-white p-5 shadow-2xl">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs uppercase tracking-[0.14em] text-muted">Event Detail</p>
+                <h3 className="mt-1 text-lg font-semibold">{selectedEvent.subject}</h3>
+                <p className="mt-1 text-xs text-muted">
+                  {new Date(selectedEvent.startAt).toLocaleString("ko-KR")} - {new Date(selectedEvent.endAt).toLocaleTimeString("ko-KR")}
+                </p>
+              </div>
+              <button className="rounded-lg border border-line bg-white px-3 py-1.5 text-sm" onClick={closeEventModal} type="button">
+                닫기
+              </button>
             </div>
 
-            <div className="rounded-lg border border-line bg-white p-3 text-sm">
-              <p className="text-xs uppercase tracking-[0.12em] text-muted">원본 테넌트</p>
-              <p className="mt-1 font-medium">{selectedEvent.tenantName}</p>
-            </div>
+            <div className="mt-4 space-y-3">
+              <div className="rounded-lg border border-line bg-slate-50 p-3 text-sm">
+                <p className="text-xs uppercase tracking-[0.12em] text-muted">원본 테넌트</p>
+                <p className="mt-1 font-medium">{selectedEvent.tenantName}</p>
+              </div>
 
-            <div className="rounded-lg border border-line bg-white p-3 text-sm">
-              <p className="text-xs uppercase tracking-[0.12em] text-muted">원본 계정</p>
-              <p className="mt-1 font-medium">{selectedEvent.sourceAccount}</p>
-            </div>
+              <div className="rounded-lg border border-line bg-slate-50 p-3 text-sm">
+                <p className="text-xs uppercase tracking-[0.12em] text-muted">원본 계정</p>
+                <p className="mt-1 font-medium">{selectedEvent.sourceAccount}</p>
+              </div>
 
-            <div className="rounded-lg border border-line bg-white p-3 text-sm">
-              <p className="text-xs uppercase tracking-[0.12em] text-muted">장소</p>
-              <p className="mt-1 font-medium">{selectedEvent.location}</p>
-            </div>
+              <div className="rounded-lg border border-line bg-slate-50 p-3 text-sm">
+                <p className="text-xs uppercase tracking-[0.12em] text-muted">장소</p>
+                <p className="mt-1 font-medium">{selectedEvent.location}</p>
+              </div>
 
-            <div className="rounded-lg border border-line bg-white p-3 text-sm">
-              <p className="text-xs uppercase tracking-[0.12em] text-muted">참석자</p>
-              {selectedEvent.attendees.length > 0 ? (
-                <ul className="mt-1 space-y-1">
-                  {selectedEvent.attendees.map((attendee) => (
-                    <li key={attendee}>{attendee}</li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="mt-1 text-muted">표시 가능한 참석자 정보가 없습니다.</p>
-              )}
+              <div className="rounded-lg border border-line bg-slate-50 p-3 text-sm">
+                <p className="text-xs uppercase tracking-[0.12em] text-muted">참석자</p>
+                {selectedEvent.attendees.length > 0 ? (
+                  <ul className="mt-1 space-y-1">
+                    {selectedEvent.attendees.map((attendee) => (
+                      <li key={attendee}>{attendee}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-1 text-muted">표시 가능한 참석자 정보가 없습니다.</p>
+                )}
+              </div>
             </div>
-          </div>
-        )}
-      </aside>
-    </div>
+          </section>
+        </div>
+      ) : null}
+    </>
   );
 }

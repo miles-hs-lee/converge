@@ -1,12 +1,12 @@
 import Link from "next/link";
 import type { Route } from "next";
-import { CalendarDays, Search, Settings, Command, LogOut } from "lucide-react";
+import { CalendarDays, Search, Settings, LogOut } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { signOutAction } from "@/app/(app)/actions";
 import { isMockMode } from "@/lib/mock-mode";
 
 const tabs: Array<{ href: Route; label: string; icon: typeof CalendarDays }> = [
-  { href: "/calendar", label: "통합 캘린더", icon: CalendarDays },
+  { href: "/calendar", label: "캘린더", icon: CalendarDays },
   { href: "/people", label: "조직도", icon: Search },
   { href: "/settings", label: "설정", icon: Settings }
 ];
@@ -18,60 +18,57 @@ export async function TopNav() {
   } = await supabase.auth.getUser();
 
   return (
-    <header className="sticky top-0 z-20 border-b border-line bg-[#f8fbff]/90 backdrop-blur-xl">
-      <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3">
-        <div>
-          <p className="text-xs uppercase tracking-[0.24em] text-accent">Converge</p>
-          <p className="text-sm font-medium text-slate-700">Unified workspace for multi-tenant M365</p>
+    <header className="sticky top-0 z-30 border-b border-line bg-white/88 backdrop-blur-xl">
+      <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-4 py-3">
+        <div className="flex items-center gap-2">
+          <Link className="text-sm font-semibold tracking-tight" href="/calendar">
+            Converge
+          </Link>
           {isMockMode ? (
-            <p className="mt-1 inline-flex rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[11px] text-sky-700">
-              MOCK MODE
-            </p>
+            <span className="rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] font-medium text-sky-700">
+              MOCK
+            </span>
           ) : null}
         </div>
 
-        <nav className="flex flex-wrap items-center gap-2">
+        <nav className="flex items-center gap-2">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             return (
               <Link
-                className="inline-flex items-center gap-2 rounded-full border border-line bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:-translate-y-0.5 hover:border-accent/60"
+                className="inline-flex items-center gap-1.5 rounded-full border border-line bg-white px-3 py-1.5 text-sm text-slate-700 transition hover:border-accent/60"
                 href={tab.href}
                 key={tab.href}
               >
-                <Icon size={16} />
+                <Icon size={14} />
                 {tab.label}
               </Link>
             );
           })}
+        </nav>
 
-          <button className="inline-flex items-center gap-2 rounded-full border border-line bg-white px-3 py-2 text-sm text-muted transition hover:border-accent/60">
-            <Command size={16} />
-            Cmd+K
-          </button>
-
+        <div className="flex items-center gap-2">
           {user ? (
             <>
-              <span className="rounded-full border border-line bg-white px-3 py-2 text-xs text-muted">{user.email}</span>
+              <span className="hidden max-w-44 truncate rounded-full border border-line bg-white px-3 py-1.5 text-xs text-muted md:inline-flex">
+                {user.email}
+              </span>
               <form action={signOutAction}>
                 <button
-                  className="inline-flex items-center gap-2 rounded-full border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700 transition hover:border-rose-300"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-line bg-white px-3 py-1.5 text-sm text-slate-700 transition hover:border-rose-300 hover:text-rose-700"
                   type="submit"
                 >
-                  <LogOut size={16} />
+                  <LogOut size={14} />
                   로그아웃
                 </button>
               </form>
             </>
           ) : (
-            <Link
-              className="inline-flex items-center rounded-full border border-line bg-white px-3 py-2 text-sm font-medium"
-              href="/login"
-            >
+            <Link className="rounded-full border border-line bg-white px-3 py-1.5 text-sm" href="/login">
               로그인
             </Link>
           )}
-        </nav>
+        </div>
       </div>
     </header>
   );

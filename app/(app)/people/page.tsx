@@ -33,18 +33,18 @@ export default async function PeoplePage() {
         .order("display_name", { ascending: true })
         .limit(150);
 
-      const nameByConnection = new Map<string, string>();
+      const tenantByConnection = new Map<string, string>();
       (connections ?? []).forEach((connection) => {
-        nameByConnection.set(connection.id, connection.tenant_name ?? "Connected Tenant");
+        tenantByConnection.set(connection.id, connection.tenant_name ?? "Connected Tenant");
       });
 
       people = (dbPeople ?? []).map((person) => ({
         id: person.id,
         displayName: person.display_name,
-        mail: person.mail ?? "(email 없음)",
+        mail: person.mail ?? "",
         jobTitle: person.job_title ?? "(직책 없음)",
         department: person.department ?? "(부서 없음)",
-        tenantName: nameByConnection.get(person.connection_id) ?? "Connected Tenant",
+        tenantName: tenantByConnection.get(person.connection_id) ?? "Connected Tenant",
         officeLocation: person.office_location ?? "(위치 없음)",
         mobilePhone: person.mobile_phone ?? "(연락처 없음)"
       }));
@@ -52,44 +52,10 @@ export default async function PeoplePage() {
   }
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
-      <section className="panel-glass card p-5">
-        <p className="text-xs uppercase tracking-[0.18em] text-accent">People Finder</p>
-        <h1 className="mt-2 text-xl font-semibold">조직도 / 직원 검색</h1>
-        <p className="mt-2 text-sm leading-6 text-muted">
-          여러 테넌트의 사용자 디렉터리를 통합 색인하여 이름, 이메일, 부서로 즉시 검색합니다. 검색 결과에서 소속
-          테넌트를 함께 보여 중복 인원을 구분합니다.
-        </p>
-
-        {isMockMode ? (
-          <p className="mt-3 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-700">
-            Mock 모드로 실행 중입니다. 실제 Graph 동기화 없이도 검색 UX를 테스트할 수 있습니다.
-          </p>
-        ) : null}
-
-        <PeopleSearchPanel people={people} />
-      </section>
-
-      <aside className="panel-glass card p-5">
-        <h2 className="text-base font-semibold">프로필 상세</h2>
-        <p className="mt-3 text-sm leading-6 text-muted">
-          검색 결과에서 사용자를 클릭하면 상세 팝업이 열립니다. 팝업에서 빠른 액션(메일/Teams/약속 생성)을 바로
-          실행할 수 있습니다.
-        </p>
-
-        <div className="mt-5 rounded-xl border border-line bg-white/80 p-4 text-sm">
-          <p className="font-medium">빠른 액션</p>
-          <ul className="mt-2 space-y-1 text-muted">
-            <li>1. 메일 작성</li>
-            <li>2. Teams 채팅 열기</li>
-            <li>3. 캘린더 약속 생성</li>
-          </ul>
-        </div>
-
-        <div className="mt-4 rounded-xl border border-line bg-white/80 p-4 text-xs text-muted">
-          검색 성능 향상을 위해 `pg_trgm` 인덱스를 사용합니다.
-        </div>
-      </aside>
-    </div>
+    <section className="panel-glass card p-5">
+      <h1 className="text-xl font-semibold">조직도</h1>
+      <p className="mt-1 text-sm text-muted">직원을 검색하고 상세 팝업에서 빠른 액션을 실행하세요.</p>
+      <PeopleSearchPanel people={people} />
+    </section>
   );
 }

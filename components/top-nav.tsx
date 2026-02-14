@@ -3,6 +3,7 @@ import type { Route } from "next";
 import { CalendarDays, Search, Settings, Command, LogOut } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { signOutAction } from "@/app/(app)/actions";
+import { isMockMode } from "@/lib/mock-mode";
 
 const tabs: Array<{ href: Route; label: string; icon: typeof CalendarDays }> = [
   { href: "/calendar", label: "통합 캘린더", icon: CalendarDays },
@@ -22,6 +23,11 @@ export async function TopNav() {
         <div>
           <p className="text-xs uppercase tracking-[0.24em] text-accent">Converge</p>
           <p className="text-sm font-medium text-slate-700">Unified workspace for multi-tenant M365</p>
+          {isMockMode ? (
+            <p className="mt-1 inline-flex rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[11px] text-sky-700">
+              MOCK MODE
+            </p>
+          ) : null}
         </div>
 
         <nav className="flex flex-wrap items-center gap-2">

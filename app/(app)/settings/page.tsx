@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { signOutAction } from "@/app/(app)/actions";
+import { isMockMode } from "@/lib/mock-mode";
+import { mockConnections } from "@/lib/mock-data";
 
 const statusMessage: Record<string, string> = {
   oauth_connected: "Microsoft 계정 연결이 완료되었습니다.",
@@ -38,7 +40,15 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
     updated_at: string;
   }> = [];
 
-  if (user) {
+  if (isMockMode) {
+    connections = mockConnections.map((connection) => ({
+      id: connection.id,
+      m365_user_principal_name: connection.principalName,
+      status: connection.status,
+      token_expires_at: connection.tokenExpiresAt,
+      updated_at: new Date().toISOString()
+    }));
+  } else if (user) {
     const { data } = await supabase
       .from("m365_connections")
       .select("id,m365_user_principal_name,status,token_expires_at,updated_at")
@@ -48,6 +58,12 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
 
   return (
     <div className="space-y-4">
+      {isMockMode ? (
+        <section className="panel-glass card border-sky-200 bg-sky-50 p-4 text-sm text-sky-700">
+          Mock 모드 활성화: 관리자 승인 전에도 연결 계정/동기화 화면을 테스트할 수 있습니다.
+        </section>
+      ) : null}
+
       {status && statusMessage[status] ? (
         <section className="panel-glass card border-accent/40 bg-accent/5 p-4 text-sm">{statusMessage[status]}</section>
       ) : null}
@@ -70,7 +86,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
 
       <section className="panel-glass card p-5">
         <h2 className="text-base font-semibold">연결된 계정</h2>
-        {!user ? (
+        {!user && !isMockMode ? (
           <p className="mt-3 text-sm text-muted">Converge 로그인 후 계정 연결 정보를 조회할 수 있습니다.</p>
         ) : connections.length === 0 ? (
           <p className="mt-3 text-sm text-muted">아직 연결된 M365 계정이 없습니다.</p>

@@ -39,6 +39,8 @@ cp .env.example .env.local
      - `http://localhost:3000/auth/callback`
    - Azure Redirect URI must include:
      - `http://localhost:3000/api/auth/microsoft/callback`
+   - Use mock mode when admin consent is not available yet:
+     - `NEXT_PUBLIC_USE_MOCK=true`
 
 4. Run migration SQL in Supabase SQL editor:
 
@@ -49,6 +51,15 @@ cp .env.example .env.local
 ```bash
 npm run dev
 ```
+
+## Testing Without Admin Consent
+
+You can test calendar/people/settings without Microsoft admin approval in two ways:
+
+1. UI mock mode (fastest):
+   - set `NEXT_PUBLIC_USE_MOCK=true`
+2. DB seed mode:
+   - run `/Users/cnt-22-70004/Documents/Converge/supabase/seeds/mock_data.sql` after replacing the test email.
 
 ## Next Implementation Tasks
 

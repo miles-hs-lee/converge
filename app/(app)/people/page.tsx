@@ -1,10 +1,52 @@
-const samplePeople = [
-  "김민수 · Platform Engineer · Primary Tenant",
-  "Alex Chen · Sales Lead · Partner Tenant",
-  "윤아린 · Product Ops · Personal Tenant"
-];
+import { createClient } from "@/lib/supabase/server";
+import { isMockMode } from "@/lib/mock-mode";
+import { mockPeople } from "@/lib/mock-data";
+import { PeopleSearchPanel } from "@/components/people-search-panel";
 
-export default function PeoplePage() {
+type PersonRow = {
+  id: string;
+  displayName: string;
+  mail: string;
+  jobTitle: string;
+  department: string;
+  tenantName: string;
+};
+
+export default async function PeoplePage() {
+  let people: PersonRow[] = [];
+
+  if (isMockMode) {
+    people = mockPeople;
+  } else {
+    const supabase = await createClient();
+    const {
+      data: { user }
+    } = await supabase.auth.getUser();
+
+    if (user) {
+      const { data: connections } = await supabase.from("m365_connections").select("id,tenant_name");
+      const { data: dbPeople } = await supabase
+        .from("people_cache")
+        .select("id,display_name,mail,job_title,department,connection_id")
+        .order("display_name", { ascending: true })
+        .limit(150);
+
+      const nameByConnection = new Map<string, string>();
+      (connections ?? []).forEach((connection) => {
+        nameByConnection.set(connection.id, connection.tenant_name ?? "Connected Tenant");
+      });
+
+      people = (dbPeople ?? []).map((person) => ({
+        id: person.id,
+        displayName: person.display_name,
+        mail: person.mail ?? "(email 없음)",
+        jobTitle: person.job_title ?? "(직책 없음)",
+        department: person.department ?? "(부서 없음)",
+        tenantName: nameByConnection.get(person.connection_id) ?? "Connected Tenant"
+      }));
+    }
+  }
+
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
       <section className="panel-glass card p-5">
@@ -15,22 +57,13 @@ export default function PeoplePage() {
           테넌트를 함께 보여 중복 인원을 구분합니다.
         </p>
 
-        <input
-          className="mt-4 w-full rounded-xl border border-line bg-white px-3 py-3 text-sm outline-none ring-accent focus:ring"
-          placeholder="이름, 이메일, 부서 검색"
-          type="search"
-        />
+        {isMockMode ? (
+          <p className="mt-3 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-700">
+            Mock 모드로 실행 중입니다. 실제 Graph 동기화 없이도 검색 UX를 테스트할 수 있습니다.
+          </p>
+        ) : null}
 
-        <div className="mt-4 space-y-2 text-sm">
-          {samplePeople.map((person) => (
-            <div
-              className="rounded-xl border border-line bg-white/80 px-3 py-3 transition hover:border-accent/50"
-              key={person}
-            >
-              {person}
-            </div>
-          ))}
-        </div>
+        <PeopleSearchPanel people={people} />
       </section>
 
       <aside className="panel-glass card p-5">

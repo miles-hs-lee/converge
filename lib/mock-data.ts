@@ -9,10 +9,12 @@ export type MockConnection = {
 export type MockCalendarEvent = {
   id: string;
   tenantName: string;
+  sourceAccount: string;
   subject: string;
   startAt: string;
   endAt: string;
   location: string;
+  attendees: string[];
 };
 
 export type MockPerson = {
@@ -45,26 +47,32 @@ export const mockCalendarEvents: MockCalendarEvent[] = [
   {
     id: "evt-1",
     tenantName: "Primary Tenant",
+    sourceAccount: "you@primary.contoso.com",
     subject: "Weekly Product Sync",
     startAt: new Date(Date.now() + 1000 * 60 * 30).toISOString(),
     endAt: new Date(Date.now() + 1000 * 60 * 90).toISOString(),
-    location: "Microsoft Teams"
+    location: "Microsoft Teams",
+    attendees: ["pm@primary.contoso.com", "design@primary.contoso.com", "dev@primary.contoso.com"]
   },
   {
     id: "evt-2",
     tenantName: "Partner Tenant",
+    sourceAccount: "you@partner.fabrikam.com",
     subject: "Partner Forecast Review",
     startAt: new Date(Date.now() + 1000 * 60 * 60 * 2).toISOString(),
     endAt: new Date(Date.now() + 1000 * 60 * 60 * 3).toISOString(),
-    location: "Conf Room B"
+    location: "Conf Room B",
+    attendees: ["saleslead@partner.fabrikam.com", "finance@partner.fabrikam.com"]
   },
   {
     id: "evt-3",
     tenantName: "Primary Tenant",
+    sourceAccount: "you@primary.contoso.com",
     subject: "1:1 with Design",
     startAt: new Date(Date.now() + 1000 * 60 * 60 * 2.5).toISOString(),
     endAt: new Date(Date.now() + 1000 * 60 * 60 * 3).toISOString(),
-    location: "Teams"
+    location: "Teams",
+    attendees: ["designlead@primary.contoso.com"]
   }
 ];
 

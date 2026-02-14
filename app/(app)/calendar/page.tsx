@@ -10,6 +10,8 @@ type EventRow = {
   startAt: string;
   endAt: string;
   location: string;
+  sourceAccount: string;
+  attendees: string[];
 };
 
 const tenantColors = ["bg-teal-500", "bg-sky-500", "bg-slate-500", "bg-emerald-500"];
@@ -29,6 +31,31 @@ function detectConflicts(events: EventRow[]): number {
   return conflicts;
 }
 
+function parseAttendees(raw: unknown): string[] {
+  if (!raw) {
+    return [];
+  }
+
+  if (Array.isArray(raw)) {
+    return raw
+      .map((item) => {
+        if (typeof item === "string") {
+          return item;
+        }
+        if (typeof item === "object" && item && "emailAddress" in item) {
+          const emailAddress = (item as { emailAddress?: { address?: string } }).emailAddress;
+          if (emailAddress?.address) {
+            return emailAddress.address;
+          }
+        }
+        return null;
+      })
+      .filter((item): item is string => Boolean(item));
+  }
+
+  return [];
+}
+
 export default async function CalendarPage() {
   let events: EventRow[] = [];
   let tenants: string[] = [];
@@ -40,7 +67,9 @@ export default async function CalendarPage() {
       subject: event.subject,
       startAt: event.startAt,
       endAt: event.endAt,
-      location: event.location
+      location: event.location,
+      sourceAccount: event.sourceAccount,
+      attendees: event.attendees
     }));
     tenants = [...new Set(mockConnections.map((connection) => connection.tenantName))];
   } else {
@@ -52,19 +81,21 @@ export default async function CalendarPage() {
     if (user) {
       const { data: connections } = await supabase
         .from("m365_connections")
-        .select("id,tenant_name")
+        .select("id,tenant_name,m365_user_principal_name")
         .order("created_at", { ascending: true });
 
       const { data: dbEvents } = await supabase
         .from("calendar_events_cache")
-        .select("id,subject,start_at,end_at,location,connection_id")
+        .select("id,subject,start_at,end_at,location,connection_id,organizer,attendees")
         .gte("end_at", new Date().toISOString())
         .order("start_at", { ascending: true })
         .limit(20);
 
       const nameByConnection = new Map<string, string>();
+      const accountByConnection = new Map<string, string>();
       (connections ?? []).forEach((connection) => {
         nameByConnection.set(connection.id, connection.tenant_name ?? "Connected Tenant");
+        accountByConnection.set(connection.id, connection.m365_user_principal_name ?? "unknown@account");
       });
 
       events = (dbEvents ?? []).map((event) => ({
@@ -73,7 +104,9 @@ export default async function CalendarPage() {
         subject: event.subject ?? "(제목 없음)",
         startAt: event.start_at,
         endAt: event.end_at,
-        location: event.location ?? "미지정"
+        location: event.location ?? "미지정",
+        sourceAccount: accountByConnection.get(event.connection_id) ?? event.organizer ?? "unknown@account",
+        attendees: parseAttendees(event.attendees)
       }));
 
       tenants = [...new Set((connections ?? []).map((connection) => connection.tenant_name ?? "Connected Tenant"))];

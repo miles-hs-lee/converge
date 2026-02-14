@@ -69,11 +69,12 @@ export default async function PeoplePage() {
       <aside className="panel-glass card p-5">
         <h2 className="text-base font-semibold">프로필 상세</h2>
         <p className="mt-3 text-sm leading-6 text-muted">
-          사용자를 선택하면 직책, 부서, 연락처, 매니저, 소속 테넌트를 우측 패널에 표시합니다.
+          검색 결과에서 사용자를 클릭하면 상세 페이지로 이동합니다. 상세 페이지에서 빠른 액션(메일/Teams/약속 생성)을
+          바로 실행할 수 있습니다.
         </p>
 
         <div className="mt-5 rounded-xl border border-line bg-white/80 p-4 text-sm">
-          <p className="font-medium">빠른 액션(예정)</p>
+          <p className="font-medium">빠른 액션</p>
           <ul className="mt-2 space-y-1 text-muted">
             <li>1. 메일 작성</li>
             <li>2. Teams 채팅 열기</li>

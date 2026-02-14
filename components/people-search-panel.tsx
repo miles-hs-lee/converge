@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 
 type PersonRow = {
@@ -48,13 +49,14 @@ export function PeopleSearchPanel({ people }: PeopleSearchPanelProps) {
 
       <div className="mt-3 space-y-2 text-sm">
         {filtered.map((person) => (
-          <div
-            className="rounded-xl border border-line bg-white/80 px-3 py-3 transition hover:border-accent/50"
+          <Link
+            className="block rounded-xl border border-line bg-white/80 px-3 py-3 transition hover:border-accent/50"
+            href={`/people/${person.id}`}
             key={person.id}
           >
             {person.displayName} · {person.jobTitle} · {person.department} · {person.tenantName}
             <p className="mt-1 text-xs text-muted">{person.mail}</p>
-          </div>
+          </Link>
         ))}
 
         {filtered.length === 0 ? (

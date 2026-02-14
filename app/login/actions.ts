@@ -19,7 +19,7 @@ export async function requestMagicLink(formData: FormData): Promise<void> {
   const { error } = await supabase.auth.signInWithOtp({
     email,
     options: {
-      emailRedirectTo: `${getAppUrl()}/auth/callback?next=/settings`
+      emailRedirectTo: `${getAppUrl()}/auth/callback?next=/calendar`
     }
   });
 

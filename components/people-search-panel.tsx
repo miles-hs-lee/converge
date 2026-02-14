@@ -68,7 +68,7 @@ export function PeopleSearchPanel({ people }: PeopleSearchPanelProps) {
   return (
     <>
       <input
-        className="mt-4 w-full rounded-xl border border-line bg-white px-3 py-3 text-sm outline-none ring-accent focus:ring"
+        className="input-control mt-4"
         onChange={(event) => setQuery(event.target.value)}
         placeholder="이름, 이메일, 부서, 테넌트 검색"
         type="search"
@@ -111,7 +111,7 @@ export function PeopleSearchPanel({ people }: PeopleSearchPanelProps) {
                 </p>
               </div>
               <button
-                className="inline-flex items-center gap-1 rounded-lg border border-line bg-white px-3 py-1.5 text-sm"
+                className="btn btn-secondary px-3 py-1.5"
                 onClick={() => setSelectedPersonId(null)}
                 type="button"
               >

@@ -165,13 +165,13 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
                 월간
               </button>
             </div>
-            <button className="rounded-lg border border-line bg-white px-3 py-1.5 text-sm" onClick={goPrev} type="button">
+            <button className="btn btn-secondary px-3 py-1.5" onClick={goPrev} type="button">
               이전
             </button>
-            <button className="rounded-lg border border-line bg-white px-3 py-1.5 text-sm" onClick={goToday} type="button">
+            <button className="btn btn-secondary px-3 py-1.5" onClick={goToday} type="button">
               오늘
             </button>
-            <button className="rounded-lg border border-line bg-white px-3 py-1.5 text-sm" onClick={goNext} type="button">
+            <button className="btn btn-secondary px-3 py-1.5" onClick={goNext} type="button">
               다음
             </button>
           </div>
@@ -277,7 +277,7 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
                   {new Date(selectedEvent.startAt).toLocaleString("ko-KR")} - {new Date(selectedEvent.endAt).toLocaleTimeString("ko-KR")}
                 </p>
               </div>
-              <button className="rounded-lg border border-line bg-white px-3 py-1.5 text-sm" onClick={closeEventModal} type="button">
+              <button className="btn btn-secondary px-3 py-1.5" onClick={closeEventModal} type="button">
                 닫기
               </button>
             </div>

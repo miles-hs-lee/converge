@@ -53,8 +53,8 @@ export default async function PeoplePage() {
 
   return (
     <section className="panel-glass card p-5">
-      <h1 className="text-xl font-semibold">조직도</h1>
-      <p className="mt-1 text-sm text-muted">직원을 검색하고 상세 팝업에서 빠른 액션을 실행하세요.</p>
+      <h1 className="title-xl">조직도</h1>
+      <p className="muted mt-1">직원을 검색하고 상세 팝업에서 빠른 액션을 실행하세요.</p>
       <PeopleSearchPanel people={people} />
     </section>
   );

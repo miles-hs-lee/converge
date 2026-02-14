@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { AlertCircle } from "lucide-react";
 import { requestMagicLink } from "@/app/login/actions";
+import { createClient } from "@/lib/supabase/server";
 
 const loginStatusMessage: Record<string, string> = {
   magic_link_sent: "매직링크를 보냈습니다. 이메일에서 로그인 링크를 열어주세요.",
@@ -18,11 +20,20 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   const params = await searchParams;
   const status = params.status;
 
+  const supabase = await createClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  if (user) {
+    redirect("/calendar");
+  }
+
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-md items-center px-4 py-12">
+    <main className="page-wrap flex min-h-screen max-w-md items-center py-12">
       <section className="panel-glass card w-full p-8">
-        <h1 className="text-2xl font-semibold">Converge 로그인</h1>
-        <p className="mt-2 text-sm text-muted">메인 계정으로 로그인하고 계정을 연결하세요.</p>
+        <h1 className="title-xl">Converge 로그인</h1>
+        <p className="muted mt-2">메인 계정으로 로그인하고 바로 캘린더를 확인하세요.</p>
 
         {status && loginStatusMessage[status] ? (
           <p className="mt-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
@@ -35,23 +46,13 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           <label className="text-sm font-medium" htmlFor="email">
             이메일
           </label>
-          <input
-            className="w-full rounded-xl border border-line bg-white px-3 py-3 text-sm outline-none ring-accent focus:ring"
-            id="email"
-            name="email"
-            placeholder="you@company.com"
-            required
-            type="email"
-          />
-          <button className="w-full rounded-xl bg-accent px-4 py-3 text-sm font-semibold text-white" type="submit">
+          <input className="input-control" id="email" name="email" placeholder="you@company.com" required type="email" />
+          <button className="btn btn-primary w-full" type="submit">
             매직링크 로그인
           </button>
         </form>
 
-        <Link
-          className="mt-3 inline-flex w-full items-center justify-center rounded-xl border border-line bg-white px-4 py-3 text-sm font-semibold"
-          href="/api/auth/microsoft/start"
-        >
+        <Link className="btn btn-secondary mt-3 w-full" href="/api/auth/microsoft/start">
           Microsoft 계정으로 계속
         </Link>
 

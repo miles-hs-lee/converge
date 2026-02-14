@@ -63,17 +63,17 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
       <section className="panel-glass card p-5">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-semibold">설정</h1>
-            <p className="mt-1 text-sm text-muted">M365 계정 연결 및 세션 관리</p>
+            <h1 className="title-xl">설정</h1>
+            <p className="muted mt-1">M365 계정 연결 및 세션 관리</p>
           </div>
-          <Link className="rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-white" href="/api/auth/microsoft/start">
+          <Link className="btn btn-primary" href="/api/auth/microsoft/start">
             계정 추가
           </Link>
         </div>
       </section>
 
       <section className="panel-glass card p-5">
-        <h2 className="text-base font-semibold">연결 계정</h2>
+        <h2 className="title-lg">연결 계정</h2>
         {!user && !isMockMode ? (
           <p className="mt-3 text-sm text-muted">로그인 후 연결 정보를 확인할 수 있습니다.</p>
         ) : connections.length === 0 ? (
@@ -94,7 +94,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
 
       <section className="panel-glass card p-5">
         <form action={signOutAction}>
-          <button className="rounded-xl border border-line bg-white px-4 py-2 text-sm font-semibold" type="submit">
+          <button className="btn btn-secondary" type="submit">
             로그아웃
           </button>
         </form>

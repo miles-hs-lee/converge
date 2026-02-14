@@ -1,0 +1,30 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(circle at 10% 10%, rgba(15, 118, 110, 0.09), transparent 40%),
+    radial-gradient(circle at 95% 0%, rgba(51, 65, 85, 0.08), transparent 30%),
+    #f6f7fb;
+  color: #0f172a;
+  font-family: "IBM Plex Sans", "Noto Sans KR", sans-serif;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.card {
+  @apply rounded-2xl border border-line bg-panel shadow-soft;
+}

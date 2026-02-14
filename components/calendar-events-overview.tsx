@@ -115,22 +115,6 @@ export function CalendarEventsOverview({ events, tenants }: CalendarEventsOvervi
             value={query}
           />
         </label>
-        <div className="inline-flex rounded-xl border border-line bg-white p-0.5">
-          <button
-            className={`rounded-lg px-3 py-1.5 text-sm ${rangeDays === 3 ? "bg-slate-900 text-white" : "text-slate-700"}`}
-            onClick={() => setRangeDays(3)}
-            type="button"
-          >
-            ±3일
-          </button>
-          <button
-            className={`rounded-lg px-3 py-1.5 text-sm ${rangeDays === 7 ? "bg-slate-900 text-white" : "text-slate-700"}`}
-            onClick={() => setRangeDays(7)}
-            type="button"
-          >
-            ±7일
-          </button>
-        </div>
       </div>
 
       <div className="mt-3 flex flex-wrap gap-2">
@@ -144,8 +128,28 @@ export function CalendarEventsOverview({ events, tenants }: CalendarEventsOvervi
       <UnifiedWeekCalendar events={filteredEvents} tenants={visibleTenants} />
 
       <section className="panel-glass card mt-4 p-5">
-        <h2 className="title-lg">오늘 기준 전후 일정</h2>
-        <p className="muted mt-1">현재 필터: ±{rangeDays}일</p>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="title-lg">오늘 기준 전후 일정</h2>
+            <p className="muted mt-1">현재 필터: ±{rangeDays}일</p>
+          </div>
+          <div className="inline-flex rounded-xl border border-line bg-white p-0.5">
+            <button
+              className={`rounded-lg px-3 py-1.5 text-sm ${rangeDays === 3 ? "bg-slate-900 text-white" : "text-slate-700"}`}
+              onClick={() => setRangeDays(3)}
+              type="button"
+            >
+              ±3일
+            </button>
+            <button
+              className={`rounded-lg px-3 py-1.5 text-sm ${rangeDays === 7 ? "bg-slate-900 text-white" : "text-slate-700"}`}
+              onClick={() => setRangeDays(7)}
+              type="button"
+            >
+              ±7일
+            </button>
+          </div>
+        </div>
         <div className="mt-3 grid gap-3 md:grid-cols-2">
           <EventList title="지난 일정" events={pastEvents} />
           <EventList title="예정 일정" events={upcomingEvents} />

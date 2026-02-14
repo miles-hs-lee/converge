@@ -39,6 +39,7 @@ function buildActionLinks(person: PersonRow) {
 export function PeopleSearchPanel({ people }: PeopleSearchPanelProps) {
   const [query, setQuery] = useState("");
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
+  const [sortMode, setSortMode] = useState<"default" | "tenant">("default");
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -55,6 +56,25 @@ export function PeopleSearchPanel({ people }: PeopleSearchPanelProps) {
       );
     });
   }, [people, query]);
+
+  const sortedByTenant = useMemo(() => {
+    return [...filtered].sort((a, b) => {
+      return a.tenantName.localeCompare(b.tenantName, "ko") || a.displayName.localeCompare(b.displayName, "ko");
+    });
+  }, [filtered]);
+
+  const tenantGroups = useMemo(() => {
+    const groups = new Map<string, PersonRow[]>();
+    sortedByTenant.forEach((person) => {
+      const current = groups.get(person.tenantName);
+      if (current) {
+        current.push(person);
+      } else {
+        groups.set(person.tenantName, [person]);
+      }
+    });
+    return Array.from(groups.entries()).map(([tenantName, items]) => ({ tenantName, items }));
+  }, [sortedByTenant]);
 
   const selectedPerson = useMemo(() => {
     if (!selectedPersonId) {
@@ -75,20 +95,60 @@ export function PeopleSearchPanel({ people }: PeopleSearchPanelProps) {
         value={query}
       />
 
-      <p className="mt-3 text-xs text-muted">총 {filtered.length}명</p>
-
-      <div className="mt-3 space-y-2 text-sm">
-        {filtered.map((person) => (
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs text-muted">총 {filtered.length}명</p>
+        <div className="inline-flex rounded-xl border border-line bg-white p-0.5 text-sm">
           <button
-            className="block w-full rounded-xl border border-line bg-white/80 px-3 py-3 text-left transition hover:border-accent/50"
-            key={person.id}
-            onClick={() => setSelectedPersonId(person.id)}
+            className={`rounded-lg px-3 py-1.5 ${sortMode === "default" ? "bg-slate-900 text-white" : "text-slate-700"}`}
+            onClick={() => setSortMode("default")}
             type="button"
           >
-            {person.displayName} · {person.jobTitle} · {person.department} · {person.tenantName}
-            <p className="mt-1 text-xs text-muted">{person.mail}</p>
+            기본
           </button>
-        ))}
+          <button
+            className={`rounded-lg px-3 py-1.5 ${sortMode === "tenant" ? "bg-slate-900 text-white" : "text-slate-700"}`}
+            onClick={() => setSortMode("tenant")}
+            type="button"
+          >
+            테넌트 정렬
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-3 space-y-2 text-sm">
+        {sortMode === "default"
+          ? filtered.map((person) => (
+              <button
+                className="block w-full rounded-xl border border-line bg-white/80 px-3 py-3 text-left transition hover:border-accent/50"
+                key={person.id}
+                onClick={() => setSelectedPersonId(person.id)}
+                type="button"
+              >
+                {person.displayName} · {person.jobTitle} · {person.department} · {person.tenantName}
+                <p className="mt-1 text-xs text-muted">{person.mail}</p>
+              </button>
+            ))
+          : tenantGroups.map((group) => (
+              <section className="rounded-xl border border-line bg-white/70 p-2" key={group.tenantName}>
+                <div className="flex items-center justify-between px-1 py-1">
+                  <p className="text-xs font-semibold uppercase tracking-[0.1em] text-muted">{group.tenantName}</p>
+                  <p className="text-xs text-muted">{group.items.length}명</p>
+                </div>
+                <div className="space-y-2">
+                  {group.items.map((person) => (
+                    <button
+                      className="block w-full rounded-xl border border-line bg-white px-3 py-3 text-left transition hover:border-accent/50"
+                      key={person.id}
+                      onClick={() => setSelectedPersonId(person.id)}
+                      type="button"
+                    >
+                      {person.displayName} · {person.jobTitle} · {person.department}
+                      <p className="mt-1 text-xs text-muted">{person.mail}</p>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            ))}
 
         {filtered.length === 0 ? (
           <div className="rounded-xl border border-dashed border-line bg-white/70 px-3 py-6 text-center text-muted">

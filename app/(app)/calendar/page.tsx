@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { isMockMode } from "@/lib/mock-mode";
 import { mockCalendarEvents, mockConnections } from "@/lib/mock-data";
+import { UnifiedWeekCalendar } from "@/components/unified-week-calendar";
 
 type EventRow = {
   id: string;
@@ -120,30 +121,8 @@ export default async function CalendarPage() {
             <p className="text-xs uppercase tracking-[0.18em] text-muted">Upcoming Events</p>
             <h2 className="text-lg font-semibold">Week Focus</h2>
           </div>
-          <div className="flex items-center gap-2">
-            <button className="rounded-xl border border-line bg-white px-3 py-2 text-sm">오늘</button>
-            <button className="rounded-xl border border-line bg-white px-3 py-2 text-sm">새로고침</button>
-          </div>
         </div>
-
-        <div className="mt-4 space-y-2">
-          {events.slice(0, 8).map((event) => (
-            <div className="rounded-xl border border-line bg-white/80 px-3 py-3 text-sm" key={event.id}>
-              <p className="font-medium">{event.subject}</p>
-              <p className="mt-1 text-xs text-muted">
-                {new Date(event.startAt).toLocaleString("ko-KR")} - {new Date(event.endAt).toLocaleTimeString("ko-KR")} ·
-                {" "}
-                {event.location} · {event.tenantName}
-              </p>
-            </div>
-          ))}
-
-          {events.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-line bg-white/70 p-8 text-center text-sm text-muted">
-              표시할 이벤트가 없습니다. 설정 탭에서 계정을 연결하거나 Mock 모드를 활성화하세요.
-            </div>
-          ) : null}
-        </div>
+        <UnifiedWeekCalendar events={events} tenants={tenants} />
 
         <div className="mt-4 grid gap-3 md:grid-cols-3">
           <div className="rounded-xl border border-line bg-white/80 p-3 text-sm">

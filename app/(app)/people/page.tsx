@@ -2,6 +2,8 @@ import { createClient } from "@/lib/supabase/server";
 import { isMockMode } from "@/lib/mock-mode";
 import { mockPeople } from "@/lib/mock-data";
 import { PeopleSearchPanel } from "@/components/people-search-panel";
+import { getServerLocale } from "@/lib/i18n-server";
+import { t } from "@/lib/i18n";
 
 type PersonRow = {
   id: string;
@@ -15,6 +17,9 @@ type PersonRow = {
 };
 
 export default async function PeoplePage() {
+  const locale = await getServerLocale();
+  const tt = (key: Parameters<typeof t>[1], vars?: Parameters<typeof t>[2]) => t(locale, key, vars);
+
   let people: PersonRow[] = [];
 
   if (isMockMode) {
@@ -42,11 +47,11 @@ export default async function PeoplePage() {
         id: person.id,
         displayName: person.display_name,
         mail: person.mail ?? "",
-        jobTitle: person.job_title ?? "(직책 없음)",
-        department: person.department ?? "(부서 없음)",
+        jobTitle: person.job_title ?? tt("people.unknown.jobTitle"),
+        department: person.department ?? tt("people.unknown.department"),
         tenantName: tenantByConnection.get(person.connection_id) ?? "Connected Tenant",
-        officeLocation: person.office_location ?? "(위치 없음)",
-        mobilePhone: person.mobile_phone ?? "(연락처 없음)"
+        officeLocation: person.office_location ?? tt("people.unknown.office"),
+        mobilePhone: person.mobile_phone ?? tt("people.unknown.phone")
       }));
     }
   }
@@ -56,10 +61,10 @@ export default async function PeoplePage() {
       <section className="panel-glass card p-5 md:p-6">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h1 className="title-xl">조직도</h1>
-            <p className="muted mt-1">직원 검색과 프로필 기반 빠른 커뮤니케이션을 지원합니다.</p>
+            <h1 className="title-xl">{tt("people.title")}</h1>
+            <p className="muted mt-1">{tt("people.subtitle")}</p>
           </div>
-          <span className="surface-chip">검색 대상 {people.length}명</span>
+          <span className="surface-chip">{tt("people.searchCount", { count: people.length })}</span>
         </div>
       </section>
 

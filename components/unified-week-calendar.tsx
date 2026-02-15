@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { ModalPortal } from "@/components/modal-portal";
 import { colorForTenant } from "@/lib/tenant-colors";
+import { useIntlLocale, useT } from "@/components/locale-provider";
 
 type CalendarEvent = {
   id: string;
@@ -46,16 +47,16 @@ function startOfMonthGrid(date: Date): Date {
   return startOfWeek(first);
 }
 
-function weekLabel(weekStart: Date): string {
+function weekLabel(weekStart: Date, intl: string): string {
   const end = addDays(weekStart, 6);
-  return `${weekStart.toLocaleDateString("ko-KR", { month: "short", day: "numeric" })} - ${end.toLocaleDateString("ko-KR", {
+  return `${weekStart.toLocaleDateString(intl, { month: "short", day: "numeric" })} - ${end.toLocaleDateString(intl, {
     month: "short",
     day: "numeric"
   })}`;
 }
 
-function monthLabel(monthDate: Date): string {
-  return monthDate.toLocaleDateString("ko-KR", { year: "numeric", month: "long" });
+function monthLabel(monthDate: Date, intl: string): string {
+  return monthDate.toLocaleDateString(intl, { year: "numeric", month: "long" });
 }
 
 function dayKey(date: Date): string {
@@ -63,6 +64,9 @@ function dayKey(date: Date): string {
 }
 
 export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProps) {
+  const t = useT();
+  const intl = useIntlLocale();
+
   const [viewMode, setViewMode] = useState<ViewMode>("week");
   const [offsetWeek, setOffsetWeek] = useState(0);
   const [offsetMonth, setOffsetMonth] = useState(0);
@@ -115,7 +119,7 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
     return eventsByDay.get(moreDayKeyValue) ?? [];
   }, [eventsByDay, moreDayKeyValue]);
 
-  const label = viewMode === "week" ? weekLabel(weekStart) : monthLabel(monthDate);
+  const label = viewMode === "week" ? weekLabel(weekStart, intl) : monthLabel(monthDate, intl);
 
   function dateNumberClass(day: Date, isToday: boolean, inCurrentMonth = true): string {
     if (!inCurrentMonth) {
@@ -172,6 +176,10 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
   const inlineLimitWeek = 4;
   const inlineLimitMonth = 3;
 
+  const weekdayLabels = useMemo(() => {
+    return [t("weekday.mon"), t("weekday.tue"), t("weekday.wed"), t("weekday.thu"), t("weekday.fri"), t("weekday.sat"), t("weekday.sun")];
+  }, [t]);
+
   return (
     <>
       <div className="mt-5 rounded-2xl border border-line bg-white/78 p-2 sm:p-3">
@@ -184,26 +192,26 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
                 onClick={() => setViewMode("week")}
                 type="button"
               >
-                주간
+                {t("common.week")}
               </button>
               <button
                 className={`rounded-lg px-3 py-1.5 font-medium ${viewMode === "month" ? "bg-accent text-white" : "text-slate-700"}`}
                 onClick={() => setViewMode("month")}
                 type="button"
               >
-                월간
+                {t("common.month")}
               </button>
             </div>
           </div>
           <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:items-center">
             <button className="btn btn-secondary px-3 py-1.5" onClick={goPrev} type="button">
-              이전
+              {t("common.prev")}
             </button>
             <button className="btn btn-secondary px-3 py-1.5" onClick={goToday} type="button">
-              오늘
+              {t("common.today")}
             </button>
             <button className="btn btn-secondary px-3 py-1.5" onClick={goNext} type="button">
-              다음
+              {t("common.next")}
             </button>
           </div>
         </div>
@@ -217,9 +225,9 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
               return (
                 <section className="min-h-44 rounded-xl border border-line bg-white/90 p-2" key={key}>
                   <header className="mb-2 border-b border-line pb-2">
-                    <p className="text-xs uppercase tracking-[0.14em] text-muted">{day.toLocaleDateString("ko-KR", { weekday: "short" })}</p>
+                    <p className="text-xs uppercase tracking-[0.14em] text-muted">{day.toLocaleDateString(intl, { weekday: "short" })}</p>
                     <p className={`text-sm font-semibold ${dateNumberClass(day, isToday)}`}>
-                      {day.toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" })}
+                      {day.toLocaleDateString(intl, { month: "numeric", day: "numeric" })}
                     </p>
                   </header>
 
@@ -235,7 +243,7 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
                         >
                           <p className="line-clamp-1 text-xs font-semibold">{event.subject}</p>
                           <p className="mt-1 text-[11px] text-muted">
-                            {new Date(event.startAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })}
+                            {new Date(event.startAt).toLocaleTimeString(intl, { hour: "2-digit", minute: "2-digit" })}
                           </p>
                           <div
                             className="mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium"
@@ -253,10 +261,10 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
                         onClick={() => openMore(day)}
                         type="button"
                       >
-                        +{dailyEvents.length - inlineLimitWeek} more
+                        {t("common.more", { count: dailyEvents.length - inlineLimitWeek })}
                       </button>
                     ) : null}
-                    {dailyEvents.length === 0 ? <p className="pt-4 text-center text-xs text-muted">일정 없음</p> : null}
+                    {dailyEvents.length === 0 ? <p className="pt-4 text-center text-xs text-muted">{t("calendar.none")}</p> : null}
                   </div>
                 </section>
               );
@@ -266,11 +274,11 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
           <div className="-mx-1 overflow-x-auto pb-1">
             <div className="min-w-[720px] px-1">
               <div className="mb-2 grid grid-cols-7 gap-2 text-center text-xs uppercase tracking-[0.12em] text-muted">
-                {["월", "화", "수", "목", "금", "토", "일"].map((day) => {
-                  const weekendClass = day === "토" ? "text-sky-600" : day === "일" ? "text-rose-600" : "";
+                {weekdayLabels.map((dayLabel, index) => {
+                  const weekendClass = index === 5 ? "text-sky-600" : index === 6 ? "text-rose-600" : "";
                   return (
-                    <p className={weekendClass} key={day}>
-                      {day}
+                    <p className={weekendClass} key={dayLabel}>
+                      {dayLabel}
                     </p>
                   );
                 })}
@@ -297,7 +305,7 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
                               style={{ backgroundColor: `${color}1f`, color }}
                               type="button"
                             >
-                              {new Date(event.startAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} {event.subject}
+                              {new Date(event.startAt).toLocaleTimeString(intl, { hour: "2-digit", minute: "2-digit" })} {event.subject}
                             </button>
                           );
                         })}
@@ -307,7 +315,7 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
                             onClick={() => openMore(day)}
                             type="button"
                           >
-                            +{dailyEvents.length - inlineLimitMonth} more
+                            {t("common.more", { count: dailyEvents.length - inlineLimitMonth })}
                           </button>
                         ) : null}
                       </div>
@@ -323,22 +331,22 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
       {moreDayKeyValue ? (
         <ModalPortal>
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-3 sm:p-4" role="dialog" aria-modal="true">
-            <button aria-label="닫기" className="absolute inset-0 cursor-default" onClick={closeMore} type="button" />
+            <button aria-label={t("common.close")} className="absolute inset-0 cursor-default" onClick={closeMore} type="button" />
             <section className="panel-glass card relative z-10 max-h-[86vh] w-full max-w-lg overflow-y-auto rounded-2xl p-4 pb-7 sm:p-5">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.14em] text-accent">Daily Events</p>
+                  <p className="text-xs uppercase tracking-[0.14em] text-accent">{t("calendar.title")}</p>
                   <h3 className="mt-1 text-lg font-semibold">
                     {(() => {
                       const [y, m, d] = moreDayKeyValue.split("-").map((v) => Number(v));
                       const date = new Date(y ?? 0, m ?? 0, d ?? 0);
-                      return date.toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric", weekday: "short" });
+                      return date.toLocaleDateString(intl, { year: "numeric", month: "long", day: "numeric", weekday: "short" });
                     })()}
                   </h3>
-                  <p className="mt-1 text-xs text-muted">총 {moreEvents.length}개 일정</p>
+                  <p className="mt-1 text-xs text-muted">{t("common.total", { count: moreEvents.length })}</p>
                 </div>
                 <button className="btn btn-secondary px-3 py-1.5" onClick={closeMore} type="button">
-                  닫기
+                  {t("common.close")}
                 </button>
               </div>
 
@@ -359,8 +367,8 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
                         <div>
                           <p className="text-sm font-semibold">{event.subject}</p>
                           <p className="mt-1 text-xs text-muted">
-                            {new Date(event.startAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} -{" "}
-                            {new Date(event.endAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })}
+                            {new Date(event.startAt).toLocaleTimeString(intl, { hour: "2-digit", minute: "2-digit" })} -{" "}
+                            {new Date(event.endAt).toLocaleTimeString(intl, { hour: "2-digit", minute: "2-digit" })}
                           </p>
                           <p className="mt-1 text-xs text-muted">{event.location}</p>
                         </div>
@@ -384,39 +392,39 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
       {selectedEvent ? (
         <ModalPortal>
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-3 sm:p-4" role="dialog" aria-modal="true">
-            <button aria-label="닫기" className="absolute inset-0 cursor-default" onClick={closeEventModal} type="button" />
+            <button aria-label={t("common.close")} className="absolute inset-0 cursor-default" onClick={closeEventModal} type="button" />
             <section className="panel-glass card relative z-10 max-h-[86vh] w-full max-w-lg overflow-y-auto rounded-2xl p-4 pb-7 sm:p-5">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.14em] text-accent">Event Detail</p>
+                  <p className="text-xs uppercase tracking-[0.14em] text-accent">{t("event.detailTitle")}</p>
                   <h3 className="mt-1 text-lg font-semibold">{selectedEvent.subject}</h3>
                   <p className="mt-1 text-xs text-muted">
-                    {new Date(selectedEvent.startAt).toLocaleString("ko-KR")} - {new Date(selectedEvent.endAt).toLocaleTimeString("ko-KR")}
+                    {new Date(selectedEvent.startAt).toLocaleString(intl)} - {new Date(selectedEvent.endAt).toLocaleTimeString(intl)}
                   </p>
                 </div>
                 <button className="btn btn-secondary px-3 py-1.5" onClick={closeEventModal} type="button">
-                  닫기
+                  {t("common.close")}
                 </button>
               </div>
 
               <div className="mt-4 space-y-3">
                 <div className="rounded-lg border border-line bg-white/85 p-3 text-sm">
-                  <p className="text-xs uppercase tracking-[0.12em] text-muted">원본 테넌트</p>
+                  <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("event.sourceTenant")}</p>
                   <p className="mt-1 font-medium">{selectedEvent.tenantName}</p>
                 </div>
 
                 <div className="rounded-lg border border-line bg-white/85 p-3 text-sm">
-                  <p className="text-xs uppercase tracking-[0.12em] text-muted">원본 계정</p>
+                  <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("event.sourceAccount")}</p>
                   <p className="mt-1 font-medium">{selectedEvent.sourceAccount}</p>
                 </div>
 
                 <div className="rounded-lg border border-line bg-white/85 p-3 text-sm">
-                  <p className="text-xs uppercase tracking-[0.12em] text-muted">장소</p>
+                  <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("event.location")}</p>
                   <p className="mt-1 font-medium">{selectedEvent.location}</p>
                 </div>
 
                 <div className="rounded-lg border border-line bg-white/85 p-3 text-sm">
-                  <p className="text-xs uppercase tracking-[0.12em] text-muted">참석자</p>
+                  <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("event.attendees")}</p>
                   {selectedEvent.attendees.length > 0 ? (
                     <ul className="mt-1 space-y-1">
                       {selectedEvent.attendees.map((attendee) => (
@@ -424,7 +432,7 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
                       ))}
                     </ul>
                   ) : (
-                    <p className="mt-1 text-muted">표시 가능한 참석자 정보가 없습니다.</p>
+                    <p className="mt-1 text-muted">{t("event.attendeesEmpty")}</p>
                   )}
                 </div>
               </div>

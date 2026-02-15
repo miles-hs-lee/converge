@@ -5,14 +5,19 @@ import { createClient } from "@/lib/supabase/server";
 import { signOutAction } from "@/app/(app)/actions";
 import { isMockMode } from "@/lib/mock-mode";
 import { BrandLogo } from "@/components/brand-logo";
-
-const tabs: Array<{ href: Route; label: string; icon: typeof CalendarDays }> = [
-  { href: "/calendar", label: "캘린더", icon: CalendarDays },
-  { href: "/people", label: "조직도", icon: Search },
-  { href: "/settings", label: "설정", icon: Settings }
-];
+import { getServerLocale } from "@/lib/i18n-server";
+import { t } from "@/lib/i18n";
 
 export async function TopNav() {
+  const locale = await getServerLocale();
+  const tt = (key: Parameters<typeof t>[1]) => t(locale, key);
+
+  const tabs: Array<{ href: Route; label: string; icon: typeof CalendarDays }> = [
+    { href: "/calendar", label: tt("nav.calendar"), icon: CalendarDays },
+    { href: "/people", label: tt("nav.people"), icon: Search },
+    { href: "/settings", label: tt("nav.settings"), icon: Settings }
+  ];
+
   const supabase = await createClient();
   const {
     data: { user }
@@ -56,13 +61,13 @@ export async function TopNav() {
                 <form action={signOutAction}>
                   <button className="btn btn-secondary px-3 py-1.5" type="submit">
                     <LogOut size={14} />
-                    <span className="hidden sm:inline">로그아웃</span>
+                    <span className="hidden sm:inline">{tt("nav.logout")}</span>
                   </button>
                 </form>
               </>
             ) : (
               <Link className="btn btn-secondary px-3 py-1.5" href="/login">
-                로그인
+                {tt("nav.login")}
               </Link>
             )}
           </div>

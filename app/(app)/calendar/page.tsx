@@ -2,6 +2,8 @@ import { createClient } from "@/lib/supabase/server";
 import { isMockMode } from "@/lib/mock-mode";
 import { mockCalendarEvents, mockConnections } from "@/lib/mock-data";
 import { CalendarEventsOverview, type CalendarEventRow } from "@/components/calendar-events-overview";
+import { getServerLocale } from "@/lib/i18n-server";
+import { t } from "@/lib/i18n";
 
 function parseAttendees(raw: unknown): string[] {
   if (!Array.isArray(raw)) {
@@ -23,6 +25,9 @@ function parseAttendees(raw: unknown): string[] {
 }
 
 export default async function CalendarPage() {
+  const locale = await getServerLocale();
+  const tt = (key: Parameters<typeof t>[1], vars?: Parameters<typeof t>[2]) => t(locale, key, vars);
+
   let events: CalendarEventRow[] = [];
   let tenants: string[] = [];
 
@@ -80,12 +85,12 @@ export default async function CalendarPage() {
       <section className="panel-glass card p-5 md:p-6">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h1 className="title-xl">통합 캘린더</h1>
-            <p className="muted mt-1">연결된 계정 일정을 한 화면에서 주간/월간으로 관리합니다.</p>
+            <h1 className="title-xl">{tt("calendar.title")}</h1>
+            <p className="muted mt-1">{tt("calendar.subtitle")}</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <span className="surface-chip">연결 테넌트 {tenants.length}개</span>
-            <span className="surface-chip">표시 일정 {events.length}건</span>
+            <span className="surface-chip">{tt("calendar.connectedTenants", { count: tenants.length })}</span>
+            <span className="surface-chip">{tt("calendar.visibleEvents", { count: events.length })}</span>
           </div>
         </div>
       </section>

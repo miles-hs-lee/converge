@@ -15,6 +15,7 @@ import {
   X
 } from "lucide-react";
 import { ModalPortal } from "@/components/modal-portal";
+import { useIntlLocale, useT } from "@/components/locale-provider";
 
 type PersonRow = {
   id: string;
@@ -46,7 +47,7 @@ function buildActionLinks(person: PersonRow) {
   end.setMinutes(end.getMinutes() + 30);
 
   const calendar = email
-    ? `https://outlook.office.com/calendar/0/deeplink/compose?subject=${encodeURIComponent(`${person.displayName} 미팅`)}&to=${encodeURIComponent(email)}&startdt=${encodeURIComponent(start.toISOString())}&enddt=${encodeURIComponent(end.toISOString())}`
+    ? `https://outlook.office.com/calendar/0/deeplink/compose?subject=${encodeURIComponent(`${person.displayName} meeting`)}&to=${encodeURIComponent(email)}&startdt=${encodeURIComponent(start.toISOString())}&enddt=${encodeURIComponent(end.toISOString())}`
     : "#";
 
   return { mailto, teams, calendar, disabled: !email };
@@ -81,10 +82,13 @@ function writeStoredIds(key: string, ids: string[]) {
 }
 
 function hasUsablePhone(value: string): boolean {
-  return Boolean(value && !value.includes("없음"));
+  return Boolean(value && /\d/.test(value));
 }
 
 export function PeopleSearchPanel({ people }: PeopleSearchPanelProps) {
+  const t = useT();
+  const intl = useIntlLocale();
+
   const [query, setQuery] = useState("");
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
   const [sortMode, setSortMode] = useState<"default" | "tenant">("default");
@@ -136,9 +140,9 @@ export function PeopleSearchPanel({ people }: PeopleSearchPanelProps) {
 
   const sortedByTenant = useMemo(() => {
     return [...filtered].sort((a, b) => {
-      return a.tenantName.localeCompare(b.tenantName, "ko") || a.displayName.localeCompare(b.displayName, "ko");
+      return a.tenantName.localeCompare(b.tenantName, intl) || a.displayName.localeCompare(b.displayName, intl);
     });
-  }, [filtered]);
+  }, [filtered, intl]);
 
   const tenantGroups = useMemo(() => {
     const groups = new Map<string, PersonRow[]>();
@@ -214,7 +218,7 @@ export function PeopleSearchPanel({ people }: PeopleSearchPanelProps) {
           <p className="mt-1 text-xs text-muted">{person.mail}</p>
         </button>
         <button
-          aria-label={isFavorite ? "즐겨찾기 해제" : "즐겨찾기 추가"}
+          aria-label={isFavorite ? t("people.favoriteRemove") : t("people.favoriteAdd")}
           className={`mt-1 rounded-lg p-2 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 ${isFavorite ? "text-amber-500 hover:bg-amber-50" : "text-slate-400 hover:bg-slate-100 hover:text-amber-500"}`}
           onClick={() => toggleFavorite(person.id)}
           type="button"
@@ -232,28 +236,28 @@ export function PeopleSearchPanel({ people }: PeopleSearchPanelProps) {
         <input
           className="input-control pl-9"
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="이름, 이메일, 부서, 테넌트 검색"
+          placeholder={t("people.searchPlaceholder")}
           type="search"
           value={query}
         />
       </label>
 
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs text-muted">총 {filtered.length}명</p>
+        <p className="text-xs text-muted">{t("common.total", { count: filtered.length })}</p>
         <div className="inline-flex rounded-xl border border-line bg-white p-0.5 text-sm">
           <button
             className={`rounded-lg px-3 py-1.5 font-medium ${sortMode === "default" ? "bg-accent text-white" : "text-slate-700"}`}
             onClick={() => setSortMode("default")}
             type="button"
           >
-            기본
+            {t("people.sort.default")}
           </button>
           <button
             className={`rounded-lg px-3 py-1.5 font-medium ${sortMode === "tenant" ? "bg-accent text-white" : "text-slate-700"}`}
             onClick={() => setSortMode("tenant")}
             type="button"
           >
-            테넌트 정렬
+            {t("people.sort.tenant")}
           </button>
         </div>
       </div>
@@ -263,10 +267,10 @@ export function PeopleSearchPanel({ people }: PeopleSearchPanelProps) {
           <section className="rounded-xl border border-line bg-white/80 p-3">
             <div className="mb-2 flex items-center gap-2">
               <Star className="text-amber-500" size={14} />
-              <p className="text-xs font-semibold uppercase tracking-[0.1em] text-muted">즐겨찾기 직원</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.1em] text-muted">{t("people.favoritesTitle")}</p>
             </div>
             {favoritePeople.length === 0 ? (
-              <p className="text-xs text-muted">직원 상세에서 별 버튼으로 즐겨찾기를 추가하세요.</p>
+              <p className="text-xs text-muted">{t("people.favoritesHint")}</p>
             ) : (
               <div className="flex flex-wrap gap-2">
                 {favoritePeople.map((person) => (
@@ -287,10 +291,10 @@ export function PeopleSearchPanel({ people }: PeopleSearchPanelProps) {
           <section className="rounded-xl border border-line bg-white/80 p-3">
             <div className="mb-2 flex items-center gap-2">
               <Clock3 className="text-accent" size={14} />
-              <p className="text-xs font-semibold uppercase tracking-[0.1em] text-muted">최근 조회 직원</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.1em] text-muted">{t("people.recentsTitle")}</p>
             </div>
             {recentPeople.length === 0 ? (
-              <p className="text-xs text-muted">직원 카드를 열어보면 최근 조회 목록이 쌓입니다.</p>
+              <p className="text-xs text-muted">{t("people.recentsHint")}</p>
             ) : (
               <div className="flex flex-wrap gap-2">
                 {recentPeople.map((person) => (
@@ -322,9 +326,9 @@ export function PeopleSearchPanel({ people }: PeopleSearchPanelProps) {
                     onClick={() => toggleTenant(group.tenantName)}
                     type="button"
                   >
-                    <p className="text-xs font-semibold uppercase tracking-[0.1em] text-muted">{group.tenantName}</p>
-                    <span className="inline-flex items-center gap-1 text-xs text-muted">
-                      {group.items.length}명
+                  <p className="text-xs font-semibold uppercase tracking-[0.1em] text-muted">{group.tenantName}</p>
+                  <span className="inline-flex items-center gap-1 text-xs text-muted">
+                      {t("people.searchCount", { count: group.items.length })}
                       {collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
                     </span>
                   </button>
@@ -335,7 +339,7 @@ export function PeopleSearchPanel({ people }: PeopleSearchPanelProps) {
 
         {filtered.length === 0 ? (
           <div className="rounded-xl border border-dashed border-line bg-white/70 px-3 py-6 text-center text-muted">
-            검색 결과가 없습니다.
+            {t("people.noResults")}
           </div>
         ) : null}
       </div>
@@ -343,12 +347,17 @@ export function PeopleSearchPanel({ people }: PeopleSearchPanelProps) {
       {selectedPerson && actionLinks ? (
         <ModalPortal>
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-3 sm:p-4" role="dialog" aria-modal="true">
-            <button aria-label="닫기" className="absolute inset-0 cursor-default" onClick={() => setSelectedPersonId(null)} type="button" />
+            <button
+              aria-label={t("common.close")}
+              className="absolute inset-0 cursor-default"
+              onClick={() => setSelectedPersonId(null)}
+              type="button"
+            />
 
             <section className="panel-glass card relative z-10 max-h-[88vh] w-full max-w-2xl overflow-y-auto rounded-2xl p-4 pb-7 sm:p-5">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.14em] text-accent">People Detail</p>
+                  <p className="text-xs uppercase tracking-[0.14em] text-accent">{t("people.title")}</p>
                   <h3 className="mt-1 text-xl font-semibold">{selectedPerson.displayName}</h3>
                   <p className="mt-1 text-sm text-muted">
                     {selectedPerson.jobTitle} · {selectedPerson.department} · {selectedPerson.tenantName}
@@ -361,14 +370,14 @@ export function PeopleSearchPanel({ people }: PeopleSearchPanelProps) {
                     type="button"
                   >
                     <Star className={favoriteIds.includes(selectedPerson.id) ? "fill-current" : ""} size={14} />
-                    즐겨찾기
+                    {t("people.action.favorite")}
                   </button>
                   <button
                     className="btn btn-secondary px-3 py-1.5"
                     onClick={() => setSelectedPersonId(null)}
                     type="button"
                   >
-                    <X size={14} /> 닫기
+                    <X size={14} /> {t("common.close")}
                   </button>
                 </div>
               </div>
@@ -380,7 +389,7 @@ export function PeopleSearchPanel({ people }: PeopleSearchPanelProps) {
                   rel="noreferrer"
                   target="_blank"
                 >
-                  <Mail size={16} /> 메일 작성
+                  <Mail size={16} /> {t("people.action.mail")}
                 </a>
                 <a
                   className={`inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium ${actionLinks.disabled ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400" : "border-line bg-white hover:border-accent/45"}`}
@@ -388,7 +397,7 @@ export function PeopleSearchPanel({ people }: PeopleSearchPanelProps) {
                   rel="noreferrer"
                   target="_blank"
                 >
-                  <MessageSquareText size={16} /> Teams 채팅 열기
+                  <MessageSquareText size={16} /> {t("people.action.teams")}
                 </a>
                 <a
                   className={`inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium ${actionLinks.disabled ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400" : "border-line bg-white hover:border-accent/45"}`}
@@ -396,7 +405,7 @@ export function PeopleSearchPanel({ people }: PeopleSearchPanelProps) {
                   rel="noreferrer"
                   target="_blank"
                 >
-                  <CalendarPlus size={16} /> 캘린더 약속 생성
+                  <CalendarPlus size={16} /> {t("people.action.meeting")}
                 </a>
               </div>
 
@@ -408,7 +417,7 @@ export function PeopleSearchPanel({ people }: PeopleSearchPanelProps) {
                   type="button"
                 >
                   {copiedField === "mail" ? <Check size={16} /> : <Copy size={16} />}
-                  {copiedField === "mail" ? "이메일 복사됨" : "이메일 복사"}
+                  {copiedField === "mail" ? t("people.copyMailDone") : t("people.copyMail")}
                 </button>
                 <button
                   className={`inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium ${hasUsablePhone(selectedPerson.mobilePhone) ? "border-line bg-white hover:border-accent/45" : "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400"}`}
@@ -417,25 +426,25 @@ export function PeopleSearchPanel({ people }: PeopleSearchPanelProps) {
                   type="button"
                 >
                   {copiedField === "phone" ? <Check size={16} /> : <Copy size={16} />}
-                  {copiedField === "phone" ? "전화번호 복사됨" : "전화번호 복사"}
+                  {copiedField === "phone" ? t("people.copyPhoneDone") : t("people.copyPhone")}
                 </button>
               </div>
 
               <div className="mt-4 grid gap-3 text-sm md:grid-cols-2">
                 <div className="rounded-xl border border-line bg-white/85 p-3">
-                  <p className="text-xs uppercase tracking-[0.12em] text-muted">이메일</p>
-                  <p className="mt-1 font-medium">{selectedPerson.mail || "(email 없음)"}</p>
+                  <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("people.field.mail")}</p>
+                  <p className="mt-1 font-medium">{selectedPerson.mail || "-"}</p>
                 </div>
                 <div className="rounded-xl border border-line bg-white/85 p-3">
-                  <p className="text-xs uppercase tracking-[0.12em] text-muted">전화번호</p>
+                  <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("people.field.phone")}</p>
                   <p className="mt-1 font-medium">{selectedPerson.mobilePhone}</p>
                 </div>
                 <div className="rounded-xl border border-line bg-white/85 p-3">
-                  <p className="text-xs uppercase tracking-[0.12em] text-muted">오피스 위치</p>
+                  <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("people.field.office")}</p>
                   <p className="mt-1 font-medium">{selectedPerson.officeLocation}</p>
                 </div>
                 <div className="rounded-xl border border-line bg-white/85 p-3">
-                  <p className="text-xs uppercase tracking-[0.12em] text-muted">소속 테넌트</p>
+                  <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("people.field.tenant")}</p>
                   <p className="mt-1 font-medium">{selectedPerson.tenantName}</p>
                 </div>
               </div>

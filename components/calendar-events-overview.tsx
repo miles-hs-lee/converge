@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { UnifiedWeekCalendar } from "@/components/unified-week-calendar";
 import { colorForTenant } from "@/lib/tenant-colors";
+import { useT, useIntlLocale } from "@/components/locale-provider";
 
 export type CalendarEventRow = {
   id: string;
@@ -28,22 +29,39 @@ function formatRange(event: CalendarEventRow): string {
   })}`;
 }
 
-function EventList({ title, events }: { title: string; events: CalendarEventRow[] }) {
+function EventList({
+  title,
+  events,
+  emptyText,
+  attendeesLabel,
+  intl
+}: {
+  title: string;
+  events: CalendarEventRow[];
+  emptyText: string;
+  attendeesLabel: (count: number) => string;
+  intl: string;
+}) {
   return (
     <section className="rounded-2xl border border-line bg-white/85 p-4">
       <h3 className="text-sm font-semibold tracking-tight">{title}</h3>
       {events.length === 0 ? (
-        <p className="muted mt-2">해당 일정이 없습니다.</p>
+        <p className="muted mt-2">{emptyText}</p>
       ) : (
         <div className="mt-3 space-y-2">
           {events.map((event) => (
             <article className="rounded-xl border border-line bg-white p-3 transition hover:border-accent/45" key={event.id}>
               <p className="text-sm font-medium">{event.subject}</p>
-              <p className="mt-1 text-xs text-muted">{formatRange(event)}</p>
+              <p className="mt-1 text-xs text-muted">
+                {new Date(event.startAt).toLocaleString(intl)} -{" "}
+                {new Date(event.endAt).toLocaleTimeString(intl, { hour: "2-digit", minute: "2-digit" })}
+              </p>
               <p className="mt-1 text-xs text-muted">
                 {event.tenantName} · {event.sourceAccount} · {event.location}
               </p>
-              {event.attendees.length > 0 ? <p className="mt-1 text-xs text-muted">참석자 {event.attendees.length}명</p> : null}
+              {event.attendees.length > 0 ? (
+                <p className="mt-1 text-xs text-muted">{attendeesLabel(event.attendees.length)}</p>
+              ) : null}
             </article>
           ))}
         </div>
@@ -53,6 +71,8 @@ function EventList({ title, events }: { title: string; events: CalendarEventRow[
 }
 
 export function CalendarEventsOverview({ events, tenants }: CalendarEventsOverviewProps) {
+  const t = useT();
+  const intl = useIntlLocale();
   const [query, setQuery] = useState("");
   const [rangeDays, setRangeDays] = useState<3 | 7>(3);
   const [disabledTenants, setDisabledTenants] = useState<Set<string>>(() => new Set());
@@ -111,7 +131,7 @@ export function CalendarEventsOverview({ events, tenants }: CalendarEventsOvervi
           <input
             className="input-control pl-11"
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="일정 검색 (제목/장소/테넌트/참석자)"
+            placeholder={t("calendar.searchPlaceholder")}
             type="search"
             value={query}
           />
@@ -152,8 +172,8 @@ export function CalendarEventsOverview({ events, tenants }: CalendarEventsOvervi
       <section className="panel-glass card mt-5 p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="title-lg">오늘 기준 전후 일정</h2>
-            <p className="muted mt-1">현재 필터: ±{rangeDays}일</p>
+            <h2 className="title-lg">{t("calendar.rangeTitle")}</h2>
+            <p className="muted mt-1">{t("calendar.rangeCurrent", { days: rangeDays })}</p>
           </div>
           <div className="inline-flex rounded-xl border border-line bg-white/90 p-0.5">
             <button
@@ -161,20 +181,32 @@ export function CalendarEventsOverview({ events, tenants }: CalendarEventsOvervi
               onClick={() => setRangeDays(3)}
               type="button"
             >
-              ±3일
+              {t("calendar.range3")}
             </button>
             <button
               className={`rounded-lg px-3 py-1.5 text-sm font-medium ${rangeDays === 7 ? "bg-accent text-white" : "text-slate-700"}`}
               onClick={() => setRangeDays(7)}
               type="button"
             >
-              ±7일
+              {t("calendar.range7")}
             </button>
           </div>
         </div>
         <div className="mt-3 grid gap-3 md:grid-cols-2">
-          <EventList title="지난 일정" events={pastEvents} />
-          <EventList title="예정 일정" events={upcomingEvents} />
+          <EventList
+            attendeesLabel={(count) => t("calendar.attendeesCount", { count })}
+            emptyText={t("calendar.none")}
+            events={pastEvents}
+            intl={intl}
+            title={t("calendar.past")}
+          />
+          <EventList
+            attendeesLabel={(count) => t("calendar.attendeesCount", { count })}
+            emptyText={t("calendar.none")}
+            events={upcomingEvents}
+            intl={intl}
+            title={t("calendar.upcoming")}
+          />
         </div>
       </section>
     </>

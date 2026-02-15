@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ModalPortal } from "@/components/modal-portal";
 import { colorForTenant } from "@/lib/tenant-colors";
 import { useIntlLocale, useT } from "@/components/locale-provider";
@@ -93,6 +93,9 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
   const [moreDayKeyValue, setMoreDayKeyValue] = useState<string | null>(null);
   const [canHover, setCanHover] = useState(false);
   const [hovered, setHovered] = useState<{ event: CalendarEvent; rect: DOMRect } | null>(null);
+
+  const dayScrollRef = useRef<HTMLDivElement | null>(null);
+  const lastAutoScrollKey = useRef<string | null>(null);
 
   const dayDate = useMemo(() => {
     const base = startOfDay(new Date());
@@ -340,6 +343,38 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
     return base;
   }, [dayDate, dayEvents]);
 
+  const dayFirstStartMin = useMemo(() => {
+    if (dayLayout.length === 0) return null;
+    let min = Number.POSITIVE_INFINITY;
+    dayLayout.forEach((it) => {
+      min = Math.min(min, it.startMin);
+    });
+    return Number.isFinite(min) ? min : null;
+  }, [dayLayout]);
+
+  useEffect(() => {
+    if (viewMode !== "day") return;
+    if (!dayScrollRef.current) return;
+
+    const key = `${dayKey(dayDate)}|${dayFirstStartMin ?? "none"}`;
+    if (lastAutoScrollKey.current === key) return;
+    lastAutoScrollKey.current = key;
+
+    const scroller = dayScrollRef.current;
+    // Scroll near the first event (keep ~90 minutes context above).
+    const targetMin = Math.max(0, (dayFirstStartMin ?? 0) - 90);
+    const targetTop = (targetMin / 60) * 56;
+
+    // Wait a tick so layout has a stable height.
+    requestAnimationFrame(() => {
+      try {
+        scroller.scrollTo({ top: Math.max(0, targetTop - 24), behavior: "smooth" });
+      } catch {
+        scroller.scrollTop = Math.max(0, targetTop - 24);
+      }
+    });
+  }, [dayDate, dayFirstStartMin, viewMode]);
+
   return (
     <>
       <div className="mt-5 rounded-2xl border border-line bg-white/78 p-2 sm:p-3">
@@ -385,7 +420,7 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
 
         {viewMode === "day" ? (
           <div className="overflow-hidden rounded-xl border border-line bg-white/90">
-            <div className="max-h-[72vh] overflow-y-auto">
+            <div className="max-h-[72vh] overflow-y-auto" ref={dayScrollRef}>
               <div className="grid grid-cols-[56px_1fr]">
                 <div className="border-r border-line bg-white/95">
                   {Array.from({ length: 25 }, (_, hour) => (
@@ -423,13 +458,17 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
                       const color = colorForTenant(event.tenantName);
                       const top = (startMin / 60) * 56;
                       const height = Math.max(28, ((endMin - startMin) / 60) * 56);
-                      const gap = 8;
+                      const gap = colCount >= 4 ? 4 : colCount === 3 ? 6 : 8;
                       const leftPct = (col / colCount) * 100;
                       const widthPct = (1 / colCount) * 100;
+                      const dense = colCount >= 3;
+                      const showLocation = height >= 44 && !dense;
 
                       return (
                         <button
-                          className="absolute rounded-xl border border-line bg-white p-2 text-left shadow-soft transition hover:border-accent/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
+                          className={`absolute rounded-xl border border-line bg-white text-left shadow-soft transition hover:border-accent/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 ${
+                            dense ? "p-1.5" : "p-2"
+                          }`}
                           key={event.id}
                           onBlur={closeHover}
                           onClick={() => openEvent(event.id)}
@@ -445,12 +484,23 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
                           }}
                           type="button"
                         >
-                          <p className="line-clamp-2 text-xs font-semibold">{event.subject}</p>
-                          <p className="mt-1 text-[11px] text-muted">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className={`line-clamp-2 font-semibold ${dense ? "text-[11px]" : "text-xs"}`}>{event.subject}</p>
+                            <span
+                              className={`inline-flex items-center gap-1 rounded-full border border-line bg-white/85 px-2 py-0.5 text-[10px] font-medium ${
+                                dense ? "px-1.5" : ""
+                              }`}
+                              style={{ color }}
+                            >
+                              <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: color }} />
+                              {dense ? null : <span className="line-clamp-1">{event.tenantName}</span>}
+                            </span>
+                          </div>
+                          <p className={`mt-1 text-muted ${dense ? "text-[10px]" : "text-[11px]"}`}>
                             {new Date(event.startAt).toLocaleTimeString(intl, { hour: "2-digit", minute: "2-digit" })} -{" "}
                             {new Date(event.endAt).toLocaleTimeString(intl, { hour: "2-digit", minute: "2-digit" })}
                           </p>
-                          <p className="mt-1 line-clamp-1 text-[11px] text-muted">{event.location}</p>
+                          {showLocation ? <p className="mt-1 line-clamp-1 text-[11px] text-muted">{event.location}</p> : null}
                         </button>
                       );
                     })}

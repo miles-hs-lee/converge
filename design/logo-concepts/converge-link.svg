@@ -1,0 +1,18 @@
+<svg width="960" height="320" viewBox="0 0 960 320" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="960" height="320" rx="24" fill="#F8FAFC"/>
+  <g transform="translate(52,34)">
+    <rect x="0" y="0" width="252" height="252" rx="36" fill="#111827"/>
+    <path d="M70 166C52 166 38 152 38 134C38 116 52 102 70 102H122" stroke="#2DD4BF" stroke-width="20" stroke-linecap="round"/>
+    <path d="M182 86C200 86 214 100 214 118C214 136 200 150 182 150H130" stroke="#14B8A6" stroke-width="20" stroke-linecap="round"/>
+    <path d="M102 190C84 190 70 176 70 158C70 140 84 126 102 126H150" stroke="#5EEAD4" stroke-width="20" stroke-linecap="round"/>
+    <path d="M150 62C168 62 182 76 182 94C182 112 168 126 150 126H102" stroke="#99F6E4" stroke-width="20" stroke-linecap="round"/>
+  </g>
+  <g transform="translate(340,92)">
+    <text x="0" y="62" fill="#0F172A" font-size="66" font-family="Sora, Avenir Next, sans-serif" font-weight="700" letter-spacing="-1.2">
+      Converge
+    </text>
+    <text x="2" y="102" fill="#475569" font-size="22" font-family="Sora, Avenir Next, sans-serif" font-weight="500">
+      Cross-Tenant Connector
+    </text>
+  </g>
+</svg>

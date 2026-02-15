@@ -1,0 +1,19 @@
+<svg width="960" height="320" viewBox="0 0 960 320" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="960" height="320" rx="24" fill="#F8FAFC"/>
+  <g transform="translate(58,40)">
+    <rect x="0" y="0" width="240" height="240" rx="30" fill="#0F172A"/>
+    <path d="M58 120L120 58L182 120L120 182L58 120Z" fill="#F97316"/>
+    <path d="M120 58L182 120L120 120V58Z" fill="#FB923C"/>
+    <path d="M58 120L120 182L120 120H58Z" fill="#FDBA74"/>
+    <circle cx="120" cy="120" r="14" fill="#FFF7ED"/>
+    <circle cx="120" cy="120" r="6" fill="#EA580C"/>
+  </g>
+  <g transform="translate(340,92)">
+    <text x="0" y="62" fill="#0F172A" font-size="66" font-family="Sora, Avenir Next, sans-serif" font-weight="700" letter-spacing="-1.2">
+      Converge
+    </text>
+    <text x="2" y="102" fill="#475569" font-size="22" font-family="Sora, Avenir Next, sans-serif" font-weight="500">
+      Fast. Focused. Unified.
+    </text>
+  </g>
+</svg>

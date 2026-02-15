@@ -1,0 +1,19 @@
+<svg width="960" height="320" viewBox="0 0 960 320" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="960" height="320" rx="24" fill="#F8FAFC"/>
+  <g transform="translate(60,40)">
+    <rect x="0" y="0" width="240" height="240" rx="32" fill="#0F172A"/>
+    <path d="M42 120C42 78.6 75.6 45 117 45H130" stroke="#7DD3FC" stroke-width="20" stroke-linecap="round"/>
+    <path d="M198 120C198 161.4 164.4 195 123 195H110" stroke="#38BDF8" stroke-width="20" stroke-linecap="round"/>
+    <path d="M72 66L168 174" stroke="#E2E8F0" stroke-width="12" stroke-linecap="round" opacity="0.8"/>
+    <circle cx="120" cy="120" r="26" fill="#22D3EE"/>
+    <circle cx="120" cy="120" r="9" fill="#0F172A"/>
+  </g>
+  <g transform="translate(340,90)">
+    <text x="0" y="64" fill="#0F172A" font-size="68" font-family="Sora, Avenir Next, sans-serif" font-weight="700" letter-spacing="-1.2">
+      Converge
+    </text>
+    <text x="2" y="106" fill="#475569" font-size="22" font-family="Sora, Avenir Next, sans-serif" font-weight="500">
+      Unified M365 Workspace
+    </text>
+  </g>
+</svg>

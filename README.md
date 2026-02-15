@@ -7,6 +7,7 @@ Converge is a unified workspace for people using Microsoft 365 across multiple t
 - Next.js 15 (App Router) + TypeScript
 - Supabase (Auth, Postgres, RLS)
 - Microsoft Graph API (multi-tenant OAuth)
+- Google OAuth + Google Calendar API (OAuth skeleton)
 - Tailwind CSS
 
 ## Implemented Starter Scope
@@ -16,9 +17,10 @@ Converge is a unified workspace for people using Microsoft 365 across multiple t
 - Core tabs:
   - Unified Calendar: `/calendar`
   - People Search: `/people`
-  - Settings (connect extra M365 accounts): `/settings`
+- Settings (connect extra M365 accounts): `/settings`
 - Initial Supabase schema and RLS policy:
   - `supabase/migrations/0001_init.sql`
+  - `supabase/migrations/0002_provider_expansion.sql`
 
 ## Local Setup
 
@@ -41,10 +43,15 @@ cp .env.example .env.local
      - `http://localhost:3000/api/auth/microsoft/callback`
    - Use mock mode when admin consent is not available yet:
      - `NEXT_PUBLIC_USE_MOCK=true`
+   - Optional Google OAuth setup:
+     - `GOOGLE_CLIENT_ID`
+     - `GOOGLE_CLIENT_SECRET`
+     - `GOOGLE_REDIRECT_URI` (e.g. `http://localhost:3000/api/auth/google/callback`)
 
 4. Run migration SQL in Supabase SQL editor:
 
 - `/Users/cnt-22-70004/Documents/Converge/supabase/migrations/0001_init.sql`
+- `/Users/cnt-22-70004/Documents/Converge/supabase/migrations/0002_provider_expansion.sql`
 
 5. Start app
 

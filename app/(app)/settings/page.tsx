@@ -7,6 +7,16 @@ import { mockConnections } from "@/lib/mock-data";
 const statusMessage: Record<string, string> = {
   oauth_connected: "Microsoft 계정 연결이 완료되었습니다.",
   oauth_error: "Microsoft 인증 중 오류가 발생했습니다.",
+  google_oauth_connected: "Google 계정 연결이 완료되었습니다.",
+  google_oauth_error: "Google 인증 중 오류가 발생했습니다.",
+  google_invalid_state: "Google OAuth state 검증에 실패했습니다.",
+  google_missing_code: "Google 인증 코드가 누락되었습니다.",
+  google_token_exchange_failed: "Google 토큰 교환에 실패했습니다.",
+  google_token_payload_invalid: "Google 토큰 응답이 유효하지 않습니다.",
+  google_profile_failed: "Google 프로필 조회에 실패했습니다.",
+  google_profile_incomplete: "Google 프로필 정보가 불완전합니다.",
+  google_refresh_token_missing: "Google refresh token을 받지 못했습니다. 다시 연결해주세요.",
+  google_config_missing: "Google OAuth 설정이 누락되었습니다.",
   invalid_state: "OAuth state 검증에 실패했습니다.",
   missing_code: "인증 코드가 누락되었습니다.",
   auth_required: "먼저 로그인해 주세요.",
@@ -34,6 +44,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
 
   let connections: Array<{
     id: string;
+    provider: string;
     m365_user_principal_name: string | null;
     status: string;
     token_expires_at: string;
@@ -42,6 +53,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
   if (isMockMode) {
     connections = mockConnections.map((connection) => ({
       id: connection.id,
+      provider: "microsoft",
       m365_user_principal_name: connection.principalName,
       status: connection.status,
       token_expires_at: connection.tokenExpiresAt
@@ -49,7 +61,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
   } else if (user) {
     const { data } = await supabase
       .from("m365_connections")
-      .select("id,m365_user_principal_name,status,token_expires_at")
+      .select("id,provider,m365_user_principal_name,status,token_expires_at")
       .order("updated_at", { ascending: false });
     connections = data ?? [];
   }
@@ -66,9 +78,14 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
             <h1 className="title-xl">설정</h1>
             <p className="muted mt-1">M365 계정 연결 상태와 세션을 관리합니다.</p>
           </div>
-          <Link className="btn btn-primary" href="/api/auth/microsoft/start">
-            계정 추가
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link className="btn btn-primary" href="/api/auth/microsoft/start">
+              Microsoft 계정 추가
+            </Link>
+            <a className="btn btn-secondary" href="/api/auth/google/start">
+              Google 캘린더 추가
+            </a>
+          </div>
         </div>
       </section>
 
@@ -84,7 +101,8 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
               <article className="rounded-xl border border-line bg-white/85 p-3" key={connection.id}>
                 <p className="font-medium">{connection.m365_user_principal_name ?? "Unknown account"}</p>
                 <p className="mt-1 text-xs text-muted">
-                  {connection.status} · 만료 {new Date(connection.token_expires_at).toLocaleString("ko-KR")}
+                  {connection.provider === "google" ? "Google" : "Microsoft"} · {connection.status} · 만료{" "}
+                  {new Date(connection.token_expires_at).toLocaleString("ko-KR")}
                 </p>
               </article>
             ))}

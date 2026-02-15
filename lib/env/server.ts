@@ -13,10 +13,21 @@ function getServerEnv(
   return value;
 }
 
+function getOptionalServerEnv(key: "GOOGLE_CLIENT_ID" | "GOOGLE_CLIENT_SECRET" | "GOOGLE_REDIRECT_URI"): string | undefined {
+  const value = process.env[key];
+  if (!value) {
+    return undefined;
+  }
+  return value;
+}
+
 export const serverEnv = {
   supabaseServiceRoleKey: getServerEnv("SUPABASE_SERVICE_ROLE_KEY"),
   azureClientId: getServerEnv("AZURE_CLIENT_ID"),
   azureClientSecret: getServerEnv("AZURE_CLIENT_SECRET"),
   azureTenantId: getServerEnv("AZURE_TENANT_ID"),
-  azureRedirectUri: getServerEnv("AZURE_REDIRECT_URI")
+  azureRedirectUri: getServerEnv("AZURE_REDIRECT_URI"),
+  googleClientId: getOptionalServerEnv("GOOGLE_CLIENT_ID"),
+  googleClientSecret: getOptionalServerEnv("GOOGLE_CLIENT_SECRET"),
+  googleRedirectUri: getOptionalServerEnv("GOOGLE_REDIRECT_URI")
 };

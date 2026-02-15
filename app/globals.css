@@ -36,57 +36,61 @@ button {
   cursor: pointer;
 }
 
-.card {
-  @apply rounded-2xl border border-line bg-panel shadow-soft;
-}
+/* Place app-level component classes in the Components layer so Tailwind utilities
+   (e.g. `pl-11`, `px-3`) can reliably override them when needed. */
+@layer components {
+  .card {
+    @apply rounded-2xl border border-line bg-panel shadow-soft;
+  }
 
-.panel-glass {
-  background: linear-gradient(165deg, rgba(255, 255, 255, 0.92), rgba(244, 250, 255, 0.82));
-  backdrop-filter: blur(14px);
-}
+  .panel-glass {
+    background: linear-gradient(165deg, rgba(255, 255, 255, 0.92), rgba(244, 250, 255, 0.82));
+    backdrop-filter: blur(14px);
+  }
 
-.page-wrap {
-  @apply mx-auto w-full max-w-6xl px-3 sm:px-4;
-}
+  .page-wrap {
+    @apply mx-auto w-full max-w-6xl px-3 sm:px-4;
+  }
 
-.title-xl {
-  @apply text-2xl font-bold tracking-tight text-text;
-}
+  .title-xl {
+    @apply text-2xl font-bold tracking-tight text-text;
+  }
 
-.title-lg {
-  @apply text-lg font-semibold tracking-tight text-text;
-}
+  .title-lg {
+    @apply text-lg font-semibold tracking-tight text-text;
+  }
 
-.muted {
-  @apply text-sm text-muted;
-}
+  .muted {
+    @apply text-sm text-muted;
+  }
 
-.input-control {
-  @apply w-full rounded-xl border border-line bg-white px-3 py-2.5 text-sm text-text outline-none transition focus-visible:ring-2 focus-visible:ring-accent/40;
-}
+  .input-control {
+    @apply w-full rounded-xl border border-line bg-white px-3 py-2.5 text-sm text-text outline-none transition focus-visible:ring-2 focus-visible:ring-accent/40;
+  }
 
-.btn {
-  @apply inline-flex items-center justify-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/45 active:scale-[0.99];
-}
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/45 active:scale-[0.99];
+  }
 
-.btn-primary {
-  @apply border-cyan-600 bg-gradient-to-r from-cyan-600 to-sky-600 text-white hover:brightness-110;
-}
+  .btn-primary {
+    @apply border-cyan-600 bg-gradient-to-r from-cyan-600 to-sky-600 text-white hover:brightness-110;
+  }
 
-.btn-secondary {
-  @apply border-line bg-white/90 text-slate-700 hover:border-accent/45 hover:bg-white;
-}
+  .btn-secondary {
+    @apply border-line bg-white/90 text-slate-700 hover:border-accent/45 hover:bg-white;
+  }
 
-.btn-danger {
-  @apply border-rose-200 bg-rose-50 text-rose-700 hover:border-rose-300;
-}
+  .btn-danger {
+    @apply border-rose-200 bg-rose-50 text-rose-700 hover:border-rose-300;
+  }
 
-.badge {
-  @apply inline-flex items-center rounded-full border border-line bg-white/85 px-3 py-1 text-xs font-medium text-slate-700;
-}
+  .badge {
+    @apply inline-flex items-center rounded-full border border-line bg-white/85 px-3 py-1 text-xs font-medium text-slate-700;
+  }
 
-.surface-chip {
-  @apply inline-flex items-center gap-2 rounded-xl border border-line bg-white/80 px-3 py-2 text-xs font-medium text-slate-700;
+  .surface-chip {
+    @apply inline-flex items-center gap-2 rounded-xl border border-line bg-white/80 px-3 py-2 text-xs font-medium text-slate-700;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

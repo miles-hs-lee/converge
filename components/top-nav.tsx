@@ -24,11 +24,11 @@ export async function TopNav() {
   } = await supabase.auth.getUser();
 
   return (
-    <header className="sticky top-0 z-30 pt-3">
+    <header className="sticky top-0 z-30 pt-3" data-testid="top-nav">
       <div className="page-wrap">
         <div className="panel-glass card flex flex-wrap items-center justify-between gap-3 px-3 py-3 md:px-4">
           <div className="flex items-center gap-2">
-            <Link className="inline-flex items-center" href="/calendar">
+            <Link className="inline-flex items-center" data-testid="nav-brand" href="/calendar">
               <BrandLogo compact />
             </Link>
             {isMockMode ? <span className="badge border-sky-200 bg-sky-50 text-sky-700">MOCK</span> : null}
@@ -38,9 +38,11 @@ export async function TopNav() {
             <div className="grid grid-cols-3 gap-2 rounded-xl border border-line bg-white/85 p-1">
               {tabs.map((tab) => {
                 const Icon = tab.icon;
+                const testId = `nav-tab-${String(tab.href).replace(/^\//, "")}`;
                 return (
                   <Link
                     className="inline-flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-[13px] font-medium text-slate-700 transition hover:bg-accent/10 hover:text-accent sm:gap-2 sm:px-3 sm:text-sm"
+                    data-testid={testId}
                     href={tab.href}
                     key={tab.href}
                   >
@@ -59,14 +61,14 @@ export async function TopNav() {
                   {user.email}
                 </span>
                 <form action={signOutAction}>
-                  <button className="btn btn-secondary px-3 py-1.5" type="submit">
+                  <button className="btn btn-secondary px-3 py-1.5" data-testid="nav-logout" type="submit">
                     <LogOut size={14} />
                     <span className="hidden sm:inline">{tt("nav.logout")}</span>
                   </button>
                 </form>
               </>
             ) : (
-              <Link className="btn btn-secondary px-3 py-1.5" href="/login">
+              <Link className="btn btn-secondary px-3 py-1.5" data-testid="nav-login" href="/login">
                 {tt("nav.login")}
               </Link>
             )}

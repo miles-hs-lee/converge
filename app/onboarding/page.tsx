@@ -6,7 +6,12 @@ export default function OnboardingPage() {
   return (
     <main className="page-wrap py-10 md:py-14">
       <section className="panel-glass card p-7 md:p-10">
-        <BrandLogo subtitle="Unified M365 Workspace" />
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <BrandLogo subtitle="Unified M365 Workspace" />
+          <Link className="btn btn-primary" href="/login">
+            시작하기
+          </Link>
+        </div>
         <h1 className="mt-4 text-3xl font-bold leading-tight tracking-tight md:text-5xl">여러 M365 계정을 하나의 워크스페이스로</h1>
         <p className="muted mt-4 max-w-3xl md:text-base">
           Converge는 여러 테넌트에 흩어진 캘린더와 직원 정보를 한 번에 연결합니다. 계정을 추가하면 일정과 조직 정보를 통합해서
@@ -105,9 +110,6 @@ export default function OnboardingPage() {
         </section>
 
         <div className="mt-9 flex flex-wrap gap-3">
-          <Link className="btn btn-primary" href="/login">
-            시작하기
-          </Link>
           <Link className="btn btn-secondary" href="/calendar">
             캘린더 보기
           </Link>

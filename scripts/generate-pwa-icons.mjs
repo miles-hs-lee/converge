@@ -8,6 +8,8 @@ import { join } from "node:path";
 // - public/icons/icon-512.png
 // - public/icons/icon-512-maskable.png (extra padding/safe area)
 // - public/icons/apple-touch-icon.png (180x180)
+// - public/favicon-16x16.png
+// - public/favicon-32x32.png
 
 function crc32(buf) {
   // Table-based CRC32 (IEEE)
@@ -53,93 +55,138 @@ function pngRGBA({ width, height, pixels }) {
   return Buffer.concat([signature, chunk("IHDR", ihdr), chunk("IDAT", idat), chunk("IEND", iend)]);
 }
 
-function clamp01(v) {
-  return Math.max(0, Math.min(1, v));
+function insideRoundedRect(x, y, size, r) {
+  const rx = Math.max(0, Math.min(r, size / 2));
+  const nx = Math.min(x, size - 1 - x);
+  const ny = Math.min(y, size - 1 - y);
+  if (nx >= rx || ny >= rx) return true;
+  const dx = rx - nx;
+  const dy = rx - ny;
+  return dx * dx + dy * dy <= rx * rx;
 }
 
-function lerp(a, b, t) {
-  return a + (b - a) * t;
+function distToSegment(px, py, x1, y1, x2, y2) {
+  const vx = x2 - x1;
+  const vy = y2 - y1;
+  const wx = px - x1;
+  const wy = py - y1;
+  const c1 = wx * vx + wy * vy;
+  if (c1 <= 0) return Math.hypot(px - x1, py - y1);
+  const c2 = vx * vx + vy * vy;
+  if (c2 <= c1) return Math.hypot(px - x2, py - y2);
+  const t = c1 / c2;
+  const bx = x1 + t * vx;
+  const by = y1 + t * vy;
+  return Math.hypot(px - bx, py - by);
 }
 
-function blend(a, b, t) {
-  return [
-    Math.round(lerp(a[0], b[0], t)),
-    Math.round(lerp(a[1], b[1], t)),
-    Math.round(lerp(a[2], b[2], t)),
-    Math.round(lerp(a[3], b[3], t))
-  ];
+function inRange(angle, startDeg, endDeg) {
+  // inclusive, 0..360
+  if (startDeg <= endDeg) return angle >= startDeg && angle <= endDeg;
+  return angle >= startDeg || angle <= endDeg;
 }
 
-function drawIcon({ size, maskable = false }) {
+function drawIcon({ size, maskable = false, transparentCorners = true }) {
   const w = size;
   const h = size;
   const pixels = Buffer.alloc(w * h * 4);
 
-  // Brand-ish palette from UI:
-  // background: deep slate (#0F172A)
-  // accents: cyan/sky (#22D3EE, #38BDF8, #7DD3FC)
-  const bgTop = [245, 250, 255, 255]; // #F5FAFF
-  const bgBot = [234, 242, 251, 255]; // #EAF2FB
-
-  // For maskable, give extra safe area by shrinking the mark.
-  const pad = maskable ? Math.round(size * 0.12) : Math.round(size * 0.06);
-
-  const cx = (w - 1) / 2;
-  const cy = (h - 1) / 2;
-  const r0 = (Math.min(w, h) / 2) - pad;
-
-  const markBg = [15, 23, 42, 255]; // #0F172A
+  // Match BrandLogo SVG (viewBox 0 0 240 240) as closely as possible.
+  const scale = size / 240;
+  const bg = [15, 23, 42, 255]; // #0F172A
   const ring1 = [125, 211, 252, 255]; // #7DD3FC
   const ring2 = [56, 189, 248, 255]; // #38BDF8
+  const streak = [226, 232, 240, 204]; // #E2E8F0 @ 0.8
   const core = [34, 211, 238, 255]; // #22D3EE
-  const coreHole = [15, 23, 42, 255];
+  const hole = [15, 23, 42, 255];
 
-  // Subtle diagonal streak
-  const streak = [226, 232, 240, 200]; // #E2E8F0 @ ~0.78
+  const rCorner = Math.round(32 * scale);
+  const cx = 120 * scale;
+  const cy = 120 * scale;
+
+  // Arc/ring: approximate circle arc around center; stroke width 20 in SVG.
+  const rArc = 78 * scale;
+  const strokeArc = 20 * scale;
+  const innerArc = rArc - strokeArc / 2;
+  const outerArc = rArc + strokeArc / 2;
+
+  // Diagonal stroke: 72,66 -> 168,174 width 12.
+  const x1 = 72 * scale;
+  const y1 = 66 * scale;
+  const x2 = 168 * scale;
+  const y2 = 174 * scale;
+  const strokeDiag = 12 * scale;
+
+  // Core circle/hole.
+  const rCore = 26 * scale;
+  const rHole = 9 * scale;
+
+  // Maskable: add safe padding by scaling the mark down slightly.
+  const markScale = maskable ? 0.86 : 1.0;
 
   for (let y = 0; y < h; y++) {
-    const t = y / (h - 1);
-    const rowBg = blend(bgTop, bgBot, t);
     for (let x = 0; x < w; x++) {
-      const dx = x - cx;
-      const dy = y - cy;
-      const d = Math.sqrt(dx * dx + dy * dy);
+      const inside = insideRoundedRect(x, y, size, rCorner);
+      const idx = (y * w + x) * 4;
 
-      // Base background gradient
-      let col = rowBg;
+      if (!inside && transparentCorners) {
+        pixels[idx + 0] = 0;
+        pixels[idx + 1] = 0;
+        pixels[idx + 2] = 0;
+        pixels[idx + 3] = 0;
+        continue;
+      }
 
-      // Big rounded square-ish mark background (use circle for simplicity)
-      if (d <= r0) col = markBg;
+      // Base
+      pixels[idx + 0] = bg[0];
+      pixels[idx + 1] = bg[1];
+      pixels[idx + 2] = bg[2];
+      pixels[idx + 3] = 255;
 
-      // Two arc-like rings (approx using annulus)
-      const r1 = r0 * 0.78;
-      const r2 = r0 * 0.62;
-      if (d <= r1 && d >= r1 - r0 * 0.09) col = ring1;
-      if (d <= r2 && d >= r2 - r0 * 0.09) col = ring2;
+      const dx = (x - cx) / markScale;
+      const dy = (y - cy) / markScale;
+      const d = Math.hypot(dx, dy);
 
-      // Diagonal streak line
-      // Line around y = x mapped into icon space
-      const line = Math.abs((y - x) - (cy - cx));
-      if (d <= r0 * 0.92 && line < Math.max(1, Math.round(size * 0.012))) {
-        // alpha blend streak over current
+      // Diagonal streak (blend)
+      const dLine = distToSegment(x, y, x1, y1, x2, y2);
+      if (dLine <= strokeDiag / 2) {
         const a = streak[3] / 255;
-        col = [
-          Math.round(col[0] * (1 - a) + streak[0] * a),
-          Math.round(col[1] * (1 - a) + streak[1] * a),
-          Math.round(col[2] * (1 - a) + streak[2] * a),
-          255
-        ];
+        pixels[idx + 0] = Math.round(pixels[idx + 0] * (1 - a) + streak[0] * a);
+        pixels[idx + 1] = Math.round(pixels[idx + 1] * (1 - a) + streak[1] * a);
+        pixels[idx + 2] = Math.round(pixels[idx + 2] * (1 - a) + streak[2] * a);
+        pixels[idx + 3] = 255;
+      }
+
+      // Arc strokes
+      if (d >= innerArc && d <= outerArc) {
+        let ang = Math.atan2(dy, dx) * (180 / Math.PI);
+        if (ang < 0) ang += 360;
+        if (inRange(ang, 180, 270)) {
+          pixels[idx + 0] = ring1[0];
+          pixels[idx + 1] = ring1[1];
+          pixels[idx + 2] = ring1[2];
+          pixels[idx + 3] = 255;
+        } else if (inRange(ang, 0, 90)) {
+          pixels[idx + 0] = ring2[0];
+          pixels[idx + 1] = ring2[1];
+          pixels[idx + 2] = ring2[2];
+          pixels[idx + 3] = 255;
+        }
       }
 
       // Core dot + hole
-      if (d <= r0 * 0.22) col = core;
-      if (d <= r0 * 0.08) col = coreHole;
-
-      const idx = (y * w + x) * 4;
-      pixels[idx + 0] = col[0];
-      pixels[idx + 1] = col[1];
-      pixels[idx + 2] = col[2];
-      pixels[idx + 3] = col[3];
+      if (d <= rCore) {
+        pixels[idx + 0] = core[0];
+        pixels[idx + 1] = core[1];
+        pixels[idx + 2] = core[2];
+        pixels[idx + 3] = 255;
+      }
+      if (d <= rHole) {
+        pixels[idx + 0] = hole[0];
+        pixels[idx + 1] = hole[1];
+        pixels[idx + 2] = hole[2];
+        pixels[idx + 3] = 255;
+      }
     }
   }
 
@@ -150,11 +197,14 @@ function main() {
   const outDir = join(process.cwd(), "public", "icons");
   mkdirSync(outDir, { recursive: true });
 
-  writeFileSync(join(outDir, "icon-192.png"), drawIcon({ size: 192 }));
-  writeFileSync(join(outDir, "icon-512.png"), drawIcon({ size: 512 }));
-  writeFileSync(join(outDir, "icon-512-maskable.png"), drawIcon({ size: 512, maskable: true }));
-  writeFileSync(join(outDir, "apple-touch-icon.png"), drawIcon({ size: 180 }));
+  writeFileSync(join(outDir, "icon-192.png"), drawIcon({ size: 192, transparentCorners: true }));
+  writeFileSync(join(outDir, "icon-512.png"), drawIcon({ size: 512, transparentCorners: true }));
+  writeFileSync(join(outDir, "icon-512-maskable.png"), drawIcon({ size: 512, maskable: true, transparentCorners: false }));
+  writeFileSync(join(outDir, "apple-touch-icon.png"), drawIcon({ size: 180, transparentCorners: false }));
+
+  const publicDir = join(process.cwd(), "public");
+  writeFileSync(join(publicDir, "favicon-16x16.png"), drawIcon({ size: 16, transparentCorners: false }));
+  writeFileSync(join(publicDir, "favicon-32x32.png"), drawIcon({ size: 32, transparentCorners: false }));
 }
 
 main();
-

@@ -67,6 +67,76 @@ const tenantAccounts = [
   { tenantName: "Regional Tenant", sourceAccount: "you@regional.adatum.com" }
 ];
 
+function createBusyMockEvents(): MockCalendarEvent[] {
+  const base = new Date();
+  base.setHours(0, 0, 0, 0);
+
+  const days = [0, 1, 2];
+  const slots = [
+    { title: "Daily Standup", hour: 9, minute: 10, durationMin: 20, location: "Teams" },
+    { title: "1:1", hour: 10, minute: 30, durationMin: 30, location: "Meeting Room 3" },
+    { title: "Project Review", hour: 14, minute: 0, durationMin: 60, location: "Conference A" }
+  ];
+
+  const events: MockCalendarEvent[] = [];
+  let seq = 1;
+
+  for (const dayOffset of days) {
+    for (const tenant of tenantAccounts) {
+      for (const [slotIndex, slot] of slots.entries()) {
+        const start = new Date(base);
+        start.setDate(start.getDate() + dayOffset);
+        start.setHours(slot.hour, slot.minute, 0, 0);
+
+        const end = new Date(start);
+        end.setMinutes(end.getMinutes() + slot.durationMin);
+
+        const attendeeBase = `${tenant.tenantName.replace(/\s+/g, "").toLowerCase()}.example.com`;
+        const attendees = [
+          `lead+${seq}@${attendeeBase}`,
+          `member+${seq}@${attendeeBase}`,
+          `partner+${(slotIndex % 6) + 1}@example.com`
+        ];
+
+        events.push({
+          id: `evt-busy-${seq}`,
+          tenantName: tenant.tenantName,
+          sourceAccount: tenant.sourceAccount,
+          subject: `${slot.title} · ${tenant.tenantName}`,
+          startAt: start.toISOString(),
+          endAt: end.toISOString(),
+          location: slot.location,
+          attendees
+        });
+        seq += 1;
+      }
+    }
+
+    // A shared cross-tenant slot (same time across tenants) to test collisions.
+    const sharedStart = new Date(base);
+    sharedStart.setDate(sharedStart.getDate() + dayOffset);
+    sharedStart.setHours(11, 0, 0, 0);
+    const sharedEnd = new Date(sharedStart);
+    sharedEnd.setMinutes(sharedEnd.getMinutes() + 45);
+
+    tenantAccounts.forEach((tenant) => {
+      events.push({
+        id: `evt-busy-${seq}`,
+        tenantName: tenant.tenantName,
+        sourceAccount: tenant.sourceAccount,
+        subject: `All Hands · ${tenant.tenantName}`,
+        startAt: sharedStart.toISOString(),
+        endAt: sharedEnd.toISOString(),
+        location: "Auditorium / Teams",
+        attendees: ["all@example.com", "ops@example.com"]
+      });
+      seq += 1;
+    });
+  }
+
+  return events;
+}
+
 function createFutureMockEvents(count: number): MockCalendarEvent[] {
   const base = new Date();
   const events: MockCalendarEvent[] = [];
@@ -133,7 +203,7 @@ function createPastMockEvents(count: number): MockCalendarEvent[] {
   return events;
 }
 
-export const mockCalendarEvents: MockCalendarEvent[] = [...createPastMockEvents(8), ...createFutureMockEvents(30)];
+export const mockCalendarEvents: MockCalendarEvent[] = [...createPastMockEvents(8), ...createBusyMockEvents(), ...createFutureMockEvents(30)];
 
 const peopleSeed: Array<{
   displayName: string;

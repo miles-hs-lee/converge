@@ -65,14 +65,15 @@ export default function OnboardingPage() {
 
           <div className="grid gap-4">
             <article className="rounded-2xl border border-line bg-white/85 p-3 md:p-4">
-              <div className="relative overflow-hidden rounded-xl border border-line">
+              <div className="relative max-h-[560px] overflow-auto rounded-xl border border-line bg-white">
                 <Image
                   alt="Converge 통합 캘린더 실제 화면"
-                  className="max-h-[430px] w-full object-cover object-top"
+                  className="h-auto w-full"
                   height={1028}
                   priority
                   src="/onboarding/calendar-desktop.png"
                   width={1280}
+                  style={{ marginTop: -76 }}
                 />
               </div>
               <p className="mt-3 text-sm font-medium">통합 캘린더</p>
@@ -80,13 +81,14 @@ export default function OnboardingPage() {
             </article>
 
             <article className="rounded-2xl border border-line bg-white/85 p-3 md:p-4">
-              <div className="relative overflow-hidden rounded-xl border border-line">
+              <div className="relative max-h-[560px] overflow-auto rounded-xl border border-line bg-white">
                 <Image
                   alt="Converge 조직도 검색 실제 화면"
-                  className="max-h-[520px] w-full object-cover object-top"
+                  className="h-auto w-full"
                   height={3624}
                   src="/onboarding/people-desktop.png"
                   width={1280}
+                  style={{ marginTop: -76 }}
                 />
               </div>
               <p className="mt-3 text-sm font-medium">조직도/직원 검색</p>
@@ -94,13 +96,14 @@ export default function OnboardingPage() {
             </article>
 
             <article className="rounded-2xl border border-line bg-white/85 p-3 md:p-4">
-              <div className="relative overflow-hidden rounded-xl border border-line">
+              <div className="relative max-h-[560px] overflow-auto rounded-xl border border-line bg-white">
                 <Image
                   alt="Converge 설정 실제 화면"
-                  className="max-h-[430px] w-full object-cover object-top"
+                  className="h-auto w-full"
                   height={758}
                   src="/onboarding/settings-desktop.png"
                   width={1280}
+                  style={{ marginTop: -76 }}
                 />
               </div>
               <p className="mt-3 text-sm font-medium">설정/계정 연결 관리</p>

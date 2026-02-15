@@ -14,6 +14,7 @@ type PersonRow = {
   tenantName: string;
   officeLocation: string;
   mobilePhone: string;
+  businessPhones: string[];
 };
 
 export default async function PeoplePage() {
@@ -34,7 +35,7 @@ export default async function PeoplePage() {
       const { data: connections } = await supabase.from("m365_connections").select("id,tenant_name");
       const { data: dbPeople } = await supabase
         .from("people_cache")
-        .select("id,display_name,mail,job_title,department,office_location,mobile_phone,connection_id")
+        .select("id,display_name,mail,job_title,department,office_location,mobile_phone,business_phones,connection_id")
         .order("display_name", { ascending: true })
         .limit(150);
 
@@ -51,7 +52,8 @@ export default async function PeoplePage() {
         department: person.department ?? tt("people.unknown.department"),
         tenantName: tenantByConnection.get(person.connection_id) ?? "Connected Tenant",
         officeLocation: person.office_location ?? tt("people.unknown.office"),
-        mobilePhone: person.mobile_phone ?? tt("people.unknown.phone")
+        mobilePhone: person.mobile_phone ?? tt("people.unknown.phone"),
+        businessPhones: person.business_phones ?? []
       }));
     }
   }

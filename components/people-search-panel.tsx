@@ -26,6 +26,7 @@ type PersonRow = {
   tenantName: string;
   officeLocation: string;
   mobilePhone: string;
+  businessPhones: string[];
 };
 
 type PeopleSearchPanelProps = {
@@ -85,6 +86,18 @@ function hasUsablePhone(value: string): boolean {
   return Boolean(value && /\d/.test(value));
 }
 
+function digitsOnly(value: string): string {
+  return (value ?? "").replace(/[^\d]/g, "");
+}
+
+function getPrimaryPhone(person: PersonRow): string {
+  if (hasUsablePhone(person.mobilePhone)) {
+    return person.mobilePhone;
+  }
+  const candidate = (person.businessPhones ?? []).find((phone) => hasUsablePhone(phone));
+  return candidate ?? person.mobilePhone;
+}
+
 export function PeopleSearchPanel({ people }: PeopleSearchPanelProps) {
   const t = useT();
   const intl = useIntlLocale();
@@ -128,7 +141,18 @@ export function PeopleSearchPanel({ people }: PeopleSearchPanelProps) {
       return people;
     }
 
+    const qDigits = digitsOnly(q);
+    const wantsPhone = qDigits.length > 0;
+
     return people.filter((person) => {
+      if (wantsPhone) {
+        const mobileDigits = digitsOnly(person.mobilePhone);
+        const businessDigits = (person.businessPhones ?? []).map((phone) => digitsOnly(phone));
+        if (mobileDigits.includes(qDigits) || businessDigits.some((digits) => digits.includes(qDigits))) {
+          return true;
+        }
+      }
+
       return (
         person.displayName.toLowerCase().includes(q) ||
         person.mail.toLowerCase().includes(q) ||
@@ -165,6 +189,7 @@ export function PeopleSearchPanel({ people }: PeopleSearchPanelProps) {
   }, [people, selectedPersonId]);
 
   const actionLinks = selectedPerson ? buildActionLinks(selectedPerson) : null;
+  const selectedPhone = selectedPerson ? getPrimaryPhone(selectedPerson) : "";
   const showPinnedSections = query.trim().length === 0;
 
   function openPerson(personId: string) {
@@ -420,9 +445,9 @@ export function PeopleSearchPanel({ people }: PeopleSearchPanelProps) {
                   {copiedField === "mail" ? t("people.copyMailDone") : t("people.copyMail")}
                 </button>
                 <button
-                  className={`inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium ${hasUsablePhone(selectedPerson.mobilePhone) ? "border-line bg-white hover:border-accent/45" : "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400"}`}
-                  disabled={!hasUsablePhone(selectedPerson.mobilePhone)}
-                  onClick={() => copyToClipboard(selectedPerson.mobilePhone, "phone")}
+                  className={`inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium ${hasUsablePhone(selectedPhone) ? "border-line bg-white hover:border-accent/45" : "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400"}`}
+                  disabled={!hasUsablePhone(selectedPhone)}
+                  onClick={() => copyToClipboard(selectedPhone, "phone")}
                   type="button"
                 >
                   {copiedField === "phone" ? <Check size={16} /> : <Copy size={16} />}
@@ -437,7 +462,12 @@ export function PeopleSearchPanel({ people }: PeopleSearchPanelProps) {
                 </div>
                 <div className="rounded-xl border border-line bg-white/85 p-3">
                   <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("people.field.phone")}</p>
-                  <p className="mt-1 font-medium">{selectedPerson.mobilePhone}</p>
+                  <p className="mt-1 font-medium">{selectedPhone}</p>
+                  {selectedPerson.businessPhones.length > 0 ? (
+                    <p className="mt-1 text-xs text-muted">
+                      {selectedPerson.businessPhones.filter((p) => p !== selectedPhone && hasUsablePhone(p)).slice(0, 2).join(" · ")}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="rounded-xl border border-line bg-white/85 p-3">
                   <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("people.field.office")}</p>

@@ -26,6 +26,7 @@ export type MockPerson = {
   tenantName: string;
   officeLocation: string;
   mobilePhone: string;
+  businessPhones: string[];
 };
 
 export const mockConnections: MockConnection[] = [
@@ -258,6 +259,7 @@ export const mockPeople: MockPerson[] = peopleSeed.map((person, index) => {
     department: person.department,
     tenantName: person.tenantName,
     officeLocation: `${person.officeLocation} Office`,
-    mobilePhone: `010-${String(1000 + index).padStart(4, "0")}-${String(2000 + index).padStart(4, "0")}`
+    mobilePhone: `010-${String(1000 + index).padStart(4, "0")}-${String(2000 + index).padStart(4, "0")}`,
+    businessPhones: [`02-${String(3000 + (index % 100)).padStart(4, "0")}-${String(4000 + (index % 100)).padStart(4, "0")}`]
   };
 });

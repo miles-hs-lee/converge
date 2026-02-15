@@ -21,7 +21,7 @@ type UnifiedWeekCalendarProps = {
   tenants: string[];
 };
 
-type ViewMode = "week" | "month";
+type ViewMode = "day" | "week" | "month";
 
 function addDays(date: Date, days: number): Date {
   const result = new Date(date);
@@ -31,6 +31,12 @@ function addDays(date: Date, days: number): Date {
 
 function sameDate(a: Date, b: Date): boolean {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
+function startOfDay(date: Date): Date {
+  const result = new Date(date);
+  result.setHours(0, 0, 0, 0);
+  return result;
 }
 
 function startOfWeek(date: Date): Date {
@@ -59,6 +65,10 @@ function monthLabel(monthDate: Date, intl: string): string {
   return monthDate.toLocaleDateString(intl, { year: "numeric", month: "long" });
 }
 
+function dayLabel(dayDate: Date, intl: string): string {
+  return dayDate.toLocaleDateString(intl, { year: "numeric", month: "short", day: "numeric", weekday: "short" });
+}
+
 function dayKey(date: Date): string {
   return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
 }
@@ -68,12 +78,18 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
   const intl = useIntlLocale();
 
   const [viewMode, setViewMode] = useState<ViewMode>("week");
+  const [offsetDay, setOffsetDay] = useState(0);
   const [offsetWeek, setOffsetWeek] = useState(0);
   const [offsetMonth, setOffsetMonth] = useState(0);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [moreDayKeyValue, setMoreDayKeyValue] = useState<string | null>(null);
   const [canHover, setCanHover] = useState(false);
   const [hovered, setHovered] = useState<{ event: CalendarEvent; rect: DOMRect } | null>(null);
+
+  const dayDate = useMemo(() => {
+    const base = startOfDay(new Date());
+    return addDays(base, offsetDay);
+  }, [offsetDay]);
 
   const weekStart = useMemo(() => {
     const base = startOfWeek(new Date());
@@ -121,7 +137,7 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
     return eventsByDay.get(moreDayKeyValue) ?? [];
   }, [eventsByDay, moreDayKeyValue]);
 
-  const label = viewMode === "week" ? weekLabel(weekStart, intl) : monthLabel(monthDate, intl);
+  const label = viewMode === "day" ? dayLabel(dayDate, intl) : viewMode === "week" ? weekLabel(weekStart, intl) : monthLabel(monthDate, intl);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -152,6 +168,10 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
   }
 
   function goPrev() {
+    if (viewMode === "day") {
+      setOffsetDay((prev) => prev - 1);
+      return;
+    }
     if (viewMode === "week") {
       setOffsetWeek((prev) => prev - 1);
       return;
@@ -160,11 +180,16 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
   }
 
   function goToday() {
+    setOffsetDay(0);
     setOffsetWeek(0);
     setOffsetMonth(0);
   }
 
   function goNext() {
+    if (viewMode === "day") {
+      setOffsetDay((prev) => prev + 1);
+      return;
+    }
     if (viewMode === "week") {
       setOffsetWeek((prev) => prev + 1);
       return;
@@ -204,6 +229,11 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
     return [t("weekday.mon"), t("weekday.tue"), t("weekday.wed"), t("weekday.thu"), t("weekday.fri"), t("weekday.sat"), t("weekday.sun")];
   }, [t]);
 
+  const dayEvents = useMemo(() => {
+    const key = dayKey(dayDate);
+    return (eventsByDay.get(key) ?? []).slice().sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
+  }, [dayDate, eventsByDay]);
+
   return (
     <>
       <div className="mt-5 rounded-2xl border border-line bg-white/78 p-2 sm:p-3">
@@ -211,6 +241,13 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
           <div className="flex items-center justify-between gap-2">
             <p className="text-sm font-semibold tracking-tight">{label}</p>
             <div className="inline-flex rounded-xl border border-line bg-white p-0.5 text-sm">
+              <button
+                className={`rounded-lg px-3 py-1.5 font-medium ${viewMode === "day" ? "bg-accent text-white" : "text-slate-700"}`}
+                onClick={() => setViewMode("day")}
+                type="button"
+              >
+                {t("common.day")}
+              </button>
               <button
                 className={`rounded-lg px-3 py-1.5 font-medium ${viewMode === "week" ? "bg-accent text-white" : "text-slate-700"}`}
                 onClick={() => setViewMode("week")}
@@ -240,7 +277,55 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
           </div>
         </div>
 
-        {viewMode === "week" ? (
+        {viewMode === "day" ? (
+          <div className="space-y-2">
+            {dayEvents.length === 0 ? (
+              <div className="rounded-xl border border-line bg-white/90 p-6 text-center">
+                <p className="text-sm font-medium">{t("calendar.none")}</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {dayEvents.map((event) => {
+                  const color = colorForTenant(event.tenantName);
+                  const start = new Date(event.startAt);
+                  const end = new Date(event.endAt);
+                  return (
+                    <button
+                      className="w-full rounded-xl border border-line bg-white/90 p-3 text-left transition hover:border-accent/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
+                      key={event.id}
+                      onClick={() => openEvent(event.id)}
+                      onFocus={(e) => openHover(event, e.currentTarget)}
+                      onBlur={closeHover}
+                      onMouseEnter={(e) => openHover(event, e.currentTarget)}
+                      onMouseLeave={closeHover}
+                      type="button"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold">{event.subject}</p>
+                          <p className="mt-1 text-xs text-muted">
+                            {start.toLocaleTimeString(intl, { hour: "2-digit", minute: "2-digit" })} -{" "}
+                            {end.toLocaleTimeString(intl, { hour: "2-digit", minute: "2-digit" })}
+                          </p>
+                          <p className="mt-1 text-xs text-muted">
+                            {event.location} · {event.sourceAccount}
+                          </p>
+                        </div>
+                        <div
+                          className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium"
+                          style={{ backgroundColor: `${color}1f`, color }}
+                        >
+                          <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: color }} />
+                          {event.tenantName}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        ) : viewMode === "week" ? (
           <div className="grid gap-2 md:grid-cols-7">
             {weekDays.map((day) => {
               const key = dayKey(day);

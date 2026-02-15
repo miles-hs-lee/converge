@@ -41,6 +41,7 @@ export type I18nKey =
   | "common.prev"
   | "common.today"
   | "common.next"
+  | "common.day"
   | "common.week"
   | "common.month"
   | "common.more"
@@ -245,6 +246,7 @@ const enUS: Dict = {
   "common.prev": "Prev",
   "common.today": "Today",
   "common.next": "Next",
+  "common.day": "Day",
   "common.week": "Week",
   "common.month": "Month",
   "common.more": "{count} more",
@@ -449,6 +451,7 @@ const koKR: Dict = {
   "common.prev": "이전",
   "common.today": "오늘",
   "common.next": "다음",
+  "common.day": "일간",
   "common.week": "주간",
   "common.month": "월간",
   "common.more": "+{count} more",
@@ -653,6 +656,7 @@ const jaJP: Dict = {
   "common.prev": "前へ",
   "common.today": "今日",
   "common.next": "次へ",
+  "common.day": "日",
   "common.week": "週",
   "common.month": "月",
   "common.more": "+{count} 件",

@@ -9,15 +9,15 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        bg: "#edf7f5",
+        bg: "#edf4fb",
         panel: "#ffffff",
-        text: "#11263f",
-        muted: "#4f6477",
-        accent: "#0d9488",
-        line: "#c9e3de"
+        text: "#0f1d33",
+        muted: "#5a6d84",
+        accent: "#0891b2",
+        line: "#d3e4f3"
       },
       boxShadow: {
-        soft: "0 12px 36px rgba(9, 34, 50, 0.1)"
+        soft: "0 12px 36px rgba(14, 38, 64, 0.1)"
       }
     }
   },

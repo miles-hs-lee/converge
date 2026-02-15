@@ -20,7 +20,7 @@ type UnifiedWeekCalendarProps = {
 
 type ViewMode = "week" | "month";
 
-const tenantPalette = ["#0f766e", "#0284c7", "#475569", "#059669", "#7c3aed", "#b45309"];
+const tenantPalette = ["#0891b2", "#0284c7", "#0ea5e9", "#1d4ed8", "#334155", "#14b8a6"];
 
 function addDays(date: Date, days: number): Date {
   const result = new Date(date);
@@ -145,10 +145,10 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
 
   return (
     <>
-      <div className="mt-5 rounded-2xl border border-line bg-white/78 p-3">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <p className="text-sm font-semibold tracking-tight">{label}</p>
-          <div className="flex flex-wrap items-center gap-2">
+      <div className="mt-5 rounded-2xl border border-line bg-white/78 p-2 sm:p-3">
+        <div className="mb-3 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm font-semibold tracking-tight">{label}</p>
             <div className="inline-flex rounded-xl border border-line bg-white p-0.5 text-sm">
               <button
                 className={`rounded-lg px-3 py-1.5 font-medium ${viewMode === "week" ? "bg-accent text-white" : "text-slate-700"}`}
@@ -165,6 +165,8 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
                 월간
               </button>
             </div>
+          </div>
+          <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:items-center">
             <button className="btn btn-secondary px-3 py-1.5" onClick={goPrev} type="button">
               이전
             </button>
@@ -223,52 +225,54 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
             })}
           </div>
         ) : (
-          <div>
-            <div className="mb-2 grid grid-cols-7 gap-2 text-center text-xs uppercase tracking-[0.12em] text-muted">
-              {["월", "화", "수", "목", "금", "토", "일"].map((day) => (
-                <p key={day}>{day}</p>
-              ))}
-            </div>
-            <div className="grid grid-cols-7 gap-2">
-              {monthDays.map((day) => {
-                const key = dayKey(day);
-                const dailyEvents = eventsByDay.get(key) ?? [];
-                const inCurrentMonth = day.getMonth() === monthDate.getMonth();
-                const isToday = sameDate(day, new Date());
-                return (
-                  <section className="min-h-28 rounded-xl border border-line bg-white/90 p-2" key={key}>
-                    <p className={`text-xs font-semibold ${isToday ? "text-accent" : inCurrentMonth ? "text-slate-700" : "text-slate-400"}`}>
-                      {day.getDate()}
-                    </p>
-                    <div className="mt-2 space-y-1">
-                      {dailyEvents.slice(0, 3).map((event) => {
-                        const color = colorByTenant.get(event.tenantName) ?? "#0f766e";
-                        return (
-                          <button
-                            className="block w-full truncate rounded-md px-1.5 py-1 text-left text-[11px] transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
-                            key={event.id}
-                            onClick={() => openEvent(event.id)}
-                            style={{ backgroundColor: `${color}1f`, color }}
-                            type="button"
-                          >
-                            {new Date(event.startAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} {event.subject}
-                          </button>
-                        );
-                      })}
-                      {dailyEvents.length > 3 ? <p className="text-[10px] text-muted">+{dailyEvents.length - 3} more</p> : null}
-                    </div>
-                  </section>
-                );
-              })}
+          <div className="-mx-1 overflow-x-auto pb-1">
+            <div className="min-w-[720px] px-1">
+              <div className="mb-2 grid grid-cols-7 gap-2 text-center text-xs uppercase tracking-[0.12em] text-muted">
+                {["월", "화", "수", "목", "금", "토", "일"].map((day) => (
+                  <p key={day}>{day}</p>
+                ))}
+              </div>
+              <div className="grid grid-cols-7 gap-2">
+                {monthDays.map((day) => {
+                  const key = dayKey(day);
+                  const dailyEvents = eventsByDay.get(key) ?? [];
+                  const inCurrentMonth = day.getMonth() === monthDate.getMonth();
+                  const isToday = sameDate(day, new Date());
+                  return (
+                    <section className="min-h-28 rounded-xl border border-line bg-white/90 p-2" key={key}>
+                      <p className={`text-xs font-semibold ${isToday ? "text-accent" : inCurrentMonth ? "text-slate-700" : "text-slate-400"}`}>
+                        {day.getDate()}
+                      </p>
+                      <div className="mt-2 space-y-1">
+                        {dailyEvents.slice(0, 3).map((event) => {
+                          const color = colorByTenant.get(event.tenantName) ?? "#0891b2";
+                          return (
+                            <button
+                              className="block w-full truncate rounded-md px-1.5 py-1 text-left text-[11px] transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
+                              key={event.id}
+                              onClick={() => openEvent(event.id)}
+                              style={{ backgroundColor: `${color}1f`, color }}
+                              type="button"
+                            >
+                              {new Date(event.startAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} {event.subject}
+                            </button>
+                          );
+                        })}
+                        {dailyEvents.length > 3 ? <p className="text-[10px] text-muted">+{dailyEvents.length - 3} more</p> : null}
+                      </div>
+                    </section>
+                  );
+                })}
+              </div>
             </div>
           </div>
         )}
       </div>
 
       {selectedEvent ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-4" role="dialog" aria-modal="true">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/45 p-0 sm:items-center sm:p-4" role="dialog" aria-modal="true">
           <button aria-label="닫기" className="absolute inset-0 cursor-default" onClick={closeEventModal} type="button" />
-          <section className="panel-glass card relative z-10 w-full max-w-lg p-5">
+          <section className="panel-glass card relative z-10 h-[86vh] w-full overflow-y-auto rounded-t-3xl p-4 pb-8 sm:h-auto sm:max-w-lg sm:rounded-2xl sm:p-5">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-xs uppercase tracking-[0.14em] text-accent">Event Detail</p>

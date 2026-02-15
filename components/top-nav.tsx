@@ -26,7 +26,7 @@ export async function TopNav() {
             <Link className="inline-flex items-center" href="/calendar">
               <BrandLogo compact />
             </Link>
-            {isMockMode ? <span className="badge border-teal-200 bg-teal-50 text-teal-700">MOCK</span> : null}
+            {isMockMode ? <span className="badge border-sky-200 bg-sky-50 text-sky-700">MOCK</span> : null}
           </div>
 
           <nav className="order-3 w-full md:order-2 md:w-auto">
@@ -35,12 +35,12 @@ export async function TopNav() {
                 const Icon = tab.icon;
                 return (
                   <Link
-                    className="inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-accent/10 hover:text-accent"
+                    className="inline-flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-[13px] font-medium text-slate-700 transition hover:bg-accent/10 hover:text-accent sm:gap-2 sm:px-3 sm:text-sm"
                     href={tab.href}
                     key={tab.href}
                   >
                     <Icon size={14} />
-                    <span className="hidden sm:inline">{tab.label}</span>
+                    <span>{tab.label}</span>
                   </Link>
                 );
               })}
@@ -56,7 +56,7 @@ export async function TopNav() {
                 <form action={signOutAction}>
                   <button className="btn btn-secondary px-3 py-1.5" type="submit">
                     <LogOut size={14} />
-                    로그아웃
+                    <span className="hidden sm:inline">로그아웃</span>
                   </button>
                 </form>
               </>

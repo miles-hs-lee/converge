@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { AlertCircle } from "lucide-react";
 import { requestMagicLink } from "@/app/login/actions";
 import { createClient } from "@/lib/supabase/server";
+import { BrandLogo } from "@/components/brand-logo";
 
 const loginStatusMessage: Record<string, string> = {
   magic_link_sent: "매직링크를 보냈습니다. 이메일에서 로그인 링크를 열어주세요.",
@@ -32,8 +33,9 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   return (
     <main className="page-wrap flex min-h-screen max-w-md items-center py-12">
       <section className="panel-glass card w-full p-8">
-        <h1 className="title-xl">Converge 로그인</h1>
-        <p className="muted mt-2">메인 계정으로 로그인하고 바로 캘린더를 확인하세요.</p>
+        <BrandLogo subtitle="Unified M365 Workspace" />
+        <h1 className="title-xl mt-4">로그인</h1>
+        <p className="muted mt-2">메인 계정으로 로그인하고 바로 통합 캘린더를 확인하세요.</p>
 
         {status && loginStatusMessage[status] ? (
           <p className="mt-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">

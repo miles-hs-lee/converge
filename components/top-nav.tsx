@@ -4,6 +4,7 @@ import { CalendarDays, Search, Settings, LogOut } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { signOutAction } from "@/app/(app)/actions";
 import { isMockMode } from "@/lib/mock-mode";
+import { BrandLogo } from "@/components/brand-logo";
 
 const tabs: Array<{ href: Route; label: string; icon: typeof CalendarDays }> = [
   { href: "/calendar", label: "캘린더", icon: CalendarDays },
@@ -21,8 +22,8 @@ export async function TopNav() {
     <header className="sticky top-0 z-30 border-b border-line bg-white/88 backdrop-blur-xl">
       <div className="page-wrap flex items-center justify-between gap-3 py-3">
         <div className="flex items-center gap-2">
-          <Link className="text-sm font-semibold tracking-tight" href="/calendar">
-            Converge
+          <Link className="inline-flex items-center" href="/calendar">
+            <BrandLogo compact />
           </Link>
           {isMockMode ? <span className="badge border-sky-200 bg-sky-50 text-sky-700">MOCK</span> : null}
         </div>

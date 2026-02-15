@@ -20,7 +20,7 @@ export default async function OnboardingPage() {
         <h1 className="mt-4 text-3xl font-bold leading-tight tracking-tight md:text-5xl">{tt("onboarding.heroTitle")}</h1>
         <p className="muted mt-4 max-w-3xl md:text-base">{tt("onboarding.heroDesc")}</p>
 
-        <div className="mt-7 grid gap-3 md:grid-cols-3">
+        <div className="mt-7 grid gap-3 md:grid-cols-2 lg:grid-cols-4">
           <article className="rounded-2xl border border-line bg-white/85 p-4">
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-accent">{tt("onboarding.coreLabel", { index: 1 })}</p>
             <h2 className="mt-2 text-sm font-semibold">{tt("onboarding.core1Title")}</h2>
@@ -35,6 +35,11 @@ export default async function OnboardingPage() {
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-accent">{tt("onboarding.coreLabel", { index: 3 })}</p>
             <h2 className="mt-2 text-sm font-semibold">{tt("onboarding.core3Title")}</h2>
             <p className="muted mt-1">{tt("onboarding.core3Desc")}</p>
+          </article>
+          <article className="rounded-2xl border border-line bg-white/85 p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-accent">{tt("onboarding.coreLabel", { index: 4 })}</p>
+            <h2 className="mt-2 text-sm font-semibold">{tt("onboarding.core4Title")}</h2>
+            <p className="muted mt-1">{tt("onboarding.core4Desc")}</p>
           </article>
         </div>
 

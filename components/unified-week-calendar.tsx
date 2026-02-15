@@ -67,6 +67,7 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
   const [offsetWeek, setOffsetWeek] = useState(0);
   const [offsetMonth, setOffsetMonth] = useState(0);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [moreDayKeyValue, setMoreDayKeyValue] = useState<string | null>(null);
 
   const weekStart = useMemo(() => {
     const base = startOfWeek(new Date());
@@ -107,7 +108,29 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
     return events.find((event) => event.id === selectedEventId) ?? null;
   }, [events, selectedEventId]);
 
+  const moreEvents = useMemo(() => {
+    if (!moreDayKeyValue) {
+      return [];
+    }
+    return eventsByDay.get(moreDayKeyValue) ?? [];
+  }, [eventsByDay, moreDayKeyValue]);
+
   const label = viewMode === "week" ? weekLabel(weekStart) : monthLabel(monthDate);
+
+  function dateNumberClass(day: Date, isToday: boolean, inCurrentMonth = true): string {
+    if (!inCurrentMonth) {
+      return "text-slate-400";
+    }
+
+    const dayOfWeek = day.getDay();
+    if (dayOfWeek === 6) {
+      return "text-sky-600";
+    }
+    if (dayOfWeek === 0) {
+      return "text-rose-600";
+    }
+    return isToday ? "text-accent" : "text-slate-700";
+  }
 
   function goPrev() {
     if (viewMode === "week") {
@@ -137,6 +160,17 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
   function closeEventModal() {
     setSelectedEventId(null);
   }
+
+  function openMore(day: Date) {
+    setMoreDayKeyValue(dayKey(day));
+  }
+
+  function closeMore() {
+    setMoreDayKeyValue(null);
+  }
+
+  const inlineLimitWeek = 4;
+  const inlineLimitMonth = 3;
 
   return (
     <>
@@ -184,13 +218,13 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
                 <section className="min-h-44 rounded-xl border border-line bg-white/90 p-2" key={key}>
                   <header className="mb-2 border-b border-line pb-2">
                     <p className="text-xs uppercase tracking-[0.14em] text-muted">{day.toLocaleDateString("ko-KR", { weekday: "short" })}</p>
-                    <p className={`text-sm font-semibold ${isToday ? "text-accent" : "text-slate-700"}`}>
+                    <p className={`text-sm font-semibold ${dateNumberClass(day, isToday)}`}>
                       {day.toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" })}
                     </p>
                   </header>
 
                   <div className="space-y-2">
-                    {dailyEvents.map((event) => {
+                    {dailyEvents.slice(0, inlineLimitWeek).map((event) => {
                       const color = colorForTenant(event.tenantName);
                       return (
                         <button
@@ -213,6 +247,15 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
                         </button>
                       );
                     })}
+                    {dailyEvents.length > inlineLimitWeek ? (
+                      <button
+                        className="w-full rounded-lg border border-line bg-white/90 px-2 py-1.5 text-left text-xs font-medium text-slate-700 transition hover:border-accent/45 hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
+                        onClick={() => openMore(day)}
+                        type="button"
+                      >
+                        +{dailyEvents.length - inlineLimitWeek} more
+                      </button>
+                    ) : null}
                     {dailyEvents.length === 0 ? <p className="pt-4 text-center text-xs text-muted">일정 없음</p> : null}
                   </div>
                 </section>
@@ -223,9 +266,14 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
           <div className="-mx-1 overflow-x-auto pb-1">
             <div className="min-w-[720px] px-1">
               <div className="mb-2 grid grid-cols-7 gap-2 text-center text-xs uppercase tracking-[0.12em] text-muted">
-                {["월", "화", "수", "목", "금", "토", "일"].map((day) => (
-                  <p key={day}>{day}</p>
-                ))}
+                {["월", "화", "수", "목", "금", "토", "일"].map((day) => {
+                  const weekendClass = day === "토" ? "text-sky-600" : day === "일" ? "text-rose-600" : "";
+                  return (
+                    <p className={weekendClass} key={day}>
+                      {day}
+                    </p>
+                  );
+                })}
               </div>
               <div className="grid grid-cols-7 gap-2">
                 {monthDays.map((day) => {
@@ -235,11 +283,11 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
                   const isToday = sameDate(day, new Date());
                   return (
                     <section className="min-h-28 rounded-xl border border-line bg-white/90 p-2" key={key}>
-                      <p className={`text-xs font-semibold ${isToday ? "text-accent" : inCurrentMonth ? "text-slate-700" : "text-slate-400"}`}>
+                      <p className={`text-xs font-semibold ${dateNumberClass(day, isToday, inCurrentMonth)}`}>
                         {day.getDate()}
                       </p>
                       <div className="mt-2 space-y-1">
-                        {dailyEvents.slice(0, 3).map((event) => {
+                        {dailyEvents.slice(0, inlineLimitMonth).map((event) => {
                           const color = colorForTenant(event.tenantName);
                           return (
                             <button
@@ -253,7 +301,15 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
                             </button>
                           );
                         })}
-                        {dailyEvents.length > 3 ? <p className="text-[10px] text-muted">+{dailyEvents.length - 3} more</p> : null}
+                        {dailyEvents.length > inlineLimitMonth ? (
+                          <button
+                            className="mt-1 inline-flex text-[10px] font-medium text-slate-600 transition hover:text-accent"
+                            onClick={() => openMore(day)}
+                            type="button"
+                          >
+                            +{dailyEvents.length - inlineLimitMonth} more
+                          </button>
+                        ) : null}
                       </div>
                     </section>
                   );
@@ -263,6 +319,67 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
           </div>
         )}
       </div>
+
+      {moreDayKeyValue ? (
+        <ModalPortal>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-3 sm:p-4" role="dialog" aria-modal="true">
+            <button aria-label="닫기" className="absolute inset-0 cursor-default" onClick={closeMore} type="button" />
+            <section className="panel-glass card relative z-10 max-h-[86vh] w-full max-w-lg overflow-y-auto rounded-2xl p-4 pb-7 sm:p-5">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.14em] text-accent">Daily Events</p>
+                  <h3 className="mt-1 text-lg font-semibold">
+                    {(() => {
+                      const [y, m, d] = moreDayKeyValue.split("-").map((v) => Number(v));
+                      const date = new Date(y ?? 0, m ?? 0, d ?? 0);
+                      return date.toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric", weekday: "short" });
+                    })()}
+                  </h3>
+                  <p className="mt-1 text-xs text-muted">총 {moreEvents.length}개 일정</p>
+                </div>
+                <button className="btn btn-secondary px-3 py-1.5" onClick={closeMore} type="button">
+                  닫기
+                </button>
+              </div>
+
+              <div className="mt-4 space-y-2">
+                {moreEvents.map((event) => {
+                  const color = colorForTenant(event.tenantName);
+                  return (
+                    <button
+                      className="w-full rounded-xl border border-line bg-white/90 p-3 text-left transition hover:border-accent/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
+                      key={event.id}
+                      onClick={() => {
+                        closeMore();
+                        openEvent(event.id);
+                      }}
+                      type="button"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold">{event.subject}</p>
+                          <p className="mt-1 text-xs text-muted">
+                            {new Date(event.startAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} -{" "}
+                            {new Date(event.endAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })}
+                          </p>
+                          <p className="mt-1 text-xs text-muted">{event.location}</p>
+                        </div>
+                        <div
+                          className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium"
+                          style={{ backgroundColor: `${color}1f`, color }}
+                        >
+                          <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: color }} />
+                          {event.tenantName}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          </div>
+        </ModalPortal>
+      ) : null}
 
       {selectedEvent ? (
         <ModalPortal>

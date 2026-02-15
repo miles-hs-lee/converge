@@ -31,20 +31,26 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   }
 
   return (
-    <main className="page-wrap flex min-h-screen max-w-md items-center py-12">
-      <section className="panel-glass card w-full p-8">
+    <main className="page-wrap flex min-h-screen max-w-xl items-center py-12">
+      <section className="panel-glass card w-full p-7 md:p-9">
         <BrandLogo subtitle="Unified M365 Workspace" />
-        <h1 className="title-xl mt-4">로그인</h1>
-        <p className="muted mt-2">메인 계정으로 로그인하고 바로 통합 캘린더를 확인하세요.</p>
+        <h1 className="title-xl mt-5">메인 계정으로 시작</h1>
+        <p className="muted mt-2">로그인 후 통합 캘린더와 다중 테넌트 직원 검색을 바로 사용할 수 있습니다.</p>
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          <span className="surface-chip">통합 캘린더</span>
+          <span className="surface-chip">직원 검색</span>
+          <span className="surface-chip">다중 테넌트</span>
+        </div>
 
         {status && loginStatusMessage[status] ? (
-          <p className="mt-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          <p className="mt-5 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
             <AlertCircle className="mt-0.5" size={16} />
             {loginStatusMessage[status]}
           </p>
         ) : null}
 
-        <form action={requestMagicLink} className="mt-5 space-y-3">
+        <form action={requestMagicLink} className="mt-6 space-y-3">
           <label className="text-sm font-medium" htmlFor="email">
             이메일
           </label>
@@ -58,7 +64,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           Microsoft 계정으로 계속
         </Link>
 
-        <Link className="mt-5 inline-flex text-sm text-muted underline" href="/onboarding">
+        <Link className="mt-6 inline-flex text-sm text-muted underline decoration-accent/30 underline-offset-4" href="/onboarding">
           온보딩 보기
         </Link>
       </section>

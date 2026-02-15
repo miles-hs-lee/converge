@@ -29,14 +29,14 @@ function formatRange(event: CalendarEventRow): string {
 
 function EventList({ title, events }: { title: string; events: CalendarEventRow[] }) {
   return (
-    <section className="rounded-xl border border-line bg-white/80 p-4">
-      <h3 className="text-sm font-semibold">{title}</h3>
+    <section className="rounded-2xl border border-line bg-white/85 p-4">
+      <h3 className="text-sm font-semibold tracking-tight">{title}</h3>
       {events.length === 0 ? (
         <p className="muted mt-2">해당 일정이 없습니다.</p>
       ) : (
-        <div className="mt-2 space-y-2">
+        <div className="mt-3 space-y-2">
           {events.map((event) => (
-            <article className="rounded-lg border border-line bg-white p-3" key={event.id}>
+            <article className="rounded-xl border border-line bg-white p-3 transition hover:border-accent/45" key={event.id}>
               <p className="text-sm font-medium">{event.subject}</p>
               <p className="mt-1 text-xs text-muted">{formatRange(event)}</p>
               <p className="mt-1 text-xs text-muted">
@@ -104,7 +104,7 @@ export function CalendarEventsOverview({ events, tenants }: CalendarEventsOvervi
 
   return (
     <>
-      <div className="mt-4 flex flex-wrap items-center gap-2">
+      <div className="mt-1 flex flex-wrap items-center gap-2">
         <label className="relative min-w-[220px] flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" size={14} />
           <input
@@ -119,7 +119,7 @@ export function CalendarEventsOverview({ events, tenants }: CalendarEventsOvervi
 
       <div className="mt-3 flex flex-wrap gap-2">
         {visibleTenants.map((tenant) => (
-          <span className="badge" key={tenant}>
+          <span className="badge bg-white/90" key={tenant}>
             {tenant}
           </span>
         ))}
@@ -127,22 +127,22 @@ export function CalendarEventsOverview({ events, tenants }: CalendarEventsOvervi
 
       <UnifiedWeekCalendar events={filteredEvents} tenants={visibleTenants} />
 
-      <section className="panel-glass card mt-4 p-5">
+      <section className="panel-glass card mt-5 p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="title-lg">오늘 기준 전후 일정</h2>
             <p className="muted mt-1">현재 필터: ±{rangeDays}일</p>
           </div>
-          <div className="inline-flex rounded-xl border border-line bg-white p-0.5">
+          <div className="inline-flex rounded-xl border border-line bg-white/90 p-0.5">
             <button
-              className={`rounded-lg px-3 py-1.5 text-sm ${rangeDays === 3 ? "bg-slate-900 text-white" : "text-slate-700"}`}
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium ${rangeDays === 3 ? "bg-accent text-white" : "text-slate-700"}`}
               onClick={() => setRangeDays(3)}
               type="button"
             >
               ±3일
             </button>
             <button
-              className={`rounded-lg px-3 py-1.5 text-sm ${rangeDays === 7 ? "bg-slate-900 text-white" : "text-slate-700"}`}
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium ${rangeDays === 7 ? "bg-accent text-white" : "text-slate-700"}`}
               onClick={() => setRangeDays(7)}
               type="button"
             >

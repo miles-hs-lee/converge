@@ -76,10 +76,23 @@ export default async function CalendarPage() {
   }
 
   return (
-    <section className="panel-glass card p-5">
-      <h1 className="title-xl">통합 캘린더</h1>
-      <p className="muted mt-1">연결된 계정의 일정을 하나의 캘린더로 보여줍니다.</p>
-      <CalendarEventsOverview events={events} tenants={tenants} />
-    </section>
+    <div className="space-y-4">
+      <section className="panel-glass card p-5 md:p-6">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h1 className="title-xl">통합 캘린더</h1>
+            <p className="muted mt-1">연결된 계정 일정을 한 화면에서 주간/월간으로 관리합니다.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <span className="surface-chip">연결 테넌트 {tenants.length}개</span>
+            <span className="surface-chip">표시 일정 {events.length}건</span>
+          </div>
+        </div>
+      </section>
+
+      <section className="panel-glass card p-5 md:p-6">
+        <CalendarEventsOverview events={events} tenants={tenants} />
+      </section>
+    </div>
   );
 }

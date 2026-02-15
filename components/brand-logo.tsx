@@ -21,7 +21,7 @@ export function BrandLogo({ className = "", subtitle, compact = false }: BrandLo
         <circle cx="120" cy="120" fill="#0F172A" r="9" />
       </svg>
       <div className="leading-none">
-        <p className={compact ? "text-sm font-semibold tracking-tight" : "text-xl font-semibold tracking-tight"}>Converge</p>
+        <p className={compact ? "text-sm font-bold tracking-tight text-text" : "text-xl font-bold tracking-tight text-text"}>Converge</p>
         {subtitle ? <p className="mt-1 text-xs text-muted">{subtitle}</p> : null}
       </div>
     </div>

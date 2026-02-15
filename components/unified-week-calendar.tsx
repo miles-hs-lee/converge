@@ -145,20 +145,20 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
 
   return (
     <>
-      <div className="mt-4 rounded-2xl border border-line bg-white/70 p-3">
+      <div className="mt-5 rounded-2xl border border-line bg-white/78 p-3">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <p className="text-sm font-medium">{label}</p>
+          <p className="text-sm font-semibold tracking-tight">{label}</p>
           <div className="flex flex-wrap items-center gap-2">
-            <div className="inline-flex rounded-lg border border-line bg-white p-0.5 text-sm">
+            <div className="inline-flex rounded-xl border border-line bg-white p-0.5 text-sm">
               <button
-                className={`rounded-md px-3 py-1.5 ${viewMode === "week" ? "bg-slate-900 text-white" : "text-slate-700"}`}
+                className={`rounded-lg px-3 py-1.5 font-medium ${viewMode === "week" ? "bg-accent text-white" : "text-slate-700"}`}
                 onClick={() => setViewMode("week")}
                 type="button"
               >
                 주간
               </button>
               <button
-                className={`rounded-md px-3 py-1.5 ${viewMode === "month" ? "bg-slate-900 text-white" : "text-slate-700"}`}
+                className={`rounded-lg px-3 py-1.5 font-medium ${viewMode === "month" ? "bg-accent text-white" : "text-slate-700"}`}
                 onClick={() => setViewMode("month")}
                 type="button"
               >
@@ -184,7 +184,7 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
               const dailyEvents = eventsByDay.get(key) ?? [];
               const isToday = sameDate(day, new Date());
               return (
-                <section className="min-h-44 rounded-xl border border-line bg-white/85 p-2" key={key}>
+                <section className="min-h-44 rounded-xl border border-line bg-white/90 p-2" key={key}>
                   <header className="mb-2 border-b border-line pb-2">
                     <p className="text-xs uppercase tracking-[0.14em] text-muted">{day.toLocaleDateString("ko-KR", { weekday: "short" })}</p>
                     <p className={`text-sm font-semibold ${isToday ? "text-accent" : "text-slate-700"}`}>
@@ -197,7 +197,7 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
                       const color = colorByTenant.get(event.tenantName) ?? "#0f766e";
                       return (
                         <button
-                          className="w-full rounded-lg border border-line bg-white p-2 text-left"
+                          className="w-full rounded-lg border border-line bg-white p-2 text-left transition hover:border-accent/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
                           key={event.id}
                           onClick={() => openEvent(event.id)}
                           type="button"
@@ -236,7 +236,7 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
                 const inCurrentMonth = day.getMonth() === monthDate.getMonth();
                 const isToday = sameDate(day, new Date());
                 return (
-                  <section className="min-h-28 rounded-xl border border-line bg-white/85 p-2" key={key}>
+                  <section className="min-h-28 rounded-xl border border-line bg-white/90 p-2" key={key}>
                     <p className={`text-xs font-semibold ${isToday ? "text-accent" : inCurrentMonth ? "text-slate-700" : "text-slate-400"}`}>
                       {day.getDate()}
                     </p>
@@ -245,7 +245,7 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
                         const color = colorByTenant.get(event.tenantName) ?? "#0f766e";
                         return (
                           <button
-                            className="block w-full truncate rounded-md px-1.5 py-1 text-left text-[11px]"
+                            className="block w-full truncate rounded-md px-1.5 py-1 text-left text-[11px] transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
                             key={event.id}
                             onClick={() => openEvent(event.id)}
                             style={{ backgroundColor: `${color}1f`, color }}
@@ -268,10 +268,10 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
       {selectedEvent ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-4" role="dialog" aria-modal="true">
           <button aria-label="닫기" className="absolute inset-0 cursor-default" onClick={closeEventModal} type="button" />
-          <section className="relative z-10 w-full max-w-lg rounded-2xl border border-line bg-white p-5 shadow-2xl">
+          <section className="panel-glass card relative z-10 w-full max-w-lg p-5">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-xs uppercase tracking-[0.14em] text-muted">Event Detail</p>
+                <p className="text-xs uppercase tracking-[0.14em] text-accent">Event Detail</p>
                 <h3 className="mt-1 text-lg font-semibold">{selectedEvent.subject}</h3>
                 <p className="mt-1 text-xs text-muted">
                   {new Date(selectedEvent.startAt).toLocaleString("ko-KR")} - {new Date(selectedEvent.endAt).toLocaleTimeString("ko-KR")}
@@ -283,22 +283,22 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
             </div>
 
             <div className="mt-4 space-y-3">
-              <div className="rounded-lg border border-line bg-slate-50 p-3 text-sm">
+              <div className="rounded-lg border border-line bg-white/85 p-3 text-sm">
                 <p className="text-xs uppercase tracking-[0.12em] text-muted">원본 테넌트</p>
                 <p className="mt-1 font-medium">{selectedEvent.tenantName}</p>
               </div>
 
-              <div className="rounded-lg border border-line bg-slate-50 p-3 text-sm">
+              <div className="rounded-lg border border-line bg-white/85 p-3 text-sm">
                 <p className="text-xs uppercase tracking-[0.12em] text-muted">원본 계정</p>
                 <p className="mt-1 font-medium">{selectedEvent.sourceAccount}</p>
               </div>
 
-              <div className="rounded-lg border border-line bg-slate-50 p-3 text-sm">
+              <div className="rounded-lg border border-line bg-white/85 p-3 text-sm">
                 <p className="text-xs uppercase tracking-[0.12em] text-muted">장소</p>
                 <p className="mt-1 font-medium">{selectedEvent.location}</p>
               </div>
 
-              <div className="rounded-lg border border-line bg-slate-50 p-3 text-sm">
+              <div className="rounded-lg border border-line bg-white/85 p-3 text-sm">
                 <p className="text-xs uppercase tracking-[0.12em] text-muted">참석자</p>
                 {selectedEvent.attendees.length > 0 ? (
                   <ul className="mt-1 space-y-1">

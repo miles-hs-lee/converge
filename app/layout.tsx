@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
-import { IBM_Plex_Sans, Noto_Sans_KR } from "next/font/google";
+import { Plus_Jakarta_Sans, Noto_Sans_KR } from "next/font/google";
 import "./globals.css";
 
-const plex = IBM_Plex_Sans({
+const jakarta = Plus_Jakarta_Sans({
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-plex"
+  weight: ["400", "500", "600", "700", "800"],
+  variable: "--font-jakarta"
 });
 
 const noto = Noto_Sans_KR({
@@ -22,7 +22,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="ko">
-      <body className={`${plex.variable} ${noto.variable}`}>{children}</body>
+      <body className={`${jakarta.variable} ${noto.variable}`}>{children}</body>
     </html>
   );
 }

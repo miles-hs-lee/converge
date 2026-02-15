@@ -19,45 +19,53 @@ export async function TopNav() {
   } = await supabase.auth.getUser();
 
   return (
-    <header className="sticky top-0 z-30 border-b border-line bg-white/88 backdrop-blur-xl">
-      <div className="page-wrap flex items-center justify-between gap-3 py-3">
-        <div className="flex items-center gap-2">
-          <Link className="inline-flex items-center" href="/calendar">
-            <BrandLogo compact />
-          </Link>
-          {isMockMode ? <span className="badge border-sky-200 bg-sky-50 text-sky-700">MOCK</span> : null}
-        </div>
-
-        <nav className="flex items-center gap-2">
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            return (
-              <Link className="btn btn-secondary px-3 py-1.5" href={tab.href} key={tab.href}>
-                <Icon size={14} />
-                {tab.label}
-              </Link>
-            );
-          })}
-        </nav>
-
-        <div className="flex items-center gap-2">
-          {user ? (
-            <>
-              <span className="hidden max-w-44 truncate rounded-full border border-line bg-white px-3 py-1.5 text-xs text-muted md:inline-flex">
-                {user.email}
-              </span>
-              <form action={signOutAction}>
-                <button className="btn btn-secondary px-3 py-1.5" type="submit">
-                  <LogOut size={14} />
-                  로그아웃
-                </button>
-              </form>
-            </>
-          ) : (
-            <Link className="btn btn-secondary px-3 py-1.5" href="/login">
-              로그인
+    <header className="sticky top-0 z-30 pt-3">
+      <div className="page-wrap">
+        <div className="panel-glass card flex flex-wrap items-center justify-between gap-3 px-3 py-3 md:px-4">
+          <div className="flex items-center gap-2">
+            <Link className="inline-flex items-center" href="/calendar">
+              <BrandLogo compact />
             </Link>
-          )}
+            {isMockMode ? <span className="badge border-teal-200 bg-teal-50 text-teal-700">MOCK</span> : null}
+          </div>
+
+          <nav className="order-3 w-full md:order-2 md:w-auto">
+            <div className="grid grid-cols-3 gap-2 rounded-xl border border-line bg-white/85 p-1">
+              {tabs.map((tab) => {
+                const Icon = tab.icon;
+                return (
+                  <Link
+                    className="inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-accent/10 hover:text-accent"
+                    href={tab.href}
+                    key={tab.href}
+                  >
+                    <Icon size={14} />
+                    <span className="hidden sm:inline">{tab.label}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          </nav>
+
+          <div className="order-2 flex items-center gap-2 md:order-3">
+            {user ? (
+              <>
+                <span className="hidden max-w-44 truncate rounded-full border border-line bg-white/90 px-3 py-1.5 text-xs text-muted lg:inline-flex">
+                  {user.email}
+                </span>
+                <form action={signOutAction}>
+                  <button className="btn btn-secondary px-3 py-1.5" type="submit">
+                    <LogOut size={14} />
+                    로그아웃
+                  </button>
+                </form>
+              </>
+            ) : (
+              <Link className="btn btn-secondary px-3 py-1.5" href="/login">
+                로그인
+              </Link>
+            )}
+          </div>
         </div>
       </div>
     </header>

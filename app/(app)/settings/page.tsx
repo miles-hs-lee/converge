@@ -60,11 +60,11 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
         <section className="panel-glass card border-accent/40 bg-accent/5 p-4 text-sm">{statusMessage[status]}</section>
       ) : null}
 
-      <section className="panel-glass card p-5">
-        <div className="flex items-center justify-between">
+      <section className="panel-glass card p-5 md:p-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="title-xl">설정</h1>
-            <p className="muted mt-1">M365 계정 연결 및 세션 관리</p>
+            <p className="muted mt-1">M365 계정 연결 상태와 세션을 관리합니다.</p>
           </div>
           <Link className="btn btn-primary" href="/api/auth/microsoft/start">
             계정 추가
@@ -72,29 +72,31 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
         </div>
       </section>
 
-      <section className="panel-glass card p-5">
+      <section className="panel-glass card p-5 md:p-6">
         <h2 className="title-lg">연결 계정</h2>
         {!user && !isMockMode ? (
           <p className="mt-3 text-sm text-muted">로그인 후 연결 정보를 확인할 수 있습니다.</p>
         ) : connections.length === 0 ? (
           <p className="mt-3 text-sm text-muted">연결된 계정이 없습니다.</p>
         ) : (
-          <div className="mt-3 space-y-2 text-sm">
+          <div className="mt-4 grid gap-2 text-sm">
             {connections.map((connection) => (
-              <div className="rounded-xl border border-line bg-white/80 p-3" key={connection.id}>
+              <article className="rounded-xl border border-line bg-white/85 p-3" key={connection.id}>
                 <p className="font-medium">{connection.m365_user_principal_name ?? "Unknown account"}</p>
                 <p className="mt-1 text-xs text-muted">
                   {connection.status} · 만료 {new Date(connection.token_expires_at).toLocaleString("ko-KR")}
                 </p>
-              </div>
+              </article>
             ))}
           </div>
         )}
       </section>
 
-      <section className="panel-glass card p-5">
+      <section className="panel-glass card p-5 md:p-6">
+        <h2 className="title-lg">세션</h2>
+        <p className="muted mt-1">현재 디바이스에서 안전하게 로그아웃합니다.</p>
         <form action={signOutAction}>
-          <button className="btn btn-secondary" type="submit">
+          <button className="btn btn-secondary mt-4" type="submit">
             로그아웃
           </button>
         </form>

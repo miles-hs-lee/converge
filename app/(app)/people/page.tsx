@@ -52,10 +52,20 @@ export default async function PeoplePage() {
   }
 
   return (
-    <section className="panel-glass card p-5">
-      <h1 className="title-xl">조직도</h1>
-      <p className="muted mt-1">직원을 검색하고 상세 팝업에서 빠른 액션을 실행하세요.</p>
-      <PeopleSearchPanel people={people} />
-    </section>
+    <div className="space-y-4">
+      <section className="panel-glass card p-5 md:p-6">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h1 className="title-xl">조직도</h1>
+            <p className="muted mt-1">직원 검색과 프로필 기반 빠른 커뮤니케이션을 지원합니다.</p>
+          </div>
+          <span className="surface-chip">검색 대상 {people.length}명</span>
+        </div>
+      </section>
+
+      <section className="panel-glass card p-5 md:p-6">
+        <PeopleSearchPanel people={people} />
+      </section>
+    </div>
   );
 }

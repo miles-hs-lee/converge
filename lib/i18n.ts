@@ -73,6 +73,8 @@ export type I18nKey =
   | "alerts.test"
   | "alerts.permission"
   | "alerts.lastSent"
+  | "alerts.notificationTitle"
+  | "alerts.notificationBody"
   | "event.detailTitle"
   | "event.sourceTenant"
   | "event.sourceAccount"
@@ -253,6 +255,8 @@ const enUS: Dict = {
   "alerts.test": "Send test notification",
   "alerts.permission": "Permission: {value}",
   "alerts.lastSent": "Last sent: {value}",
+  "alerts.notificationTitle": "Schedule conflict ({count})",
+  "alerts.notificationBody": "Overlapping events detected across tenants: {a} vs {b} ({start}-{end}). Tap to review.",
   "event.detailTitle": "Event Detail",
   "event.sourceTenant": "Source tenant",
   "event.sourceAccount": "Source account",
@@ -433,6 +437,8 @@ const koKR: Dict = {
   "alerts.test": "테스트 알림 보내기",
   "alerts.permission": "권한: {value}",
   "alerts.lastSent": "마지막 발송: {value}",
+  "alerts.notificationTitle": "일정 충돌 ({count}건)",
+  "alerts.notificationBody": "테넌트 간 시간이 겹치는 일정이 감지되었습니다: {a} vs {b} ({start}-{end}). 눌러서 확인하세요.",
   "event.detailTitle": "일정 상세",
   "event.sourceTenant": "원본 테넌트",
   "event.sourceAccount": "원본 계정",
@@ -613,6 +619,8 @@ const jaJP: Dict = {
   "alerts.test": "テスト通知を送信",
   "alerts.permission": "権限: {value}",
   "alerts.lastSent": "最終送信: {value}",
+  "alerts.notificationTitle": "予定の競合 ({count}件)",
+  "alerts.notificationBody": "テナント間で時間が重なる予定を検出しました: {a} vs {b} ({start}-{end}). タップして確認してください。",
   "event.detailTitle": "予定の詳細",
   "event.sourceTenant": "元テナント",
   "event.sourceAccount": "元アカウント",

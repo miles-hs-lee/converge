@@ -17,6 +17,8 @@ export async function sendPwaNotification(params: {
   body: string;
   url?: string;
   tag?: string;
+  icon?: string;
+  badge?: string;
 }): Promise<PwaNotificationResult> {
   if (typeof window === "undefined" || typeof window.Notification === "undefined") {
     return { ok: false, reason: "unsupported" };
@@ -26,7 +28,14 @@ export async function sendPwaNotification(params: {
   if (permission === "denied") return { ok: false, reason: "permission_denied" };
   if (permission !== "granted") return { ok: false, reason: "permission_default" };
 
-  const { title, body, url = "/calendar", tag = "converge-alert" } = params;
+  const {
+    title,
+    body,
+    url = "/calendar",
+    tag = "converge-alert",
+    icon = "/icons/icon-192.png",
+    badge = "/icons/icon-192.png"
+  } = params;
 
   // Prefer ServiceWorkerRegistration.showNotification() so it behaves like PWA/app notifications on Android.
   if ("serviceWorker" in navigator) {
@@ -37,12 +46,14 @@ export async function sendPwaNotification(params: {
       const options: NotificationOptions & { data?: unknown } = {
         body,
         tag,
-        icon: "/icons/icon-192.png",
-        badge: "/icons/icon-192.png",
+        icon,
+        badge,
         data: { url }
       };
       // Chromium supports this; TS types may lag.
       (options as unknown as { renotify?: boolean }).renotify = true;
+      (options as unknown as { requireInteraction?: boolean }).requireInteraction = true;
+      (options as unknown as { vibrate?: number[] }).vibrate = [120, 60, 120];
 
       await reg.showNotification(title, options);
 

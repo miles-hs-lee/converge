@@ -198,8 +198,16 @@ export function CalendarEventsOverview({ events, tenants }: CalendarEventsOvervi
     if (notificationsEnabled) {
       const first = unseen[0]!;
       try {
-        const title = `Converge · ${t("alerts.count", { count: unseen.length })}`;
-        const body = `${first.a.tenantName} · ${first.a.subject}`;
+        const overlapStart = new Date(first.overlapStart).toLocaleTimeString(intl, { hour: "2-digit", minute: "2-digit" });
+        const overlapEnd = new Date(first.overlapEnd).toLocaleTimeString(intl, { hour: "2-digit", minute: "2-digit" });
+        const title = t("alerts.notificationTitle", { count: unseen.length });
+        const body = t("alerts.notificationBody", {
+          a: first.a.tenantName,
+          b: first.b.tenantName,
+          start: overlapStart,
+          end: overlapEnd
+        });
+
         void sendPwaNotification({ title, body, url: "/calendar", tag: "converge-conflict" }).then((res) => {
           if (res.ok && typeof window !== "undefined") {
             const nowIso = new Date().toISOString();

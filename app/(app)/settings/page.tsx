@@ -4,6 +4,7 @@ import { signOutAction } from "@/app/(app)/actions";
 import { isMockMode } from "@/lib/mock-mode";
 import { mockConnections } from "@/lib/mock-data";
 import { LanguageSelector } from "@/components/language-selector";
+import { PwaInstall } from "@/components/pwa-install";
 import { getServerLocale } from "@/lib/i18n-server";
 import { intlLocale, t, type I18nKey } from "@/lib/i18n";
 
@@ -104,6 +105,12 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
         <div className="mt-4">
           <LanguageSelector initialLocale={locale} />
         </div>
+      </section>
+
+      <section className="panel-glass card p-5 md:p-6">
+        <h2 className="title-lg">{tt("pwa.title")}</h2>
+        <p className="muted mt-1">{tt("pwa.subtitle")}</p>
+        <PwaInstall />
       </section>
 
       <section className="panel-glass card p-5 md:p-6">

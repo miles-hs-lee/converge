@@ -82,6 +82,12 @@ export type I18nKey =
   | "settings.language.ko"
   | "settings.language.en"
   | "settings.language.ja"
+  | "pwa.title"
+  | "pwa.subtitle"
+  | "pwa.cta"
+  | "pwa.installed"
+  | "pwa.unavailable"
+  | "pwa.iosHint"
   | "status.oauth_connected"
   | "status.oauth_error"
   | "status.google_oauth_connected"
@@ -241,6 +247,12 @@ const enUS: Dict = {
   "settings.language.ko": "Korean",
   "settings.language.en": "English",
   "settings.language.ja": "Japanese",
+  "pwa.title": "Install app",
+  "pwa.subtitle": "Install Converge for faster launch and an app-like experience.",
+  "pwa.cta": "Install",
+  "pwa.installed": "Converge is already installed on this device.",
+  "pwa.unavailable": "Install is not available in this browser yet.",
+  "pwa.iosHint": "On iOS Safari: tap Share and choose “Add to Home Screen”.",
   "status.oauth_connected": "Microsoft account connected.",
   "status.oauth_error": "Microsoft authentication failed.",
   "status.google_oauth_connected": "Google account connected.",
@@ -400,6 +412,12 @@ const koKR: Dict = {
   "settings.language.ko": "한국어",
   "settings.language.en": "영어",
   "settings.language.ja": "일본어",
+  "pwa.title": "앱 설치",
+  "pwa.subtitle": "Converge를 홈 화면에 설치해서 더 빠르게 실행하고 앱처럼 사용하세요.",
+  "pwa.cta": "설치하기",
+  "pwa.installed": "이 디바이스에 이미 설치되어 있습니다.",
+  "pwa.unavailable": "현재 브라우저에서는 설치 기능을 사용할 수 없습니다.",
+  "pwa.iosHint": "iOS Safari: 공유 버튼 → “홈 화면에 추가”를 선택하세요.",
   "status.oauth_connected": "Microsoft 계정 연결이 완료되었습니다.",
   "status.oauth_error": "Microsoft 인증 중 오류가 발생했습니다.",
   "status.google_oauth_connected": "Google 계정 연결이 완료되었습니다.",
@@ -559,6 +577,12 @@ const jaJP: Dict = {
   "settings.language.ko": "韓国語",
   "settings.language.en": "英語",
   "settings.language.ja": "日本語",
+  "pwa.title": "アプリをインストール",
+  "pwa.subtitle": "Converge をインストールして、より速く起動しアプリのように使えます。",
+  "pwa.cta": "インストール",
+  "pwa.installed": "このデバイスには既にインストールされています。",
+  "pwa.unavailable": "このブラウザーではインストールできません。",
+  "pwa.iosHint": "iOS Safari: 共有 → “ホーム画面に追加”を選択してください。",
   "status.oauth_connected": "Microsoft アカウントを接続しました。",
   "status.oauth_error": "Microsoft 認証中にエラーが発生しました。",
   "status.google_oauth_connected": "Google アカウントを接続しました。",

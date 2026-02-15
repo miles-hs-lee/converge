@@ -1,70 +1,110 @@
 # Converge
 
-Converge is a unified workspace for people using Microsoft 365 across multiple tenants.
+Converge is a unified workspace for teams operating Microsoft 365 across multiple tenants.
+
+It aggregates cross-tenant calendars and directory (people) data into a single experience, with fast search, standardized "quick actions" (email, Teams chat, meeting creation), and cross-tenant schedule conflict detection.
 
 ## Tech Stack
 
 - Next.js 15 (App Router) + TypeScript
 - Supabase (Auth, Postgres, RLS)
 - Microsoft Graph API (multi-tenant OAuth)
-- Google OAuth + Google Calendar API (OAuth skeleton)
+- Google OAuth + Google Calendar API (optional / partial)
 - Tailwind CSS
+- Web Push (optional, background notifications)
 
-## Implemented Starter Scope
+## Product Scope (Current)
 
-- Onboarding page: `/onboarding`
-- Login page: `/login`
-- Core tabs:
-  - Unified Calendar: `/calendar`
-  - People Search: `/people`
-- Settings (connect extra M365 accounts): `/settings`
-- Initial Supabase schema and RLS policy:
-  - `supabase/migrations/0001_init.sql`
-  - `supabase/migrations/0002_provider_expansion.sql`
+### Pages
+
+- Onboarding: `/onboarding`
+- Login: `/login`
+- Unified Calendar: `/calendar`
+- People (directory search): `/people`
+- Settings (connect accounts, language, install/push): `/settings`
+
+### Key Capabilities
+
+- Unified calendar across multiple tenants (week/month navigation + search + tenant toggles)
+- Multi-tenant people search with profile-based quick actions
+- Cross-tenant schedule conflict detection (in-app alerts + optional notifications)
+- Connection management for additional Microsoft accounts
+- Optional PWA install + background push (Web Push)
+
+## API Routes
+
+- Supabase auth callback: `/auth/callback`
+- Microsoft OAuth:
+  - Start: `/api/auth/microsoft/start`
+  - Callback: `/api/auth/microsoft/callback`
+- Google OAuth (optional):
+  - Start: `/api/auth/google/start`
+  - Callback: `/api/auth/google/callback`
+- Web Push:
+  - Public key: `/api/push/public-key`
+  - Subscribe: `/api/push/subscribe`
+  - Unsubscribe: `/api/push/unsubscribe`
+  - Test push: `/api/push/test`
+- Optional server-side scans:
+  - Conflicts scan: `/api/cron/conflicts` (see `CRON_SECRET`)
 
 ## Local Setup
 
-1. Install packages
+### Prerequisites
+
+- Node.js (recommended: 20+)
+- A Supabase project (Auth + Postgres)
+- Azure App Registration (Microsoft identity platform) for multi-tenant OAuth
+
+### Install
 
 ```bash
 npm install
 ```
 
-2. Create local env
+### Configure Environment
 
 ```bash
 cp .env.example .env.local
 ```
 
-3. Fill env values from Supabase and Azure App Registration.
-   - Supabase Auth redirect URL must include:
-     - `http://localhost:3000/auth/callback`
-   - Azure Redirect URI must include:
-     - `http://localhost:3000/api/auth/microsoft/callback`
-   - Use mock mode when admin consent is not available yet:
-     - `NEXT_PUBLIC_USE_MOCK=true`
-   - Optional Google OAuth setup:
-     - `GOOGLE_CLIENT_ID`
-     - `GOOGLE_CLIENT_SECRET`
-     - `GOOGLE_REDIRECT_URI` (e.g. `http://localhost:3000/api/auth/google/callback`)
-   - Optional Web Push (background notifications):
-     - Generate VAPID keys:
-       - `npx web-push generate-vapid-keys`
-     - Set:
-       - `VAPID_PUBLIC_KEY`
-       - `VAPID_PRIVATE_KEY`
-       - `VAPID_SUBJECT` (e.g. `mailto:you@example.com`)
-     - If you want server-side background scans:
-       - set `CRON_SECRET` in env, and call `GET /api/cron/conflicts` with `Authorization: Bearer <CRON_SECRET>`
-       - Vercel Cron on the Hobby plan is limited to daily schedules; use an external scheduler or upgrade if you need frequent checks.
+Fill the values in `.env.local`:
 
-4. Run migration SQL in Supabase SQL editor:
+- App URL
+  - `NEXT_PUBLIC_APP_URL` (used for magic-link redirects)
+- Supabase
+  - `NEXT_PUBLIC_SUPABASE_URL`
+  - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+  - `SUPABASE_SERVICE_ROLE_KEY` (server-side admin actions)
+- Microsoft OAuth (Azure)
+  - `AZURE_CLIENT_ID`
+  - `AZURE_CLIENT_SECRET`
+  - `AZURE_TENANT_ID` (default `common` for multi-tenant)
+  - `AZURE_REDIRECT_URI` (local default: `http://localhost:3000/api/auth/microsoft/callback`)
+- Optional: Google OAuth
+  - `GOOGLE_CLIENT_ID`
+  - `GOOGLE_CLIENT_SECRET`
+  - `GOOGLE_REDIRECT_URI`
+- Optional: Web Push (background notifications)
+  - Generate VAPID keys: `npx web-push generate-vapid-keys`
+  - Set `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`
+- Optional: Protect cron endpoints
+  - `CRON_SECRET` (required header: `Authorization: Bearer <CRON_SECRET>`)
 
-- `/Users/cnt-22-70004/Documents/Converge/supabase/migrations/0001_init.sql`
-- `/Users/cnt-22-70004/Documents/Converge/supabase/migrations/0002_provider_expansion.sql`
-- `/Users/cnt-22-70004/Documents/Converge/supabase/migrations/0003_web_push.sql`
+Redirect URI checklist:
 
-5. Start app
+- Supabase Auth redirect URL must include: `http://localhost:3000/auth/callback`
+- Azure Redirect URI must include: `http://localhost:3000/api/auth/microsoft/callback`
+
+### Database Migrations
+
+Run these SQL migrations in the Supabase SQL editor:
+
+- `supabase/migrations/0001_init.sql`
+- `supabase/migrations/0002_provider_expansion.sql`
+- `supabase/migrations/0003_web_push.sql`
+
+### Start
 
 ```bash
 npm run dev
@@ -72,17 +112,39 @@ npm run dev
 
 ## Testing Without Admin Consent
 
-You can test calendar/people/settings without Microsoft admin approval in two ways:
+You can test the UI without Microsoft admin consent in two ways:
 
-1. UI mock mode (fastest):
-   - set `NEXT_PUBLIC_USE_MOCK=true`
-2. DB seed mode:
-   - run `/Users/cnt-22-70004/Documents/Converge/supabase/seeds/mock_data.sql` after replacing the test email.
+1. UI mock mode (fastest): set `NEXT_PUBLIC_USE_MOCK=true`
+2. Seed mode: run `supabase/seeds/mock_data.sql` (after replacing the test email)
 
-## Next Implementation Tasks
+## Scripts
 
-1. Microsoft refresh token rotation and secure token encryption at rest
-2. Account disconnect/reconnect action in settings page
-3. Calendar sync job and people sync job via server routes or edge functions
-4. Calendar and people pages connected to real DB data
+- `npm run dev`: start local dev server
+- `npm run build`: production build
+- `npm run start`: run production server locally
+- `npm run typecheck`: TypeScript typecheck
+- `npm run lint`: lint (requires an ESLint config; `next lint` may prompt on first run)
+
+## Deployment Notes (Vercel)
+
+- Configure the same `.env` values in Vercel Project Settings.
+- Ensure redirect URIs are updated for your production domain:
+  - Supabase Auth: `<prod-domain>/auth/callback`
+  - Azure: `<prod-domain>/api/auth/microsoft/callback`
+- `.vercel/` is local-only metadata created by `vercel link` and should not be committed (it is already in `.gitignore`).
+
+## Marketing (Optional)
+
+This repo includes a 1-page PDF brochure generator:
+
+- Script: `scripts/generate_brochure_pdf.cjs`
+- Output: `marketing/Converge_OnePager_ko.pdf`
+- Preview: `marketing/Converge_OnePager_ko.png`
+
+## Roadmap (High-Level)
+
+1. Microsoft refresh token rotation and token encryption at rest
+2. Account disconnect/reconnect in Settings
+3. Background sync jobs for calendar/people
+4. Fully DB-backed calendar and people pages (beyond starter cache)
 5. Global command palette (`Cmd/Ctrl+K`) and keyboard shortcuts

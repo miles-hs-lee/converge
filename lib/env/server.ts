@@ -13,7 +13,16 @@ function getServerEnv(
   return value;
 }
 
-function getOptionalServerEnv(key: "GOOGLE_CLIENT_ID" | "GOOGLE_CLIENT_SECRET" | "GOOGLE_REDIRECT_URI"): string | undefined {
+function getOptionalServerEnv(
+  key:
+    | "GOOGLE_CLIENT_ID"
+    | "GOOGLE_CLIENT_SECRET"
+    | "GOOGLE_REDIRECT_URI"
+    | "VAPID_PUBLIC_KEY"
+    | "VAPID_PRIVATE_KEY"
+    | "VAPID_SUBJECT"
+    | "CRON_SECRET"
+): string | undefined {
   const value = process.env[key];
   if (!value) {
     return undefined;
@@ -29,5 +38,9 @@ export const serverEnv = {
   azureRedirectUri: getServerEnv("AZURE_REDIRECT_URI"),
   googleClientId: getOptionalServerEnv("GOOGLE_CLIENT_ID"),
   googleClientSecret: getOptionalServerEnv("GOOGLE_CLIENT_SECRET"),
-  googleRedirectUri: getOptionalServerEnv("GOOGLE_REDIRECT_URI")
+  googleRedirectUri: getOptionalServerEnv("GOOGLE_REDIRECT_URI"),
+  vapidPublicKey: getOptionalServerEnv("VAPID_PUBLIC_KEY"),
+  vapidPrivateKey: getOptionalServerEnv("VAPID_PRIVATE_KEY"),
+  vapidSubject: getOptionalServerEnv("VAPID_SUBJECT"),
+  cronSecret: getOptionalServerEnv("CRON_SECRET")
 };

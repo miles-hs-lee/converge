@@ -5,6 +5,7 @@ import { isMockMode } from "@/lib/mock-mode";
 import { mockConnections } from "@/lib/mock-data";
 import { LanguageSelector } from "@/components/language-selector";
 import { PwaInstall } from "@/components/pwa-install";
+import { PushNotificationsPanel } from "@/components/push-notifications-panel";
 import { getServerLocale } from "@/lib/i18n-server";
 import { intlLocale, t, type I18nKey } from "@/lib/i18n";
 
@@ -111,6 +112,12 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
         <h2 className="title-lg">{tt("pwa.title")}</h2>
         <p className="muted mt-1">{tt("pwa.subtitle")}</p>
         <PwaInstall />
+      </section>
+
+      <section className="panel-glass card p-5 md:p-6">
+        <h2 className="title-lg">{tt("push.title")}</h2>
+        <p className="muted mt-1">{tt("push.subtitle")}</p>
+        <PushNotificationsPanel enabled={Boolean(user)} />
       </section>
 
       <section className="panel-glass card p-5 md:p-6">

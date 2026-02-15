@@ -7,16 +7,11 @@ export function PwaRegister() {
     if (process.env.NODE_ENV !== "production") return;
     if (!("serviceWorker" in navigator)) return;
 
-    const onLoad = () => {
-      navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => {
-        // Best-effort; PWA installability should not break the app.
-      });
-    };
-
-    window.addEventListener("load", onLoad);
-    return () => window.removeEventListener("load", onLoad);
+    // Register ASAP; required for push subscription and installability.
+    navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => {
+      // Best-effort; PWA installability should not break the app.
+    });
   }, []);
 
   return null;
 }
-

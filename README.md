@@ -47,11 +47,21 @@ cp .env.example .env.local
      - `GOOGLE_CLIENT_ID`
      - `GOOGLE_CLIENT_SECRET`
      - `GOOGLE_REDIRECT_URI` (e.g. `http://localhost:3000/api/auth/google/callback`)
+   - Optional Web Push (background notifications):
+     - Generate VAPID keys:
+       - `npx web-push generate-vapid-keys`
+     - Set:
+       - `VAPID_PUBLIC_KEY`
+       - `VAPID_PRIVATE_KEY`
+       - `VAPID_SUBJECT` (e.g. `mailto:you@example.com`)
+     - If you want server-side background scans via Vercel Cron:
+       - set `CRON_SECRET` in Vercel project env (Vercel Cron sends it via Authorization header)
 
 4. Run migration SQL in Supabase SQL editor:
 
 - `/Users/cnt-22-70004/Documents/Converge/supabase/migrations/0001_init.sql`
 - `/Users/cnt-22-70004/Documents/Converge/supabase/migrations/0002_provider_expansion.sql`
+- `/Users/cnt-22-70004/Documents/Converge/supabase/migrations/0003_web_push.sql`
 
 5. Start app
 

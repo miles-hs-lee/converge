@@ -4,7 +4,7 @@
 // Cache strategy: cache-first for static assets; network-first for navigations.
 
 // Bump this to force cache refresh across deployments if needed.
-const CACHE_NAME = "converge-pwa-v3";
+const CACHE_NAME = "converge-pwa-v4";
 const OFFLINE_URL = "/offline.html";
 
 self.addEventListener("install", (event) => {
@@ -94,6 +94,37 @@ self.addEventListener("fetch", (event) => {
         return (await cache.match(request)) || new Response("", { status: 504 });
       }
     })()
+  );
+});
+
+self.addEventListener("push", (event) => {
+  const defaultData = {
+    title: "Converge",
+    body: "",
+    url: "/calendar",
+    tag: "converge-push",
+    icon: "/icons/icon-192.png",
+    badge: "/icons/icon-192.png"
+  };
+
+  let data = defaultData;
+  try {
+    const payload = event.data ? event.data.json() : null;
+    if (payload && typeof payload === "object") {
+      data = { ...defaultData, ...payload };
+    }
+  } catch {
+    // ignore
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      tag: data.tag,
+      icon: data.icon,
+      badge: data.badge,
+      data: { url: data.url }
+    })
   );
 });
 

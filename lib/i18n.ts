@@ -75,6 +75,26 @@ export type I18nKey =
   | "alerts.lastSent"
   | "alerts.notificationTitle"
   | "alerts.notificationBody"
+  | "push.title"
+  | "push.subtitle"
+  | "push.notSupported"
+  | "push.configMissing"
+  | "push.permissionBlocked"
+  | "push.permission"
+  | "push.lastTest"
+  | "push.endpointHint"
+  | "push.status.subscribed"
+  | "push.status.notSubscribed"
+  | "push.subscribe"
+  | "push.unsubscribe"
+  | "push.test"
+  | "push.loginRequired"
+  | "push.subscribed"
+  | "push.unsubscribed"
+  | "push.subscribeFailed"
+  | "push.unsubscribeFailed"
+  | "push.testSent"
+  | "push.testFailed"
   | "event.detailTitle"
   | "event.sourceTenant"
   | "event.sourceAccount"
@@ -257,6 +277,26 @@ const enUS: Dict = {
   "alerts.lastSent": "Last sent: {value}",
   "alerts.notificationTitle": "Schedule conflict ({count})",
   "alerts.notificationBody": "Overlapping events detected across tenants: {a} vs {b} ({start}-{end}). Tap to review.",
+  "push.title": "Background push",
+  "push.subtitle": "Receive alerts even when the app is closed (requires Web Push subscription).",
+  "push.notSupported": "This browser does not support Web Push on this device.",
+  "push.configMissing": "Push is not configured. Set VAPID keys on the server.",
+  "push.permissionBlocked": "Notification permission is not granted.",
+  "push.permission": "Permission: {value}",
+  "push.lastTest": "Last test: {value}",
+  "push.endpointHint": "Endpoint: {value}",
+  "push.status.subscribed": "Subscribed",
+  "push.status.notSubscribed": "Not subscribed",
+  "push.subscribe": "Enable push",
+  "push.unsubscribe": "Disable push",
+  "push.test": "Send test push",
+  "push.loginRequired": "Sign in to enable background push.",
+  "push.subscribed": "Push subscription saved.",
+  "push.unsubscribed": "Push subscription removed.",
+  "push.subscribeFailed": "Failed to subscribe to push.",
+  "push.unsubscribeFailed": "Failed to unsubscribe from push.",
+  "push.testSent": "Test push requested. Check your notification tray.",
+  "push.testFailed": "Failed to send test push.",
   "event.detailTitle": "Event Detail",
   "event.sourceTenant": "Source tenant",
   "event.sourceAccount": "Source account",
@@ -439,6 +479,26 @@ const koKR: Dict = {
   "alerts.lastSent": "마지막 발송: {value}",
   "alerts.notificationTitle": "일정 충돌 ({count}건)",
   "alerts.notificationBody": "테넌트 간 시간이 겹치는 일정이 감지되었습니다: {a} vs {b} ({start}-{end}). 눌러서 확인하세요.",
+  "push.title": "백그라운드 푸시",
+  "push.subtitle": "앱이 닫혀 있어도 알림을 받습니다(Web Push 구독 필요).",
+  "push.notSupported": "현재 디바이스/브라우저에서는 Web Push를 지원하지 않습니다.",
+  "push.configMissing": "푸시가 설정되지 않았습니다. 서버에 VAPID 키를 설정하세요.",
+  "push.permissionBlocked": "알림 권한이 허용되지 않았습니다.",
+  "push.permission": "권한: {value}",
+  "push.lastTest": "마지막 테스트: {value}",
+  "push.endpointHint": "Endpoint: {value}",
+  "push.status.subscribed": "구독됨",
+  "push.status.notSubscribed": "미구독",
+  "push.subscribe": "푸시 켜기",
+  "push.unsubscribe": "푸시 끄기",
+  "push.test": "테스트 푸시",
+  "push.loginRequired": "백그라운드 푸시는 로그인 후 사용할 수 있습니다.",
+  "push.subscribed": "푸시 구독을 저장했습니다.",
+  "push.unsubscribed": "푸시 구독을 해제했습니다.",
+  "push.subscribeFailed": "푸시 구독에 실패했습니다.",
+  "push.unsubscribeFailed": "푸시 구독 해제에 실패했습니다.",
+  "push.testSent": "테스트 푸시를 요청했습니다. 알림 창을 확인하세요.",
+  "push.testFailed": "테스트 푸시 전송에 실패했습니다.",
   "event.detailTitle": "일정 상세",
   "event.sourceTenant": "원본 테넌트",
   "event.sourceAccount": "원본 계정",
@@ -621,6 +681,26 @@ const jaJP: Dict = {
   "alerts.lastSent": "最終送信: {value}",
   "alerts.notificationTitle": "予定の競合 ({count}件)",
   "alerts.notificationBody": "テナント間で時間が重なる予定を検出しました: {a} vs {b} ({start}-{end}). タップして確認してください。",
+  "push.title": "バックグラウンド Push",
+  "push.subtitle": "アプリを閉じても通知を受け取ります(Web Push の購読が必要)。",
+  "push.notSupported": "このデバイス/ブラウザーでは Web Push をサポートしていません。",
+  "push.configMissing": "Push が未設定です。サーバーで VAPID キーを設定してください。",
+  "push.permissionBlocked": "通知の許可が付与されていません。",
+  "push.permission": "権限: {value}",
+  "push.lastTest": "最終テスト: {value}",
+  "push.endpointHint": "Endpoint: {value}",
+  "push.status.subscribed": "購読済み",
+  "push.status.notSubscribed": "未購読",
+  "push.subscribe": "Push を有効化",
+  "push.unsubscribe": "Push を無効化",
+  "push.test": "テスト Push",
+  "push.loginRequired": "バックグラウンド Push はログイン後に利用できます。",
+  "push.subscribed": "Push 購読を保存しました。",
+  "push.unsubscribed": "Push 購読を解除しました。",
+  "push.subscribeFailed": "Push 購読に失敗しました。",
+  "push.unsubscribeFailed": "Push 購読解除に失敗しました。",
+  "push.testSent": "テスト Push を要求しました。通知を確認してください。",
+  "push.testFailed": "テスト Push の送信に失敗しました。",
   "event.detailTitle": "予定の詳細",
   "event.sourceTenant": "元テナント",
   "event.sourceAccount": "元アカウント",

@@ -4,7 +4,7 @@
 // Cache strategy: cache-first for static assets; network-first for navigations.
 
 // Bump this to force cache refresh across deployments if needed.
-const CACHE_NAME = "converge-pwa-v2";
+const CACHE_NAME = "converge-pwa-v3";
 const OFFLINE_URL = "/offline.html";
 
 self.addEventListener("install", (event) => {
@@ -92,6 +92,34 @@ self.addEventListener("fetch", (event) => {
         return response;
       } catch {
         return (await cache.match(request)) || new Response("", { status: 504 });
+      }
+    })()
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  const notification = event.notification;
+  const targetUrl = (notification && notification.data && notification.data.url) || "/calendar";
+  notification?.close();
+
+  event.waitUntil(
+    (async () => {
+      const allClients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      for (const client of allClients) {
+        if ("focus" in client) {
+          await client.focus();
+          if ("navigate" in client) {
+            try {
+              await client.navigate(targetUrl);
+            } catch {
+              // ignore
+            }
+          }
+          return;
+        }
+      }
+      if (self.clients.openWindow) {
+        await self.clients.openWindow(targetUrl);
       }
     })()
   );

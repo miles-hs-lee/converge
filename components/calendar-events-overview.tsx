@@ -7,6 +7,7 @@ import { colorForTenant } from "@/lib/tenant-colors";
 import { useT, useIntlLocale } from "@/components/locale-provider";
 import { detectTenantConflicts } from "@/lib/calendar-conflicts";
 import { isMockMode } from "@/lib/mock-mode";
+import { getNotificationPermissionSafe, sendPwaNotification } from "@/lib/pwa-notifications";
 
 export type CalendarEventRow = {
   id: string;
@@ -90,6 +91,8 @@ export function CalendarEventsOverview({ events, tenants }: CalendarEventsOvervi
   const [toast, setToast] = useState<string | null>(null);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [permissionBlocked, setPermissionBlocked] = useState(false);
+  const [permissionLabel, setPermissionLabel] = useState<string>("unknown");
+  const [lastSentIso, setLastSentIso] = useState<string | null>(null);
 
   const enabledTenants = useMemo(() => tenants.filter((tenant) => !disabledTenants.has(tenant)), [disabledTenants, tenants]);
 
@@ -172,6 +175,8 @@ export function CalendarEventsOverview({ events, tenants }: CalendarEventsOvervi
     } catch {
       setPermissionBlocked(false);
     }
+    setPermissionLabel(String(getNotificationPermissionSafe()));
+    setLastSentIso(localStorage.getItem("converge_notifications_last_sent"));
   }, []);
 
   useEffect(() => {
@@ -189,13 +194,19 @@ export function CalendarEventsOverview({ events, tenants }: CalendarEventsOvervi
     setToast(t("alerts.banner", { count: unseen.length }));
     const timer = window.setTimeout(() => setToast(null), 4200);
 
-    // Optional browser notification (requires user opt-in + permission granted).
-    if (notificationsEnabled && typeof window.Notification !== "undefined" && Notification.permission === "granted") {
+    // Optional PWA/system notification (requires user opt-in + permission granted).
+    if (notificationsEnabled) {
       const first = unseen[0]!;
-      const title = `Converge · ${t("alerts.count", { count: unseen.length })}`;
-      const body = `${first.a.tenantName} · ${first.a.subject}`;
       try {
-        new Notification(title, { body });
+        const title = `Converge · ${t("alerts.count", { count: unseen.length })}`;
+        const body = `${first.a.tenantName} · ${first.a.subject}`;
+        void sendPwaNotification({ title, body, url: "/calendar", tag: "converge-conflict" }).then((res) => {
+          if (res.ok && typeof window !== "undefined") {
+            const nowIso = new Date().toISOString();
+            localStorage.setItem("converge_notifications_last_sent", nowIso);
+            setLastSentIso(nowIso);
+          }
+        });
       } catch {
         // ignore
       }
@@ -211,10 +222,20 @@ export function CalendarEventsOverview({ events, tenants }: CalendarEventsOvervi
 
     try {
       const permission = await Notification.requestPermission();
+      setPermissionLabel(permission);
       if (permission === "granted") {
         localStorage.setItem("converge_notifications_enabled", "true");
         setNotificationsEnabled(true);
         setPermissionBlocked(false);
+        // Confirm to the user that notifications actually show up.
+        const title = "Converge";
+        const body = t("alerts.test");
+        const res = await sendPwaNotification({ title, body, url: "/settings", tag: "converge-test" });
+        if (res.ok) {
+          const nowIso = new Date().toISOString();
+          localStorage.setItem("converge_notifications_last_sent", nowIso);
+          setLastSentIso(nowIso);
+        }
         return;
       }
       if (permission === "denied") {
@@ -391,11 +412,33 @@ export function CalendarEventsOverview({ events, tenants }: CalendarEventsOvervi
                 {t("alerts.simulate")}
               </button>
             ) : null}
+            <button
+              className="btn btn-secondary px-3 py-1.5"
+              onClick={async () => {
+                const title = "Converge";
+                const body = t("alerts.test");
+                const res = await sendPwaNotification({ title, body, url: "/calendar", tag: "converge-test" });
+                if (res.ok && typeof window !== "undefined") {
+                  const nowIso = new Date().toISOString();
+                  localStorage.setItem("converge_notifications_last_sent", nowIso);
+                  setLastSentIso(nowIso);
+                  setToast(t("alerts.test"));
+                  window.setTimeout(() => setToast(null), 1800);
+                }
+              }}
+              type="button"
+            >
+              {t("alerts.test")}
+            </button>
           </div>
         </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
           {permissionBlocked ? <span className="text-xs text-rose-700">{t("alerts.permissionDenied")}</span> : null}
+          <span className="text-xs text-muted">{t("alerts.permission", { value: permissionLabel })}</span>
+          {lastSentIso ? (
+            <span className="text-xs text-muted">{t("alerts.lastSent", { value: new Date(lastSentIso).toLocaleString(intl) })}</span>
+          ) : null}
           {notificationsEnabled ? (
             <button className="btn btn-secondary px-3 py-1.5" onClick={disableNotifications} type="button">
               {t("alerts.disableNotifications")}

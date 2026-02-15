@@ -70,6 +70,9 @@ export type I18nKey =
   | "alerts.simulate"
   | "alerts.rescan"
   | "alerts.banner"
+  | "alerts.test"
+  | "alerts.permission"
+  | "alerts.lastSent"
   | "event.detailTitle"
   | "event.sourceTenant"
   | "event.sourceAccount"
@@ -247,6 +250,9 @@ const enUS: Dict = {
   "alerts.simulate": "Simulate new conflict",
   "alerts.rescan": "Rescan",
   "alerts.banner": "New schedule conflicts detected: {count}",
+  "alerts.test": "Send test notification",
+  "alerts.permission": "Permission: {value}",
+  "alerts.lastSent": "Last sent: {value}",
   "event.detailTitle": "Event Detail",
   "event.sourceTenant": "Source tenant",
   "event.sourceAccount": "Source account",
@@ -424,6 +430,9 @@ const koKR: Dict = {
   "alerts.simulate": "새 충돌 생성(테스트)",
   "alerts.rescan": "재검사",
   "alerts.banner": "새 일정 충돌이 감지되었습니다: {count}건",
+  "alerts.test": "테스트 알림 보내기",
+  "alerts.permission": "권한: {value}",
+  "alerts.lastSent": "마지막 발송: {value}",
   "event.detailTitle": "일정 상세",
   "event.sourceTenant": "원본 테넌트",
   "event.sourceAccount": "원본 계정",
@@ -601,6 +610,9 @@ const jaJP: Dict = {
   "alerts.simulate": "新しい競合を作成(テスト)",
   "alerts.rescan": "再スキャン",
   "alerts.banner": "新しい予定の競合を検出しました: {count}件",
+  "alerts.test": "テスト通知を送信",
+  "alerts.permission": "権限: {value}",
+  "alerts.lastSent": "最終送信: {value}",
   "event.detailTitle": "予定の詳細",
   "event.sourceTenant": "元テナント",
   "event.sourceAccount": "元アカウント",

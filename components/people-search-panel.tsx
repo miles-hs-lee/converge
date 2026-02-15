@@ -167,10 +167,10 @@ export function PeopleSearchPanel({ people }: PeopleSearchPanelProps) {
       </div>
 
       {selectedPerson && actionLinks ? (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/45 p-0 sm:items-center sm:p-4" role="dialog" aria-modal="true">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-3 sm:p-4" role="dialog" aria-modal="true">
           <button aria-label="닫기" className="absolute inset-0 cursor-default" onClick={() => setSelectedPersonId(null)} type="button" />
 
-          <section className="panel-glass card relative z-10 h-[88vh] w-full overflow-y-auto rounded-t-3xl p-4 pb-8 sm:h-auto sm:max-w-2xl sm:rounded-2xl sm:p-5">
+          <section className="panel-glass card relative z-10 max-h-[88vh] w-full max-w-2xl overflow-y-auto rounded-2xl p-4 pb-7 sm:p-5">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-xs uppercase tracking-[0.14em] text-accent">People Detail</p>

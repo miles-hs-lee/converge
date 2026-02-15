@@ -462,12 +462,21 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
                       const leftPct = (col / colCount) * 100;
                       const widthPct = (1 / colCount) * 100;
                       const dense = colCount >= 3;
-                      const showLocation = height >= 44 && !dense;
+
+                      const size: "micro" | "compact" | "normal" | "rich" =
+                        height < 34 ? "micro" : height < 52 ? "compact" : height < 78 ? "normal" : "rich";
+                      const showTime = size !== "micro";
+                      const showLocation = size === "rich" && !dense;
+                      const showTenantLabel = !dense && colCount <= 2 && size !== "micro" && size !== "compact";
+                      const subjectClamp = size === "normal" || size === "rich" ? "line-clamp-2" : "line-clamp-1";
+                      const padClass = dense || size === "micro" ? "p-1.5" : "p-2";
+                      const subjectClass = size === "micro" ? "text-[11px]" : dense ? "text-[11px]" : "text-xs";
+                      const metaClass = dense || size === "micro" ? "text-[10px]" : "text-[11px]";
 
                       return (
                         <button
                           className={`absolute rounded-xl border border-line bg-white text-left shadow-soft transition hover:border-accent/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 ${
-                            dense ? "p-1.5" : "p-2"
+                            padClass
                           }`}
                           key={event.id}
                           onBlur={closeHover}
@@ -484,23 +493,25 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
                           }}
                           type="button"
                         >
-                          <div className="flex items-start justify-between gap-2">
-                            <p className={`line-clamp-2 font-semibold ${dense ? "text-[11px]" : "text-xs"}`}>{event.subject}</p>
+                          <div className="flex min-w-0 items-start justify-between gap-2">
+                            <p className={`min-w-0 ${subjectClamp} font-semibold leading-tight ${subjectClass}`}>{event.subject}</p>
                             <span
-                              className={`inline-flex items-center gap-1 rounded-full border border-line bg-white/85 px-2 py-0.5 text-[10px] font-medium ${
-                                dense ? "px-1.5" : ""
+                              className={`inline-flex shrink-0 items-center gap-1 rounded-full border border-line bg-white/85 py-0.5 text-[10px] font-medium ${
+                                dense || size === "micro" ? "px-1.5" : "px-2"
                               }`}
                               style={{ color }}
                             >
                               <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: color }} />
-                              {dense ? null : <span className="line-clamp-1">{event.tenantName}</span>}
+                              {showTenantLabel ? <span className="max-w-[110px] truncate">{event.tenantName}</span> : null}
                             </span>
                           </div>
-                          <p className={`mt-1 text-muted ${dense ? "text-[10px]" : "text-[11px]"}`}>
-                            {new Date(event.startAt).toLocaleTimeString(intl, { hour: "2-digit", minute: "2-digit" })} -{" "}
-                            {new Date(event.endAt).toLocaleTimeString(intl, { hour: "2-digit", minute: "2-digit" })}
-                          </p>
-                          {showLocation ? <p className="mt-1 line-clamp-1 text-[11px] text-muted">{event.location}</p> : null}
+                          {showTime ? (
+                            <p className={`mt-1 leading-tight text-muted ${metaClass}`}>
+                              {new Date(event.startAt).toLocaleTimeString(intl, { hour: "2-digit", minute: "2-digit" })} -{" "}
+                              {new Date(event.endAt).toLocaleTimeString(intl, { hour: "2-digit", minute: "2-digit" })}
+                            </p>
+                          ) : null}
+                          {showLocation ? <p className="mt-1 line-clamp-1 text-[11px] leading-tight text-muted">{event.location}</p> : null}
                         </button>
                       );
                     })}

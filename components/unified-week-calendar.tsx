@@ -73,6 +73,14 @@ function dayKey(date: Date): string {
   return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
 }
 
+function minutesIntoDay(date: Date): number {
+  return date.getHours() * 60 + date.getMinutes();
+}
+
+function clamp(n: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, n));
+}
+
 export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProps) {
   const t = useT();
   const intl = useIntlLocale();
@@ -230,9 +238,107 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
   }, [t]);
 
   const dayEvents = useMemo(() => {
-    const key = dayKey(dayDate);
-    return (eventsByDay.get(key) ?? []).slice().sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
-  }, [dayDate, eventsByDay]);
+    const dayStart = startOfDay(dayDate);
+    const dayEnd = addDays(dayStart, 1);
+    const startTs = dayStart.getTime();
+    const endTs = dayEnd.getTime();
+
+    return events
+      .map((event) => {
+        const s = new Date(event.startAt).getTime();
+        const e = new Date(event.endAt).getTime();
+        return { event, s, e };
+      })
+      .filter((row) => Number.isFinite(row.s) && Number.isFinite(row.e) && row.e > row.s && row.s < endTs && row.e > startTs)
+      .sort((a, b) => a.s - b.s)
+      .map((row) => row.event);
+  }, [dayDate, events]);
+
+  const dayLayout = useMemo(() => {
+    if (dayEvents.length === 0) {
+      return [];
+    }
+
+    const dayStart = startOfDay(dayDate).getTime();
+    const dayEnd = addDays(new Date(dayStart), 1).getTime();
+    const MIN = 0;
+    const MAX = 24 * 60;
+
+    type Item = {
+      event: CalendarEvent;
+      startMin: number;
+      endMin: number;
+      clusterId: number;
+      col: number;
+      colCount: number;
+    };
+
+    const base: Item[] = dayEvents
+      .map((event) => {
+        const s = new Date(event.startAt).getTime();
+        const e = new Date(event.endAt).getTime();
+        const clampedStart = clamp(Math.floor((Math.max(s, dayStart) - dayStart) / 60000), MIN, MAX);
+        const clampedEnd = clamp(Math.ceil((Math.min(e, dayEnd) - dayStart) / 60000), MIN, MAX);
+        return {
+          event,
+          startMin: clampedStart,
+          endMin: Math.max(clampedEnd, clampedStart + 5),
+          clusterId: -1,
+          col: 0,
+          colCount: 1
+        };
+      })
+      .filter((it) => it.endMin > it.startMin)
+      .sort((a, b) => (a.startMin !== b.startMin ? a.startMin - b.startMin : b.endMin - a.endMin));
+
+    // First pass: assign clusters of overlapping events.
+    let cluster = -1;
+    let activeEnds: number[] = [];
+    for (const it of base) {
+      activeEnds = activeEnds.filter((end) => end > it.startMin);
+      if (activeEnds.length === 0) {
+        cluster += 1;
+      }
+      it.clusterId = cluster;
+      activeEnds.push(it.endMin);
+    }
+
+    // Second pass: for each cluster, assign columns.
+    const byCluster = new Map<number, Item[]>();
+    base.forEach((it) => {
+      const arr = byCluster.get(it.clusterId) ?? [];
+      arr.push(it);
+      byCluster.set(it.clusterId, arr);
+    });
+
+    for (const [, items] of byCluster.entries()) {
+      items.sort((a, b) => (a.startMin !== b.startMin ? a.startMin - b.startMin : b.endMin - a.endMin));
+      const active: Array<{ endMin: number; col: number }> = [];
+      let maxCols = 0;
+
+      for (const it of items) {
+        for (let i = active.length - 1; i >= 0; i -= 1) {
+          if (active[i]!.endMin <= it.startMin) {
+            active.splice(i, 1);
+          }
+        }
+
+        const used = new Set(active.map((a) => a.col));
+        let col = 0;
+        while (used.has(col)) col += 1;
+
+        it.col = col;
+        active.push({ endMin: it.endMin, col });
+        maxCols = Math.max(maxCols, active.length, col + 1);
+      }
+
+      items.forEach((it) => {
+        it.colCount = Math.max(1, maxCols);
+      });
+    }
+
+    return base;
+  }, [dayDate, dayEvents]);
 
   return (
     <>
@@ -278,52 +384,86 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
         </div>
 
         {viewMode === "day" ? (
-          <div className="space-y-2">
-            {dayEvents.length === 0 ? (
-              <div className="rounded-xl border border-line bg-white/90 p-6 text-center">
-                <p className="text-sm font-medium">{t("calendar.none")}</p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {dayEvents.map((event) => {
-                  const color = colorForTenant(event.tenantName);
-                  const start = new Date(event.startAt);
-                  const end = new Date(event.endAt);
-                  return (
-                    <button
-                      className="w-full rounded-xl border border-line bg-white/90 p-3 text-left transition hover:border-accent/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
-                      key={event.id}
-                      onClick={() => openEvent(event.id)}
-                      onFocus={(e) => openHover(event, e.currentTarget)}
-                      onBlur={closeHover}
-                      onMouseEnter={(e) => openHover(event, e.currentTarget)}
-                      onMouseLeave={closeHover}
-                      type="button"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-semibold">{event.subject}</p>
-                          <p className="mt-1 text-xs text-muted">
-                            {start.toLocaleTimeString(intl, { hour: "2-digit", minute: "2-digit" })} -{" "}
-                            {end.toLocaleTimeString(intl, { hour: "2-digit", minute: "2-digit" })}
-                          </p>
-                          <p className="mt-1 text-xs text-muted">
-                            {event.location} · {event.sourceAccount}
-                          </p>
-                        </div>
-                        <div
-                          className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium"
-                          style={{ backgroundColor: `${color}1f`, color }}
+          <div className="overflow-hidden rounded-xl border border-line bg-white/90">
+            <div className="max-h-[72vh] overflow-y-auto">
+              <div className="grid grid-cols-[56px_1fr]">
+                <div className="border-r border-line bg-white/95">
+                  {Array.from({ length: 25 }, (_, hour) => (
+                    <div className="relative h-14 border-b border-line px-2 py-1.5" key={hour}>
+                      <p className="text-[11px] font-medium text-muted">
+                        {hour === 24
+                          ? ""
+                          : new Date(0, 0, 0, hour, 0, 0).toLocaleTimeString(intl, { hour: "2-digit", minute: "2-digit" })}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="relative bg-white/90">
+                  <div className="relative" style={{ height: 24 * 56 }}>
+                    {Array.from({ length: 24 }, (_, hour) => (
+                      <div className="h-14 border-b border-line" key={hour} />
+                    ))}
+
+                    {sameDate(dayDate, new Date()) ? (
+                      (() => {
+                        const now = new Date();
+                        const top = (minutesIntoDay(now) / 60) * 56;
+                        return (
+                          <div className="pointer-events-none absolute left-0 right-0" style={{ top }}>
+                            <div className="h-px bg-rose-500/80" />
+                            <div className="absolute -left-1 -top-1.5 h-3 w-3 rounded-full bg-rose-500" />
+                          </div>
+                        );
+                      })()
+                    ) : null}
+
+                    {dayLayout.map((item) => {
+                      const { event, startMin, endMin, col, colCount } = item;
+                      const color = colorForTenant(event.tenantName);
+                      const top = (startMin / 60) * 56;
+                      const height = Math.max(28, ((endMin - startMin) / 60) * 56);
+                      const gap = 8;
+                      const leftPct = (col / colCount) * 100;
+                      const widthPct = (1 / colCount) * 100;
+
+                      return (
+                        <button
+                          className="absolute rounded-xl border border-line bg-white p-2 text-left shadow-soft transition hover:border-accent/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
+                          key={event.id}
+                          onBlur={closeHover}
+                          onClick={() => openEvent(event.id)}
+                          onFocus={(e) => openHover(event, e.currentTarget)}
+                          onMouseEnter={(e) => openHover(event, e.currentTarget)}
+                          onMouseLeave={closeHover}
+                          style={{
+                            top,
+                            height,
+                            left: `calc(${leftPct}% + ${gap / 2}px)`,
+                            width: `calc(${widthPct}% - ${gap}px)`,
+                            borderLeft: `4px solid ${color}`
+                          }}
+                          type="button"
                         >
-                          <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: color }} />
-                          {event.tenantName}
-                        </div>
+                          <p className="line-clamp-2 text-xs font-semibold">{event.subject}</p>
+                          <p className="mt-1 text-[11px] text-muted">
+                            {new Date(event.startAt).toLocaleTimeString(intl, { hour: "2-digit", minute: "2-digit" })} -{" "}
+                            {new Date(event.endAt).toLocaleTimeString(intl, { hour: "2-digit", minute: "2-digit" })}
+                          </p>
+                          <p className="mt-1 line-clamp-1 text-[11px] text-muted">{event.location}</p>
+                        </button>
+                      );
+                    })}
+
+                    {dayLayout.length === 0 ? (
+                      <div className="absolute inset-0 grid place-items-center p-6">
+                        <p className="text-sm font-medium text-muted">{t("calendar.none")}</p>
                       </div>
-                    </button>
-                  );
-                })}
+                    ) : null}
+                  </div>
+                </div>
               </div>
-            )}
+            </div>
           </div>
         ) : viewMode === "week" ? (
           <div className="grid gap-2 md:grid-cols-7">

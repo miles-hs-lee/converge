@@ -36,7 +36,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   }
 
   return (
-    <main className="page-wrap flex min-h-screen max-w-xl items-center py-12">
+    <main className="page-wrap flex min-h-screen max-w-xl items-center py-12" data-testid="page-login">
       <section className="panel-glass card w-full p-7 md:p-9">
         <BrandLogo subtitle={tt("brand.subtitle")} />
         <h1 className="title-xl mt-5">{tt("login.title")}</h1>
@@ -59,13 +59,21 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           <label className="text-sm font-medium" htmlFor="email">
             {tt("login.emailLabel")}
           </label>
-          <input className="input-control" id="email" name="email" placeholder="you@company.com" required type="email" />
-          <button className="btn btn-primary w-full" type="submit">
+          <input
+            className="input-control"
+            data-testid="login-email"
+            id="email"
+            name="email"
+            placeholder="you@company.com"
+            required
+            type="email"
+          />
+          <button className="btn btn-primary w-full" data-testid="login-magiclink-submit" type="submit">
             {tt("login.magicLinkCta")}
           </button>
         </form>
 
-        <Link className="btn btn-secondary mt-3 w-full" href="/api/auth/microsoft/start">
+        <Link className="btn btn-secondary mt-3 w-full" data-testid="login-microsoft" href="/api/auth/microsoft/start">
           {tt("login.microsoftCta")}
         </Link>
 

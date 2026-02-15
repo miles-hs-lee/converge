@@ -9,11 +9,11 @@ export default async function OnboardingPage() {
   const tt = (key: Parameters<typeof t>[1], vars?: Parameters<typeof t>[2]) => t(locale, key, vars);
 
   return (
-    <main className="page-wrap py-10 md:py-14">
+    <main className="page-wrap py-10 md:py-14" data-testid="page-onboarding">
       <section className="panel-glass card p-7 md:p-10">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <BrandLogo subtitle={tt("brand.subtitle")} />
-          <Link className="btn btn-primary" href="/login">
+          <Link className="btn btn-primary" data-testid="onboarding-start" href="/login">
             {tt("onboarding.start")}
           </Link>
         </div>
@@ -120,7 +120,7 @@ export default async function OnboardingPage() {
         </section>
 
         <div className="mt-9 flex flex-wrap gap-3">
-          <Link className="btn btn-secondary" href="/calendar">
+          <Link className="btn btn-secondary" data-testid="onboarding-view-calendar" href="/calendar">
             {tt("onboarding.viewCalendar")}
           </Link>
         </div>

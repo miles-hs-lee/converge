@@ -8,3 +8,7 @@ coverage
 *.log
 .vercel
 tsconfig.tsbuildinfo
+
+# Playwright CLI artifacts (keep output contained)
+output/playwright/*
+!output/playwright/.gitkeep

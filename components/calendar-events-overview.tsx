@@ -332,6 +332,49 @@ export function CalendarEventsOverview({ events, tenants }: CalendarEventsOvervi
         })}
       </div>
 
+      <UnifiedWeekCalendar events={filteredEvents} tenants={enabledTenants} />
+
+      <section className="panel-glass card mt-5 p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="title-lg">{t("calendar.rangeTitle")}</h2>
+            <p className="muted mt-1">{t("calendar.rangeCurrent", { days: rangeDays })}</p>
+          </div>
+          <div className="inline-flex rounded-xl border border-line bg-white/90 p-0.5">
+            <button
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium ${rangeDays === 3 ? "bg-accent text-white" : "text-slate-700"}`}
+              onClick={() => setRangeDays(3)}
+              type="button"
+            >
+              {t("calendar.range3")}
+            </button>
+            <button
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium ${rangeDays === 7 ? "bg-accent text-white" : "text-slate-700"}`}
+              onClick={() => setRangeDays(7)}
+              type="button"
+            >
+              {t("calendar.range7")}
+            </button>
+          </div>
+        </div>
+        <div className="mt-3 grid gap-3 md:grid-cols-2">
+          <EventList
+            attendeesLabel={(count) => t("calendar.attendeesCount", { count })}
+            emptyText={t("calendar.none")}
+            events={pastEvents}
+            intl={intl}
+            title={t("calendar.past")}
+          />
+          <EventList
+            attendeesLabel={(count) => t("calendar.attendeesCount", { count })}
+            emptyText={t("calendar.none")}
+            events={upcomingEvents}
+            intl={intl}
+            title={t("calendar.upcoming")}
+          />
+        </div>
+      </section>
+
       <section className="mt-5 rounded-2xl border border-line bg-white/85 p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -404,49 +447,6 @@ export function CalendarEventsOverview({ events, tenants }: CalendarEventsOvervi
             {visibleConflicts.length > 8 ? <p className="muted text-xs">{t("common.more", { count: visibleConflicts.length - 8 })}</p> : null}
           </div>
         )}
-      </section>
-
-      <UnifiedWeekCalendar events={filteredEvents} tenants={enabledTenants} />
-
-      <section className="panel-glass card mt-5 p-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="title-lg">{t("calendar.rangeTitle")}</h2>
-            <p className="muted mt-1">{t("calendar.rangeCurrent", { days: rangeDays })}</p>
-          </div>
-          <div className="inline-flex rounded-xl border border-line bg-white/90 p-0.5">
-            <button
-              className={`rounded-lg px-3 py-1.5 text-sm font-medium ${rangeDays === 3 ? "bg-accent text-white" : "text-slate-700"}`}
-              onClick={() => setRangeDays(3)}
-              type="button"
-            >
-              {t("calendar.range3")}
-            </button>
-            <button
-              className={`rounded-lg px-3 py-1.5 text-sm font-medium ${rangeDays === 7 ? "bg-accent text-white" : "text-slate-700"}`}
-              onClick={() => setRangeDays(7)}
-              type="button"
-            >
-              {t("calendar.range7")}
-            </button>
-          </div>
-        </div>
-        <div className="mt-3 grid gap-3 md:grid-cols-2">
-          <EventList
-            attendeesLabel={(count) => t("calendar.attendeesCount", { count })}
-            emptyText={t("calendar.none")}
-            events={pastEvents}
-            intl={intl}
-            title={t("calendar.past")}
-          />
-          <EventList
-            attendeesLabel={(count) => t("calendar.attendeesCount", { count })}
-            emptyText={t("calendar.none")}
-            events={upcomingEvents}
-            intl={intl}
-            title={t("calendar.upcoming")}
-          />
-        </div>
       </section>
     </>
   );

@@ -4,7 +4,7 @@
 // Cache strategy: cache-first for static assets; network-first for navigations.
 
 // Bump this to force cache refresh across deployments if needed.
-const CACHE_NAME = "converge-pwa-v4";
+const CACHE_NAME = "converge-pwa-v5";
 const OFFLINE_URL = "/offline.html";
 
 self.addEventListener("install", (event) => {

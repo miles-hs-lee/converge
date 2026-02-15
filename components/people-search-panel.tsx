@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { CalendarPlus, Mail, MessageSquareText, Search, X } from "lucide-react";
+import { ModalPortal } from "@/components/modal-portal";
 
 type PersonRow = {
   id: string;
@@ -167,74 +168,76 @@ export function PeopleSearchPanel({ people }: PeopleSearchPanelProps) {
       </div>
 
       {selectedPerson && actionLinks ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-3 sm:p-4" role="dialog" aria-modal="true">
-          <button aria-label="닫기" className="absolute inset-0 cursor-default" onClick={() => setSelectedPersonId(null)} type="button" />
+        <ModalPortal>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-3 sm:p-4" role="dialog" aria-modal="true">
+            <button aria-label="닫기" className="absolute inset-0 cursor-default" onClick={() => setSelectedPersonId(null)} type="button" />
 
-          <section className="panel-glass card relative z-10 max-h-[88vh] w-full max-w-2xl overflow-y-auto rounded-2xl p-4 pb-7 sm:p-5">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-xs uppercase tracking-[0.14em] text-accent">People Detail</p>
-                <h3 className="mt-1 text-xl font-semibold">{selectedPerson.displayName}</h3>
-                <p className="mt-1 text-sm text-muted">
-                  {selectedPerson.jobTitle} · {selectedPerson.department} · {selectedPerson.tenantName}
-                </p>
+            <section className="panel-glass card relative z-10 max-h-[88vh] w-full max-w-2xl overflow-y-auto rounded-2xl p-4 pb-7 sm:p-5">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.14em] text-accent">People Detail</p>
+                  <h3 className="mt-1 text-xl font-semibold">{selectedPerson.displayName}</h3>
+                  <p className="mt-1 text-sm text-muted">
+                    {selectedPerson.jobTitle} · {selectedPerson.department} · {selectedPerson.tenantName}
+                  </p>
+                </div>
+                <button
+                  className="btn btn-secondary px-3 py-1.5"
+                  onClick={() => setSelectedPersonId(null)}
+                  type="button"
+                >
+                  <X size={14} /> 닫기
+                </button>
               </div>
-              <button
-                className="btn btn-secondary px-3 py-1.5"
-                onClick={() => setSelectedPersonId(null)}
-                type="button"
-              >
-                <X size={14} /> 닫기
-              </button>
-            </div>
 
-            <div className="mt-4 grid gap-2 md:grid-cols-3">
-              <a
-                className={`inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium ${actionLinks.disabled ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400" : "border-line bg-white hover:border-accent/45"}`}
-                href={actionLinks.disabled ? undefined : actionLinks.mailto}
-                rel="noreferrer"
-                target="_blank"
-              >
-                <Mail size={16} /> 메일 작성
-              </a>
-              <a
-                className={`inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium ${actionLinks.disabled ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400" : "border-line bg-white hover:border-accent/45"}`}
-                href={actionLinks.disabled ? undefined : actionLinks.teams}
-                rel="noreferrer"
-                target="_blank"
-              >
-                <MessageSquareText size={16} /> Teams 채팅 열기
-              </a>
-              <a
-                className={`inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium ${actionLinks.disabled ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400" : "border-line bg-white hover:border-accent/45"}`}
-                href={actionLinks.disabled ? undefined : actionLinks.calendar}
-                rel="noreferrer"
-                target="_blank"
-              >
-                <CalendarPlus size={16} /> 캘린더 약속 생성
-              </a>
-            </div>
+              <div className="mt-4 grid gap-2 md:grid-cols-3">
+                <a
+                  className={`inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium ${actionLinks.disabled ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400" : "border-line bg-white hover:border-accent/45"}`}
+                  href={actionLinks.disabled ? undefined : actionLinks.mailto}
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  <Mail size={16} /> 메일 작성
+                </a>
+                <a
+                  className={`inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium ${actionLinks.disabled ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400" : "border-line bg-white hover:border-accent/45"}`}
+                  href={actionLinks.disabled ? undefined : actionLinks.teams}
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  <MessageSquareText size={16} /> Teams 채팅 열기
+                </a>
+                <a
+                  className={`inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium ${actionLinks.disabled ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400" : "border-line bg-white hover:border-accent/45"}`}
+                  href={actionLinks.disabled ? undefined : actionLinks.calendar}
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  <CalendarPlus size={16} /> 캘린더 약속 생성
+                </a>
+              </div>
 
-            <div className="mt-4 grid gap-3 text-sm md:grid-cols-2">
-              <div className="rounded-xl border border-line bg-white/85 p-3">
-                <p className="text-xs uppercase tracking-[0.12em] text-muted">이메일</p>
-                <p className="mt-1 font-medium">{selectedPerson.mail || "(email 없음)"}</p>
+              <div className="mt-4 grid gap-3 text-sm md:grid-cols-2">
+                <div className="rounded-xl border border-line bg-white/85 p-3">
+                  <p className="text-xs uppercase tracking-[0.12em] text-muted">이메일</p>
+                  <p className="mt-1 font-medium">{selectedPerson.mail || "(email 없음)"}</p>
+                </div>
+                <div className="rounded-xl border border-line bg-white/85 p-3">
+                  <p className="text-xs uppercase tracking-[0.12em] text-muted">전화번호</p>
+                  <p className="mt-1 font-medium">{selectedPerson.mobilePhone}</p>
+                </div>
+                <div className="rounded-xl border border-line bg-white/85 p-3">
+                  <p className="text-xs uppercase tracking-[0.12em] text-muted">오피스 위치</p>
+                  <p className="mt-1 font-medium">{selectedPerson.officeLocation}</p>
+                </div>
+                <div className="rounded-xl border border-line bg-white/85 p-3">
+                  <p className="text-xs uppercase tracking-[0.12em] text-muted">소속 테넌트</p>
+                  <p className="mt-1 font-medium">{selectedPerson.tenantName}</p>
+                </div>
               </div>
-              <div className="rounded-xl border border-line bg-white/85 p-3">
-                <p className="text-xs uppercase tracking-[0.12em] text-muted">전화번호</p>
-                <p className="mt-1 font-medium">{selectedPerson.mobilePhone}</p>
-              </div>
-              <div className="rounded-xl border border-line bg-white/85 p-3">
-                <p className="text-xs uppercase tracking-[0.12em] text-muted">오피스 위치</p>
-                <p className="mt-1 font-medium">{selectedPerson.officeLocation}</p>
-              </div>
-              <div className="rounded-xl border border-line bg-white/85 p-3">
-                <p className="text-xs uppercase tracking-[0.12em] text-muted">소속 테넌트</p>
-                <p className="mt-1 font-medium">{selectedPerson.tenantName}</p>
-              </div>
-            </div>
-          </section>
-        </div>
+            </section>
+          </div>
+        </ModalPortal>
       ) : null}
     </>
   );

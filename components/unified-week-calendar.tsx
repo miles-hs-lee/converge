@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { ModalPortal } from "@/components/modal-portal";
+import { colorForTenant } from "@/lib/tenant-colors";
 
 type CalendarEvent = {
   id: string;
@@ -20,8 +21,6 @@ type UnifiedWeekCalendarProps = {
 };
 
 type ViewMode = "week" | "month";
-
-const tenantPalette = ["#0891b2", "#0284c7", "#0ea5e9", "#1d4ed8", "#334155", "#14b8a6"];
 
 function addDays(date: Date, days: number): Date {
   const result = new Date(date);
@@ -85,13 +84,8 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
     return Array.from({ length: 42 }, (_, idx) => addDays(start, idx));
   }, [monthDate]);
 
-  const colorByTenant = useMemo(() => {
-    const map = new Map<string, string>();
-    tenants.forEach((tenant, index) => {
-      map.set(tenant, tenantPalette[index % tenantPalette.length]);
-    });
-    return map;
-  }, [tenants]);
+  // Keep signature but avoid tenant order affecting colors.
+  useMemo(() => tenants, [tenants]);
 
   const eventsByDay = useMemo(() => {
     const map = new Map<string, CalendarEvent[]>();
@@ -197,7 +191,7 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
 
                   <div className="space-y-2">
                     {dailyEvents.map((event) => {
-                      const color = colorByTenant.get(event.tenantName) ?? "#0f766e";
+                      const color = colorForTenant(event.tenantName);
                       return (
                         <button
                           className="w-full rounded-lg border border-line bg-white p-2 text-left transition hover:border-accent/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
@@ -246,7 +240,7 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
                       </p>
                       <div className="mt-2 space-y-1">
                         {dailyEvents.slice(0, 3).map((event) => {
-                          const color = colorByTenant.get(event.tenantName) ?? "#0891b2";
+                          const color = colorForTenant(event.tenantName);
                           return (
                             <button
                               className="block w-full truncate rounded-md px-1.5 py-1 text-left text-[11px] transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"

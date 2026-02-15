@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { UnifiedWeekCalendar } from "@/components/unified-week-calendar";
+import { colorForTenant } from "@/lib/tenant-colors";
 
 export type CalendarEventRow = {
   id: string;
@@ -54,14 +55,21 @@ function EventList({ title, events }: { title: string; events: CalendarEventRow[
 export function CalendarEventsOverview({ events, tenants }: CalendarEventsOverviewProps) {
   const [query, setQuery] = useState("");
   const [rangeDays, setRangeDays] = useState<3 | 7>(3);
+  const [disabledTenants, setDisabledTenants] = useState<Set<string>>(() => new Set());
+
+  const enabledTenants = useMemo(() => tenants.filter((tenant) => !disabledTenants.has(tenant)), [disabledTenants, tenants]);
 
   const filteredEvents = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) {
-      return events;
-    }
-
     return events.filter((event) => {
+      if (disabledTenants.has(event.tenantName)) {
+        return false;
+      }
+
+      if (!q) {
+        return true;
+      }
+
       return (
         event.subject.toLowerCase().includes(q) ||
         event.location.toLowerCase().includes(q) ||
@@ -70,14 +78,7 @@ export function CalendarEventsOverview({ events, tenants }: CalendarEventsOvervi
         event.attendees.some((attendee) => attendee.toLowerCase().includes(q))
       );
     });
-  }, [events, query]);
-
-  const visibleTenants = useMemo(() => {
-    if (!query.trim()) {
-      return tenants;
-    }
-    return [...new Set(filteredEvents.map((event) => event.tenantName))];
-  }, [filteredEvents, query, tenants]);
+  }, [disabledTenants, events, query]);
 
   const nowTs = Date.now();
   const rangeMs = rangeDays * 24 * 60 * 60 * 1000;
@@ -106,9 +107,9 @@ export function CalendarEventsOverview({ events, tenants }: CalendarEventsOvervi
     <>
       <div className="mt-1 flex flex-wrap items-center gap-2">
         <label className="relative min-w-[220px] flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" size={14} />
+          <Search className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" size={16} />
           <input
-            className="input-control pl-9"
+            className="input-control pl-11"
             onChange={(event) => setQuery(event.target.value)}
             placeholder="일정 검색 (제목/장소/테넌트/참석자)"
             type="search"
@@ -118,14 +119,35 @@ export function CalendarEventsOverview({ events, tenants }: CalendarEventsOvervi
       </div>
 
       <div className="mt-3 flex flex-wrap gap-2">
-        {visibleTenants.map((tenant) => (
-          <span className="badge bg-white/90" key={tenant}>
-            {tenant}
-          </span>
-        ))}
+        {tenants.map((tenant) => {
+          const enabled = !disabledTenants.has(tenant);
+          const color = colorForTenant(tenant);
+          return (
+            <button
+              aria-pressed={enabled}
+              className={`badge gap-2 bg-white/90 transition hover:border-accent/45 ${enabled ? "" : "opacity-45 line-through"}`}
+              key={tenant}
+              onClick={() => {
+                setDisabledTenants((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(tenant)) {
+                    next.delete(tenant);
+                  } else {
+                    next.add(tenant);
+                  }
+                  return next;
+                });
+              }}
+              type="button"
+            >
+              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
+              {tenant}
+            </button>
+          );
+        })}
       </div>
 
-      <UnifiedWeekCalendar events={filteredEvents} tenants={visibleTenants} />
+      <UnifiedWeekCalendar events={filteredEvents} tenants={enabledTenants} />
 
       <section className="panel-glass card mt-5 p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">

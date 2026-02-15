@@ -58,6 +58,18 @@ export type I18nKey =
   | "calendar.upcoming"
   | "calendar.none"
   | "calendar.attendeesCount"
+  | "alerts.title"
+  | "alerts.subtitle"
+  | "alerts.count"
+  | "alerts.none"
+  | "alerts.enableNotifications"
+  | "alerts.disableNotifications"
+  | "alerts.permissionDenied"
+  | "alerts.dismiss"
+  | "alerts.dismissed"
+  | "alerts.simulate"
+  | "alerts.rescan"
+  | "alerts.banner"
   | "event.detailTitle"
   | "event.sourceTenant"
   | "event.sourceAccount"
@@ -223,6 +235,18 @@ const enUS: Dict = {
   "calendar.upcoming": "Upcoming",
   "calendar.none": "No events.",
   "calendar.attendeesCount": "{count} attendees",
+  "alerts.title": "Conflict alerts",
+  "alerts.subtitle": "Detect overlapping events across different tenants.",
+  "alerts.count": "{count} conflicts",
+  "alerts.none": "No conflicts detected in the current window.",
+  "alerts.enableNotifications": "Enable notifications",
+  "alerts.disableNotifications": "Disable notifications",
+  "alerts.permissionDenied": "Notification permission is blocked in this browser.",
+  "alerts.dismiss": "Dismiss",
+  "alerts.dismissed": "Dismissed",
+  "alerts.simulate": "Simulate new conflict",
+  "alerts.rescan": "Rescan",
+  "alerts.banner": "New schedule conflicts detected: {count}",
   "event.detailTitle": "Event Detail",
   "event.sourceTenant": "Source tenant",
   "event.sourceAccount": "Source account",
@@ -388,6 +412,18 @@ const koKR: Dict = {
   "calendar.upcoming": "예정 일정",
   "calendar.none": "해당 일정이 없습니다.",
   "calendar.attendeesCount": "참석자 {count}명",
+  "alerts.title": "일정 충돌 알림",
+  "alerts.subtitle": "서로 다른 테넌트에서 시간이 겹치는 일정을 감지합니다.",
+  "alerts.count": "충돌 {count}건",
+  "alerts.none": "현재 범위에서 감지된 충돌이 없습니다.",
+  "alerts.enableNotifications": "알림 켜기",
+  "alerts.disableNotifications": "알림 끄기",
+  "alerts.permissionDenied": "현재 브라우저에서 알림 권한이 차단되어 있습니다.",
+  "alerts.dismiss": "숨기기",
+  "alerts.dismissed": "숨김 처리됨",
+  "alerts.simulate": "새 충돌 생성(테스트)",
+  "alerts.rescan": "재검사",
+  "alerts.banner": "새 일정 충돌이 감지되었습니다: {count}건",
   "event.detailTitle": "일정 상세",
   "event.sourceTenant": "원본 테넌트",
   "event.sourceAccount": "원본 계정",
@@ -553,6 +589,18 @@ const jaJP: Dict = {
   "calendar.upcoming": "今後の予定",
   "calendar.none": "予定はありません。",
   "calendar.attendeesCount": "参加者 {count}名",
+  "alerts.title": "予定の競合アラート",
+  "alerts.subtitle": "異なるテナント間で時間が重なる予定を検出します。",
+  "alerts.count": "競合 {count}件",
+  "alerts.none": "現在の範囲では競合が見つかりません。",
+  "alerts.enableNotifications": "通知を有効化",
+  "alerts.disableNotifications": "通知を無効化",
+  "alerts.permissionDenied": "このブラウザーで通知がブロックされています。",
+  "alerts.dismiss": "非表示",
+  "alerts.dismissed": "非表示にしました",
+  "alerts.simulate": "新しい競合を作成(テスト)",
+  "alerts.rescan": "再スキャン",
+  "alerts.banner": "新しい予定の競合を検出しました: {count}件",
   "event.detailTitle": "予定の詳細",
   "event.sourceTenant": "元テナント",
   "event.sourceAccount": "元アカウント",

@@ -1,10 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { UnifiedWeekCalendar } from "@/components/unified-week-calendar";
 import { colorForTenant } from "@/lib/tenant-colors";
 import { useT, useIntlLocale } from "@/components/locale-provider";
+import { detectTenantConflicts } from "@/lib/calendar-conflicts";
+import { isMockMode } from "@/lib/mock-mode";
 
 export type CalendarEventRow = {
   id: string;
@@ -22,11 +24,17 @@ type CalendarEventsOverviewProps = {
   tenants: string[];
 };
 
-function formatRange(event: CalendarEventRow): string {
-  return `${new Date(event.startAt).toLocaleString("ko-KR")} - ${new Date(event.endAt).toLocaleTimeString("ko-KR", {
-    hour: "2-digit",
-    minute: "2-digit"
-  })}`;
+function safeParseSet(raw: string | null): Set<string> {
+  if (!raw) {
+    return new Set();
+  }
+  try {
+    const arr = JSON.parse(raw) as unknown;
+    if (!Array.isArray(arr)) return new Set();
+    return new Set(arr.filter((v): v is string => typeof v === "string"));
+  } catch {
+    return new Set();
+  }
 }
 
 function EventList({
@@ -73,15 +81,21 @@ function EventList({
 export function CalendarEventsOverview({ events, tenants }: CalendarEventsOverviewProps) {
   const t = useT();
   const intl = useIntlLocale();
+
+  // In MOCK mode, allow generating additional conflicts without changing server data.
+  const [localEvents, setLocalEvents] = useState<CalendarEventRow[]>(() => events);
   const [query, setQuery] = useState("");
   const [rangeDays, setRangeDays] = useState<3 | 7>(3);
   const [disabledTenants, setDisabledTenants] = useState<Set<string>>(() => new Set());
+  const [toast, setToast] = useState<string | null>(null);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [permissionBlocked, setPermissionBlocked] = useState(false);
 
   const enabledTenants = useMemo(() => tenants.filter((tenant) => !disabledTenants.has(tenant)), [disabledTenants, tenants]);
 
   const filteredEvents = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return events.filter((event) => {
+    return localEvents.filter((event) => {
       if (disabledTenants.has(event.tenantName)) {
         return false;
       }
@@ -98,7 +112,7 @@ export function CalendarEventsOverview({ events, tenants }: CalendarEventsOvervi
         event.attendees.some((attendee) => attendee.toLowerCase().includes(q))
       );
     });
-  }, [disabledTenants, events, query]);
+  }, [disabledTenants, localEvents, query]);
 
   const nowTs = Date.now();
   const rangeMs = rangeDays * 24 * 60 * 60 * 1000;
@@ -123,8 +137,159 @@ export function CalendarEventsOverview({ events, tenants }: CalendarEventsOvervi
       .slice(0, 8);
   }, [filteredEvents, nowTs, rangeMs]);
 
+  const conflictEvents = useMemo(() => {
+    // Conflicts should not be affected by search query; only the tenant toggles.
+    return localEvents.filter((event) => !disabledTenants.has(event.tenantName));
+  }, [disabledTenants, localEvents]);
+
+  const conflicts = useMemo(() => {
+    return detectTenantConflicts(
+      conflictEvents.map((event) => ({
+        id: event.id,
+        tenantName: event.tenantName,
+        subject: event.subject,
+        startAt: event.startAt,
+        endAt: event.endAt,
+        location: event.location,
+        sourceAccount: event.sourceAccount
+      }))
+    );
+  }, [conflictEvents]);
+
+  const [dismissedKeys, setDismissedKeys] = useState<Set<string>>(() => {
+    if (typeof window === "undefined") return new Set();
+    return safeParseSet(localStorage.getItem("converge_conflicts_dismissed"));
+  });
+
+  const visibleConflicts = useMemo(() => conflicts.filter((c) => !dismissedKeys.has(c.key)), [conflicts, dismissedKeys]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const stored = localStorage.getItem("converge_notifications_enabled");
+    setNotificationsEnabled(stored === "true");
+    try {
+      setPermissionBlocked(Boolean(window.Notification) && Notification.permission === "denied");
+    } catch {
+      setPermissionBlocked(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const seen = safeParseSet(localStorage.getItem("converge_conflicts_seen"));
+    const unseen = visibleConflicts.filter((c) => !seen.has(c.key));
+    if (unseen.length === 0) return;
+
+    // Mark as seen.
+    unseen.forEach((c) => seen.add(c.key));
+    localStorage.setItem("converge_conflicts_seen", JSON.stringify([...seen]));
+
+    // In-app banner/toast.
+    setToast(t("alerts.banner", { count: unseen.length }));
+    const timer = window.setTimeout(() => setToast(null), 4200);
+
+    // Optional browser notification (requires user opt-in + permission granted).
+    if (notificationsEnabled && typeof window.Notification !== "undefined" && Notification.permission === "granted") {
+      const first = unseen[0]!;
+      const title = `Converge · ${t("alerts.count", { count: unseen.length })}`;
+      const body = `${first.a.tenantName} · ${first.a.subject}`;
+      try {
+        new Notification(title, { body });
+      } catch {
+        // ignore
+      }
+    }
+
+    return () => window.clearTimeout(timer);
+  }, [notificationsEnabled, t, visibleConflicts]);
+
+  async function enableNotifications() {
+    if (typeof window === "undefined" || typeof window.Notification === "undefined") {
+      return;
+    }
+
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission === "granted") {
+        localStorage.setItem("converge_notifications_enabled", "true");
+        setNotificationsEnabled(true);
+        setPermissionBlocked(false);
+        return;
+      }
+      if (permission === "denied") {
+        setPermissionBlocked(true);
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  function disableNotifications() {
+    if (typeof window === "undefined") return;
+    localStorage.setItem("converge_notifications_enabled", "false");
+    setNotificationsEnabled(false);
+  }
+
+  function dismissConflict(key: string) {
+    setDismissedKeys((prev) => {
+      const next = new Set(prev);
+      next.add(key);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("converge_conflicts_dismissed", JSON.stringify([...next]));
+      }
+      return next;
+    });
+  }
+
+  function rescan() {
+    if (typeof window === "undefined") return;
+    // Make existing conflicts "new" again for testing.
+    localStorage.removeItem("converge_conflicts_seen");
+    setToast(t("alerts.banner", { count: visibleConflicts.length }));
+    window.setTimeout(() => setToast(null), 2600);
+  }
+
+  function simulateMockConflict() {
+    if (!isMockMode) return;
+
+    const base = new Date();
+    base.setSeconds(0, 0);
+
+    const start = new Date(base);
+    start.setMinutes(start.getMinutes() + 5);
+
+    const end = new Date(start);
+    end.setMinutes(end.getMinutes() + 30);
+
+    const tenant = enabledTenants.find((name) => name !== enabledTenants[0]) ?? enabledTenants[0] ?? "Mock Tenant";
+    const id = `evt-sim-${Date.now()}`;
+
+    setLocalEvents((prev) => [
+      ...prev,
+      {
+        id,
+        tenantName: tenant,
+        subject: `Simulated overlap · ${tenant}`,
+        startAt: start.toISOString(),
+        endAt: end.toISOString(),
+        location: "Teams",
+        sourceAccount: `you@${tenant.replace(/\s+/g, "").toLowerCase()}.example.com`,
+        attendees: ["test@example.com"]
+      }
+    ]);
+  }
+
   return (
     <>
+      {toast ? (
+        <div className="sticky top-3 z-20">
+          <div className="rounded-2xl border border-accent/35 bg-white/90 p-3 text-sm shadow-soft">
+            <span className="font-medium text-text">{toast}</span>
+          </div>
+        </div>
+      ) : null}
+
       <div className="mt-1 flex flex-wrap items-center gap-2">
         <label className="relative min-w-[220px] flex-1">
           <Search className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" size={16} />
@@ -166,6 +331,80 @@ export function CalendarEventsOverview({ events, tenants }: CalendarEventsOvervi
           );
         })}
       </div>
+
+      <section className="mt-5 rounded-2xl border border-line bg-white/85 p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold tracking-tight">{t("alerts.title")}</h3>
+            <p className="muted mt-1">{t("alerts.subtitle")}</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="badge">{t("alerts.count", { count: visibleConflicts.length })}</span>
+            <button className="btn btn-secondary px-3 py-1.5" onClick={rescan} type="button">
+              {t("alerts.rescan")}
+            </button>
+            {isMockMode ? (
+              <button className="btn btn-secondary px-3 py-1.5" onClick={simulateMockConflict} type="button">
+                {t("alerts.simulate")}
+              </button>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {permissionBlocked ? <span className="text-xs text-rose-700">{t("alerts.permissionDenied")}</span> : null}
+          {notificationsEnabled ? (
+            <button className="btn btn-secondary px-3 py-1.5" onClick={disableNotifications} type="button">
+              {t("alerts.disableNotifications")}
+            </button>
+          ) : (
+            <button className="btn btn-primary px-3 py-1.5" onClick={enableNotifications} type="button">
+              {t("alerts.enableNotifications")}
+            </button>
+          )}
+        </div>
+
+        {visibleConflicts.length === 0 ? (
+          <p className="muted mt-3">{t("alerts.none")}</p>
+        ) : (
+          <div className="mt-3 space-y-2">
+            {visibleConflicts.slice(0, 8).map((conflict) => {
+              const aColor = colorForTenant(conflict.a.tenantName);
+              const bColor = colorForTenant(conflict.b.tenantName);
+              const overlap = `${new Date(conflict.overlapStart).toLocaleTimeString(intl, { hour: "2-digit", minute: "2-digit" })} - ${new Date(
+                conflict.overlapEnd
+              ).toLocaleTimeString(intl, { hour: "2-digit", minute: "2-digit" })}`;
+
+              return (
+                <article className="rounded-xl border border-line bg-white p-3" key={conflict.key}>
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <p className="text-xs font-medium text-muted">{overlap}</p>
+                      <p className="mt-1 text-sm font-semibold text-text">{conflict.a.subject}</p>
+                      <p className="mt-1 text-sm font-semibold text-text">{conflict.b.subject}</p>
+                      <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                        <span className="inline-flex items-center gap-2 rounded-full border border-line bg-white px-3 py-1" style={{ color: aColor }}>
+                          <span className="h-2 w-2 rounded-full" style={{ backgroundColor: aColor }} />
+                          {conflict.a.tenantName}
+                        </span>
+                        <span className="inline-flex items-center gap-2 rounded-full border border-line bg-white px-3 py-1" style={{ color: bColor }}>
+                          <span className="h-2 w-2 rounded-full" style={{ backgroundColor: bColor }} />
+                          {conflict.b.tenantName}
+                        </span>
+                      </div>
+                    </div>
+
+                    <button className="btn btn-secondary px-3 py-1.5" onClick={() => dismissConflict(conflict.key)} type="button">
+                      {t("alerts.dismiss")}
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
+            {visibleConflicts.length > 8 ? <p className="muted text-xs">{t("common.more", { count: visibleConflicts.length - 8 })}</p> : null}
+          </div>
+        )}
+      </section>
 
       <UnifiedWeekCalendar events={filteredEvents} tenants={enabledTenants} />
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ModalPortal } from "@/components/modal-portal";
 import { colorForTenant } from "@/lib/tenant-colors";
 import { useIntlLocale, useT } from "@/components/locale-provider";
@@ -72,6 +72,8 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
   const [offsetMonth, setOffsetMonth] = useState(0);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [moreDayKeyValue, setMoreDayKeyValue] = useState<string | null>(null);
+  const [canHover, setCanHover] = useState(false);
+  const [hovered, setHovered] = useState<{ event: CalendarEvent; rect: DOMRect } | null>(null);
 
   const weekStart = useMemo(() => {
     const base = startOfWeek(new Date());
@@ -121,6 +123,19 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
 
   const label = viewMode === "week" ? weekLabel(weekStart, intl) : monthLabel(monthDate, intl);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const media = window.matchMedia?.("(hover: hover) and (pointer: fine)");
+    if (!media) {
+      setCanHover(false);
+      return;
+    }
+    const update = () => setCanHover(Boolean(media.matches));
+    update();
+    media.addEventListener?.("change", update);
+    return () => media.removeEventListener?.("change", update);
+  }, []);
+
   function dateNumberClass(day: Date, isToday: boolean, inCurrentMonth = true): string {
     if (!inCurrentMonth) {
       return "text-slate-400";
@@ -163,6 +178,15 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
 
   function closeEventModal() {
     setSelectedEventId(null);
+  }
+
+  function openHover(event: CalendarEvent, el: HTMLElement) {
+    if (!canHover) return;
+    setHovered({ event, rect: el.getBoundingClientRect() });
+  }
+
+  function closeHover() {
+    setHovered(null);
   }
 
   function openMore(day: Date) {
@@ -239,6 +263,10 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
                           className="w-full rounded-lg border border-line bg-white p-2 text-left transition hover:border-accent/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
                           key={event.id}
                           onClick={() => openEvent(event.id)}
+                          onFocus={(e) => openHover(event, e.currentTarget)}
+                          onBlur={closeHover}
+                          onMouseEnter={(e) => openHover(event, e.currentTarget)}
+                          onMouseLeave={closeHover}
                           type="button"
                         >
                           <p className="line-clamp-1 text-xs font-semibold">{event.subject}</p>
@@ -302,6 +330,10 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
                               className="block w-full truncate rounded-md px-1.5 py-1 text-left text-[11px] transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
                               key={event.id}
                               onClick={() => openEvent(event.id)}
+                              onFocus={(e) => openHover(event, e.currentTarget)}
+                              onBlur={closeHover}
+                              onMouseEnter={(e) => openHover(event, e.currentTarget)}
+                              onMouseLeave={closeHover}
                               style={{ backgroundColor: `${color}1f`, color }}
                               type="button"
                             >
@@ -327,6 +359,65 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
           </div>
         )}
       </div>
+
+      {hovered ? (
+        <ModalPortal>
+          {(() => {
+            const centerX = hovered.rect.left + hovered.rect.width / 2;
+            const approxWidth = 340;
+            const vw = typeof window === "undefined" ? 1024 : window.innerWidth;
+            const vh = typeof window === "undefined" ? 768 : window.innerHeight;
+            const clampedLeft = Math.max(12 + approxWidth / 2, Math.min(vw - 12 - approxWidth / 2, centerX));
+            const preferAbove = hovered.rect.bottom + 12 + 180 > vh;
+            const top = preferAbove ? Math.max(12, hovered.rect.top - 12) : hovered.rect.bottom + 10;
+            const transform = preferAbove ? "translate(-50%, -100%)" : "translate(-50%, 0)";
+
+            const start = new Date(hovered.event.startAt);
+            const end = new Date(hovered.event.endAt);
+            const timeLine = `${start.toLocaleDateString(intl, { month: "short", day: "numeric", weekday: "short" })} · ${start.toLocaleTimeString(intl, {
+              hour: "2-digit",
+              minute: "2-digit"
+            })} - ${end.toLocaleTimeString(intl, { hour: "2-digit", minute: "2-digit" })}`;
+
+            return (
+              <div className="pointer-events-none fixed inset-0 z-[60]">
+                <div
+                  className="panel-glass card w-[min(340px,calc(100vw-24px))] rounded-2xl border border-line/70 bg-white/95 p-3 shadow-soft"
+                  style={{ left: clampedLeft, top, transform, position: "fixed" }}
+                >
+                  <p className="line-clamp-2 text-sm font-semibold text-text">{hovered.event.subject}</p>
+                  <p className="mt-1 text-xs text-muted">{timeLine}</p>
+
+                  <div className="mt-3 space-y-2 text-sm">
+                    <div className="rounded-xl border border-line bg-white/80 p-2.5">
+                      <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted">{t("event.sourceTenant")}</p>
+                      <p className="mt-1 text-xs font-semibold">{hovered.event.tenantName}</p>
+                    </div>
+
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <div className="rounded-xl border border-line bg-white/80 p-2.5">
+                        <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted">{t("event.location")}</p>
+                        <p className="mt-1 line-clamp-1 text-xs font-semibold">{hovered.event.location}</p>
+                      </div>
+                      <div className="rounded-xl border border-line bg-white/80 p-2.5">
+                        <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted">{t("event.sourceAccount")}</p>
+                        <p className="mt-1 line-clamp-1 text-xs font-semibold">{hovered.event.sourceAccount}</p>
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-line bg-white/80 p-2.5">
+                      <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted">{t("event.attendees")}</p>
+                      <p className="mt-1 text-xs text-muted">
+                        {hovered.event.attendees.length > 0 ? t("calendar.attendeesCount", { count: hovered.event.attendees.length }) : t("event.attendeesEmpty")}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+        </ModalPortal>
+      ) : null}
 
       {moreDayKeyValue ? (
         <ModalPortal>
@@ -361,6 +452,10 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
                         closeMore();
                         openEvent(event.id);
                       }}
+                      onFocus={(e) => openHover(event, e.currentTarget)}
+                      onBlur={closeHover}
+                      onMouseEnter={(e) => openHover(event, e.currentTarget)}
+                      onMouseLeave={closeHover}
                       type="button"
                     >
                       <div className="flex items-start justify-between gap-3">

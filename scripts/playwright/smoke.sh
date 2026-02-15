@@ -42,7 +42,12 @@ fi
 } > run.meta
 
 # Keep the flow CLI-first; use run-code only for waiting/assertions that need selectors.
-"$PWCLI" --config "$CONFIG" open "$BASE_URL" "${OPEN_ARGS[@]}" | tee open.log
+# Bash 3.2 + nounset errors on expanding empty arrays, so guard the expansion.
+if ((${#OPEN_ARGS[@]})); then
+  "$PWCLI" --config "$CONFIG" open "$BASE_URL" "${OPEN_ARGS[@]}" | tee open.log
+else
+  "$PWCLI" --config "$CONFIG" open "$BASE_URL" | tee open.log
+fi
 
 # Best-effort "settle"; don't fail the run if networkidle isn't reached.
 "$PWCLI" run-code "await page.waitForLoadState('domcontentloaded', { timeout: ${TIMEOUT_MS} })" >/dev/null 2>&1 || true

@@ -54,8 +54,9 @@ cp .env.example .env.local
        - `VAPID_PUBLIC_KEY`
        - `VAPID_PRIVATE_KEY`
        - `VAPID_SUBJECT` (e.g. `mailto:you@example.com`)
-     - If you want server-side background scans via Vercel Cron:
-       - set `CRON_SECRET` in Vercel project env (Vercel Cron sends it via Authorization header)
+     - If you want server-side background scans:
+       - set `CRON_SECRET` in env, and call `GET /api/cron/conflicts` with `Authorization: Bearer <CRON_SECRET>`
+       - Vercel Cron on the Hobby plan is limited to daily schedules; use an external scheduler or upgrade if you need frequent checks.
 
 4. Run migration SQL in Supabase SQL editor:
 

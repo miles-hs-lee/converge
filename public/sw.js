@@ -3,7 +3,8 @@
 // Minimal SW to satisfy installability (manifest + SW w/ fetch handler).
 // Cache strategy: cache-first for static assets; network-first for navigations.
 
-const CACHE_NAME = "converge-pwa-v1";
+// Bump this to force cache refresh across deployments if needed.
+const CACHE_NAME = "converge-pwa-v2";
 const OFFLINE_URL = "/offline.html";
 
 self.addEventListener("install", (event) => {
@@ -95,4 +96,3 @@ self.addEventListener("fetch", (event) => {
     })()
   );
 });
-

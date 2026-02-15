@@ -142,6 +142,13 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
             {tt("settings.signOut")}
           </button>
         </form>
+        <p className="mt-4 text-xs text-muted">
+          Build{" "}
+          <span className="font-mono">
+            {(process.env.NEXT_PUBLIC_BUILD_SHA || "").slice(0, 7) || "local"}{" "}
+            {process.env.NEXT_PUBLIC_BUILD_REF ? `(${process.env.NEXT_PUBLIC_BUILD_REF})` : ""}
+          </span>
+        </p>
       </section>
     </div>
   );

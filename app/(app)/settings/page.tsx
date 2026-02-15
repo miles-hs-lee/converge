@@ -16,6 +16,8 @@ const statusMessage: Record<string, string> = {
   google_profile_failed: "Google 프로필 조회에 실패했습니다.",
   google_profile_incomplete: "Google 프로필 정보가 불완전합니다.",
   google_refresh_token_missing: "Google refresh token을 받지 못했습니다. 다시 연결해주세요.",
+  google_oauth_connected_partial_sync: "Google 계정 연결은 완료되었지만 일부 캘린더 동기화에 실패했습니다.",
+  google_oauth_connected_sync_failed: "Google 계정 연결은 완료되었지만 초기 캘린더 동기화에 실패했습니다.",
   google_config_missing: "Google OAuth 설정이 누락되었습니다.",
   invalid_state: "OAuth state 검증에 실패했습니다.",
   missing_code: "인증 코드가 누락되었습니다.",

@@ -12,3 +12,6 @@ tsconfig.tsbuildinfo
 # Playwright CLI artifacts (keep output contained)
 output/playwright/*
 !output/playwright/.gitkeep
+
+# Playwright CLI working dir (created by @playwright/cli)
+.playwright-cli/

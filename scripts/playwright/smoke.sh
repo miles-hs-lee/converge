@@ -3,6 +3,10 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
+# macOS default TMPDIR can be very long; Playwright CLI uses a UNIX socket under tmp.
+# Keep it short to avoid hitting socket path length limits.
+export TMPDIR="/tmp"
+
 BASE_URL="${1:-${BASE_URL:-http://localhost:3000}}"
 LABEL="${LABEL:-smoke}"
 EXPECT_SELECTOR="${EXPECT_SELECTOR:-[data-testid=\"page-onboarding\"]}"
@@ -17,7 +21,15 @@ cd "$OUTDIR"
 export CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
 PWCLI="${PWCLI:-$CODEX_HOME/skills/playwright/scripts/playwright_cli.sh}"
 CONFIG="${CONFIG:-$ROOT/scripts/playwright/playwright-cli.json}"
-export PLAYWRIGHT_CLI_SESSION="${PLAYWRIGHT_CLI_SESSION:-converge-${LABEL}}"
+if [[ -z "${PLAYWRIGHT_CLI_SESSION:-}" ]]; then
+  # Session name influences the tmp socket filename; keep it short.
+  if command -v shasum >/dev/null 2>&1; then
+    h="$(printf %s "$LABEL" | shasum -a 1 | awk '{print $1}' | cut -c1-10)"
+  else
+    h="$(printf %s "$LABEL" | cksum | awk '{print $1}')"
+  fi
+  export PLAYWRIGHT_CLI_SESSION="cvg-${h}"
+fi
 
 if [[ ! -x "$PWCLI" ]]; then
   echo "Error: Playwright CLI wrapper not found/executable: $PWCLI" >&2

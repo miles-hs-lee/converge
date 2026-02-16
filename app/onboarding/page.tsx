@@ -88,7 +88,7 @@ export default async function OnboardingPage() {
             </article>
 
             <article className="rounded-2xl border border-line bg-white/85 p-3 md:p-4">
-              <div className="relative max-h-[560px] overflow-auto rounded-xl border border-line bg-white">
+              <div className="relative max-h-[360px] overflow-auto rounded-xl border border-line bg-white md:max-h-[560px]">
                 <Image
                   alt="Converge people screenshot"
                   className="h-auto w-full"

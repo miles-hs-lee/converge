@@ -51,6 +51,7 @@ self.addEventListener("fetch", (event) => {
     request.destination === "image" ||
     url.pathname.startsWith("/_next/static/") ||
     url.pathname.startsWith("/icons/") ||
+    url.pathname.startsWith("/splash/") ||
     url.pathname.startsWith("/onboarding/");
 
   if (isNav) {

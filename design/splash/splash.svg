@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1170 2532">
+  <defs>
+    <radialGradient id="r1" cx="18%" cy="10%" r="60%">
+      <stop offset="0" stop-color="#38BDF8" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#38BDF8" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="r2" cx="86%" cy="8%" r="55%">
+      <stop offset="0" stop-color="#7DD3FC" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#7DD3FC" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F5FAFF"/>
+      <stop offset="0.5" stop-color="#EEF6FC"/>
+      <stop offset="1" stop-color="#EAF2FB"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="30" stdDeviation="34" flood-color="#020617" flood-opacity="0.22"/>
+    </filter>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0891B2"/>
+      <stop offset="0.6" stop-color="#0284C7"/>
+      <stop offset="1" stop-color="#38BDF8"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect x="0" y="0" width="1170" height="2532" fill="url(#bg)"/>
+  <rect x="0" y="0" width="1170" height="2532" fill="url(#r1)"/>
+  <rect x="0" y="0" width="1170" height="2532" fill="url(#r2)"/>
+
+  <!-- Subtle geometry -->
+  <g opacity="0.22">
+    <path d="M120 2280C420 2140 520 2000 880 1860" stroke="url(#accent)" stroke-width="22" stroke-linecap="round"/>
+    <path d="M160 350C420 300 560 380 950 230" stroke="url(#accent)" stroke-width="18" stroke-linecap="round" opacity="0.6"/>
+    <circle cx="950" cy="420" r="160" fill="#0891B2" opacity="0.06"/>
+    <circle cx="270" cy="560" r="220" fill="#0284C7" opacity="0.05"/>
+  </g>
+
+  <!-- Center mark -->
+  <g filter="url(#shadow)">
+    <rect x="345" y="1046" width="480" height="480" rx="120" fill="#0F172A"/>
+  </g>
+
+  <g transform="translate(345,1046) scale(2)">
+    <path d="M42 120C42 78.6 75.6 45 117 45H130" stroke="#7DD3FC" stroke-linecap="round" stroke-width="20" />
+    <path d="M198 120C198 161.4 164.4 195 123 195H110" stroke="#38BDF8" stroke-linecap="round" stroke-width="20" />
+    <path d="M72 66L168 174" opacity="0.8" stroke="#E2E8F0" stroke-linecap="round" stroke-width="12" />
+    <circle cx="120" cy="120" fill="#22D3EE" r="26" />
+    <circle cx="120" cy="120" fill="#0F172A" r="9" />
+  </g>
+</svg>
+

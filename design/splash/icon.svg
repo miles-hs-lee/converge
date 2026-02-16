@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <radialGradient id="bg" cx="28%" cy="22%" r="90%">
+      <stop offset="0" stop-color="#22D3EE"/>
+      <stop offset="0.45" stop-color="#0891B2"/>
+      <stop offset="1" stop-color="#0B1324"/>
+    </radialGradient>
+    <linearGradient id="glow" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7DD3FC" stop-opacity="0.85"/>
+      <stop offset="0.55" stop-color="#38BDF8" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#22D3EE" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="20" stdDeviation="22" flood-color="#020617" flood-opacity="0.45"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect x="0" y="0" width="1024" height="1024" rx="220" fill="url(#bg)"/>
+  <path d="M0 120C180 44 338 112 470 230C636 380 720 380 1024 210V420C780 560 624 520 460 372C312 240 186 210 0 290V120Z" fill="url(#glow)" opacity="0.5"/>
+
+  <!-- Mark container -->
+  <g filter="url(#shadow)">
+    <rect x="208" y="208" width="608" height="608" rx="150" fill="#0F172A"/>
+  </g>
+
+  <!-- Orbit mark (based on existing favicon.svg) -->
+  <g transform="translate(208,208) scale(2.5333333333)">
+    <path d="M42 120C42 78.6 75.6 45 117 45H130" stroke="#7DD3FC" stroke-linecap="round" stroke-width="20" />
+    <path d="M198 120C198 161.4 164.4 195 123 195H110" stroke="#38BDF8" stroke-linecap="round" stroke-width="20" />
+    <path d="M72 66L168 174" opacity="0.8" stroke="#E2E8F0" stroke-linecap="round" stroke-width="12" />
+    <circle cx="120" cy="120" fill="#22D3EE" r="26" />
+    <circle cx="120" cy="120" fill="#0F172A" r="9" />
+  </g>
+</svg>
+

@@ -25,6 +25,10 @@ if [[ ! -x "$PWCLI" ]]; then
   exit 1
 fi
 
+pw() {
+  "$PWCLI" --config "$CONFIG" "$@"
+}
+
 OPEN_ARGS=()
 if [[ "$HEADED" == "1" ]]; then
   OPEN_ARGS+=(--headed)
@@ -44,27 +48,44 @@ fi
 # Keep the flow CLI-first; use run-code only for waiting/assertions that need selectors.
 # Bash 3.2 + nounset errors on expanding empty arrays, so guard the expansion.
 if ((${#OPEN_ARGS[@]})); then
-  "$PWCLI" --config "$CONFIG" open "$BASE_URL" "${OPEN_ARGS[@]}" | tee open.log
+  pw open "$BASE_URL" "${OPEN_ARGS[@]}" | tee open.log
 else
-  "$PWCLI" --config "$CONFIG" open "$BASE_URL" | tee open.log
+  pw open "$BASE_URL" | tee open.log
 fi
 
 # Best-effort "settle"; don't fail the run if networkidle isn't reached.
-"$PWCLI" run-code "await page.waitForLoadState('domcontentloaded', { timeout: ${TIMEOUT_MS} })" >/dev/null 2>&1 || true
-"$PWCLI" run-code "await page.waitForLoadState('networkidle', { timeout: ${TIMEOUT_MS} }).catch(() => {})" >/dev/null 2>&1 || true
+pw run-code "await page.waitForLoadState('domcontentloaded', { timeout: ${TIMEOUT_MS} })" >/dev/null 2>&1 || true
+pw run-code "await page.waitForLoadState('networkidle', { timeout: ${TIMEOUT_MS} }).catch(() => {})" >/dev/null 2>&1 || true
 
 if [[ -n "$EXPECT_SELECTOR" ]]; then
   SEL_JSON="$(node -e 'console.log(JSON.stringify(process.argv[1]))' "$EXPECT_SELECTOR")"
-  # Fail if the expected UI marker doesn't appear.
-  # eslint-disable-next-line no-unused-vars
-  "$PWCLI" run-code "await page.waitForSelector(${SEL_JSON}, { timeout: ${TIMEOUT_MS}, state: 'visible' })" | tee wait_for_selector.log
+  # `run-code` + `waitForSelector` can be flaky across CLI/runtime versions; use `eval` polling instead.
+  # Keep this expression simple; some CLI/runtime combinations behave oddly with IIFEs.
+  CHECK_EXPR="Boolean(document.querySelector(${SEL_JSON}))"
+  INTERVAL_MS=250
+  ITERS=$(( (TIMEOUT_MS + INTERVAL_MS - 1) / INTERVAL_MS ))
+  ok=0
+  for ((i = 1; i <= ITERS; i++)); do
+    out="$(pw eval "$CHECK_EXPR" 2>&1 || true)"
+    if echo "$out" | rg -q '^true$'; then
+      ok=1
+      break
+    fi
+    sleep 0.25
+  done
+  if [[ "$ok" != "1" ]]; then
+    echo "$out" > wait_for_selector.log
+    echo "Error: selector not found/visible within ${TIMEOUT_MS}ms: $EXPECT_SELECTOR" >&2
+    exit 1
+  fi
+  echo "OK" > wait_for_selector.log
 fi
 
-"$PWCLI" snapshot | tee snapshot.txt
-"$PWCLI" eval "document.title" | tee title.txt
+pw snapshot | tee snapshot.txt
+pw eval "document.title" | tee title.txt
 
 # Artifacts (written to cwd, i.e. output/playwright/<label>-<timestamp>/)
-"$PWCLI" screenshot | tee screenshot.log
-"$PWCLI" close >/dev/null 2>&1 || true
+pw screenshot | tee screenshot.log
+pw close >/dev/null 2>&1 || true
 
 echo "OK: $BASE_URL -> $OUTDIR"

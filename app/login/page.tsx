@@ -13,7 +13,8 @@ const loginStatusKey: Record<string, I18nKey> = {
   magic_link_error: "login.status.magic_link_error",
   auth_callback_error: "login.status.auth_callback_error",
   signed_out: "login.status.signed_out",
-  auth_required: "status.auth_required"
+  auth_required: "status.auth_required",
+  microsoft_sso_error: "login.status.microsoft_sso_error"
 };
 
 type LoginPageProps = {
@@ -74,10 +75,9 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           </button>
         </form>
 
-        <button className="btn btn-secondary mt-3 w-full cursor-not-allowed opacity-60" data-testid="login-microsoft" disabled type="button">
+        <a className="btn btn-secondary mt-3 w-full" data-testid="login-microsoft" href="/api/auth/supabase/microsoft/start">
           {tt("login.microsoftCta")}
-        </button>
-        <p className="muted mt-2 text-xs">{tt("onboarding.step2Desc")}</p>
+        </a>
 
         <Link className="mt-6 inline-flex text-sm text-muted underline decoration-accent/30 underline-offset-4" href="/onboarding">
           {tt("login.onboardingCta")}

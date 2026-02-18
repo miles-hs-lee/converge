@@ -165,6 +165,7 @@ export type I18nKey =
   | "login.status.magic_link_error"
   | "login.status.auth_callback_error"
   | "login.status.signed_out"
+  | "login.status.microsoft_sso_error"
   | "onboarding.start"
   | "onboarding.heroTitle"
   | "onboarding.heroDesc"
@@ -370,6 +371,7 @@ const enUS: Dict = {
   "login.status.magic_link_error": "Failed to send magic link. Check Supabase Auth settings.",
   "login.status.auth_callback_error": "Failed to process login callback.",
   "login.status.signed_out": "Signed out safely.",
+  "login.status.microsoft_sso_error": "Microsoft SSO failed. Check Supabase Azure provider settings.",
   "onboarding.start": "Get started",
   "onboarding.heroTitle": "One workspace for multi-tenant Microsoft 365",
   "onboarding.heroDesc":
@@ -575,6 +577,7 @@ const koKR: Dict = {
   "login.status.magic_link_error": "매직링크 전송에 실패했습니다. Supabase Auth 설정을 확인해주세요.",
   "login.status.auth_callback_error": "로그인 콜백 처리에 실패했습니다.",
   "login.status.signed_out": "안전하게 로그아웃되었습니다.",
+  "login.status.microsoft_sso_error": "Microsoft SSO에 실패했습니다. Supabase Azure 제공자 설정을 확인해주세요.",
   "onboarding.start": "시작하기",
   "onboarding.heroTitle": "멀티 테넌트 Microsoft 365 운영을 하나의 워크스페이스로",
   "onboarding.heroDesc":
@@ -780,6 +783,7 @@ const jaJP: Dict = {
   "login.status.magic_link_error": "マジックリンク送信に失敗しました。Supabase Auth 設定を確認してください。",
   "login.status.auth_callback_error": "ログインコールバックの処理に失敗しました。",
   "login.status.signed_out": "安全にログアウトしました。",
+  "login.status.microsoft_sso_error": "Microsoft SSO に失敗しました。Supabase Azure プロバイダー設定を確認してください。",
   "onboarding.start": "はじめる",
   "onboarding.heroTitle": "複数テナント Microsoft 365 運用を 1 つのワークスペースへ",
   "onboarding.heroDesc":

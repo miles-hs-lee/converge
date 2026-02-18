@@ -74,9 +74,10 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           </button>
         </form>
 
-        <Link className="btn btn-secondary mt-3 w-full" data-testid="login-microsoft" href="/api/auth/microsoft/start">
+        <button className="btn btn-secondary mt-3 w-full cursor-not-allowed opacity-60" data-testid="login-microsoft" disabled type="button">
           {tt("login.microsoftCta")}
-        </Link>
+        </button>
+        <p className="muted mt-2 text-xs">{tt("onboarding.step2Desc")}</p>
 
         <Link className="mt-6 inline-flex text-sm text-muted underline decoration-accent/30 underline-offset-4" href="/onboarding">
           {tt("login.onboardingCta")}

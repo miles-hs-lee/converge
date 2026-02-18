@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { decodeJwtPayload, getMicrosoftScopeString } from "@/lib/microsoft";
+import { syncMicrosoftCalendarSnapshot, syncMicrosoftPeopleSnapshot } from "@/lib/microsoft-sync";
 import { serverEnv } from "@/lib/env/server";
 
 type MicrosoftTokenResponse = {
@@ -27,6 +28,15 @@ type MicrosoftMeResponse = {
   userPrincipalName?: string;
   mail?: string;
 };
+
+function deriveTenantName(me: MicrosoftMeResponse, tenantId: string): string {
+  const account = me.userPrincipalName ?? me.mail ?? "";
+  const domain = account.includes("@") ? account.split("@")[1]?.trim() : "";
+  if (domain) {
+    return domain;
+  }
+  return tenantId;
+}
 
 function redirectWithStatus(request: NextRequest, status: string): NextResponse {
   const response = NextResponse.redirect(new URL(`/settings?status=${status}`, request.url));
@@ -138,6 +148,7 @@ export async function GET(request: NextRequest) {
   }
 
   const shouldBePrimary = existingConnection?.is_primary ?? !primaryConnection;
+  const tenantName = deriveTenantName(me, tenantId);
 
   const { error: appUserError } = await adminClient.from("app_users").upsert(
     {
@@ -157,7 +168,7 @@ export async function GET(request: NextRequest) {
       user_id: user.id,
       provider: "microsoft",
       tenant_id: tenantId,
-      tenant_name: null,
+      tenant_name: tenantName,
       m365_user_id: me.id,
       m365_user_principal_name: me.userPrincipalName ?? idClaims?.preferred_username ?? null,
       access_token_enc: tokenData.access_token,
@@ -173,6 +184,54 @@ export async function GET(request: NextRequest) {
   if (connectionError) {
     return redirectWithStatus(request, "db_connection_upsert_failed");
   }
+
+  const { data: connectionRow, error: connectionReadError } = await adminClient
+    .from("m365_connections")
+    .select("id")
+    .eq("user_id", user.id)
+    .eq("provider", "microsoft")
+    .eq("tenant_id", tenantId)
+    .eq("m365_user_id", me.id)
+    .maybeSingle();
+  if (connectionReadError || !connectionRow?.id) {
+    return redirectWithStatus(request, "db_connection_read_failed");
+  }
+
+  const accountEmail = me.userPrincipalName ?? me.mail ?? user.email;
+  const [calendarSync, peopleSync] = await Promise.all([
+    syncMicrosoftCalendarSnapshot({
+      accessToken: tokenData.access_token,
+      accountEmail,
+      connectionId: connectionRow.id,
+      adminClient
+    }),
+    syncMicrosoftPeopleSnapshot({
+      accessToken: tokenData.access_token,
+      connectionId: connectionRow.id,
+      adminClient
+    })
+  ]);
+
+  await adminClient
+    .from("m365_connections")
+    .update({
+      sync_state: {
+        calendar: {
+          ok: calendarSync.ok,
+          partial: calendarSync.partial,
+          syncedCount: calendarSync.syncedCount,
+          syncedAt: new Date().toISOString()
+        },
+        people: {
+          ok: peopleSync.ok,
+          partial: peopleSync.partial,
+          syncedCount: peopleSync.syncedCount,
+          syncedAt: new Date().toISOString()
+        }
+      },
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", connectionRow.id);
 
   return redirectWithStatus(request, "oauth_connected");
 }

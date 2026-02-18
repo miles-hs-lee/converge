@@ -1,8 +1,18 @@
 import { NextResponse } from "next/server";
 import { serverEnv } from "@/lib/env/server";
 import { getMicrosoftScopeString } from "@/lib/microsoft";
+import { createClient } from "@/lib/supabase/server";
 
 export async function GET() {
+  const supabase = await createClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.redirect(new URL("/login?status=auth_required", serverEnv.azureRedirectUri));
+  }
+
   const state = crypto.randomUUID();
   const params = new URLSearchParams({
     client_id: serverEnv.azureClientId,

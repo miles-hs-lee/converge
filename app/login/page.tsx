@@ -12,7 +12,8 @@ const loginStatusKey: Record<string, I18nKey> = {
   invalid_email: "login.status.invalid_email",
   magic_link_error: "login.status.magic_link_error",
   auth_callback_error: "login.status.auth_callback_error",
-  signed_out: "login.status.signed_out"
+  signed_out: "login.status.signed_out",
+  auth_required: "status.auth_required"
 };
 
 type LoginPageProps = {

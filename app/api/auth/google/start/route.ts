@@ -1,10 +1,19 @@
 import { NextResponse } from "next/server";
 import { serverEnv } from "@/lib/env/server";
 import { getGoogleScopeString } from "@/lib/google";
+import { createClient } from "@/lib/supabase/server";
 
 export async function GET(request: Request) {
   if (!serverEnv.googleClientId || !serverEnv.googleRedirectUri) {
     return NextResponse.redirect(new URL("/settings?status=google_config_missing", request.url));
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.redirect(new URL("/login?status=auth_required", request.url));
   }
 
   const state = crypto.randomUUID();

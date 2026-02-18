@@ -89,14 +89,16 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
             <h1 className="title-xl">{tt("settings.title")}</h1>
             <p className="muted mt-1">{tt("settings.subtitle")}</p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Link className="btn btn-primary" href="/api/auth/microsoft/start">
-              {tt("settings.addMicrosoft")}
-            </Link>
-            <a className="btn btn-secondary" href="/api/auth/google/start">
-              {tt("settings.addGoogle")}
-            </a>
-          </div>
+          {user ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <Link className="btn btn-primary" href="/api/auth/microsoft/start">
+                {tt("settings.addMicrosoft")}
+              </Link>
+              <a className="btn btn-secondary" href="/api/auth/google/start">
+                {tt("settings.addGoogle")}
+              </a>
+            </div>
+          ) : null}
         </div>
       </section>
 

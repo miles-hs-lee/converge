@@ -13,6 +13,51 @@ It aggregates cross-tenant calendars and directory (people) data into a single e
 - Tailwind CSS
 - Web Push (optional, background notifications)
 
+## Architecture (Overview)
+
+Detailed C4 document: `docs/architecture-overview.md`
+
+### System Context
+
+- Client: Browser/PWA
+- Core app: Next.js (BFF)
+- System of record: Supabase (Auth + Postgres + RLS)
+- External integrations: Microsoft Identity + Graph, Google OAuth + Calendar API, Web Push network
+- Trigger source: optional scheduler calling `/api/cron/conflicts`
+
+### Containers
+
+- UI Container: App Router pages/components, service worker (`/public/sw.js`)
+- API/BFF Container: Route handlers (`/app/api/*`), auth callback (`/auth/callback`), server actions
+- Domain Container: conflict detection, i18n, push helper utilities
+- Data Container: Supabase SSR/Admin clients + Postgres tables (`app_users`, `m365_connections`, `calendar_events_cache`, `people_cache`, `push_subscriptions`, `alert_dedup`)
+
+### Main Flows
+
+1. Auth flow: magic link (Supabase) and OAuth callbacks (Microsoft/Google) -> connection/token upsert in Supabase
+2. Calendar/people read flow: UI -> Next.js server -> Supabase cached data
+3. Alert flow: scheduler -> `/api/cron/conflicts` -> conflict detection -> Web Push send -> dedup update
+
+```mermaid
+flowchart LR
+  U["User"]
+  B["Browser / PWA"]
+  C["Converge Next.js (UI + API/BFF)"]
+  S["Supabase (Auth + Postgres + RLS)"]
+  M["Microsoft Identity + Graph"]
+  G["Google OAuth + Calendar API"]
+  W["Web Push Network"]
+  R["Scheduler / Cron"]
+
+  U --> B --> C
+  C <--> S
+  C <--> M
+  C <--> G
+  C <--> W
+  R --> C
+  W --> B
+```
+
 ## Product Scope (Current)
 
 ### Pages

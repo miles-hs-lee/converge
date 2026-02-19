@@ -20,6 +20,33 @@ function sortPair(a: string, b: string): [string, string] {
   return a < b ? [a, b] : [b, a];
 }
 
+function normalizeKeyPart(value: string | undefined): string {
+  return (value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function compareEvents(a: CalendarEventLike, b: CalendarEventLike): number {
+  return (
+    a.tenantName.localeCompare(b.tenantName) ||
+    a.startAt.localeCompare(b.startAt) ||
+    a.endAt.localeCompare(b.endAt) ||
+    a.subject.localeCompare(b.subject) ||
+    a.id.localeCompare(b.id)
+  );
+}
+
+function orderConflictPair(a: CalendarEventLike, b: CalendarEventLike): [CalendarEventLike, CalendarEventLike] {
+  return compareEvents(a, b) <= 0 ? [a, b] : [b, a];
+}
+
+function eventFingerprint(event: CalendarEventLike): string {
+  return [
+    normalizeKeyPart(event.tenantName),
+    normalizeKeyPart(event.subject),
+    new Date(event.startAt).getTime(),
+    new Date(event.endAt).getTime()
+  ].join("|");
+}
+
 function toTs(iso: string): number | null {
   const dt = new Date(iso);
   const ts = dt.getTime();
@@ -35,7 +62,7 @@ export function detectTenantConflicts(events: CalendarEventLike[], opts?: { minO
     .filter((row): row is { e: CalendarEventLike; start: number; end: number } => row.start !== null && row.end !== null && row.end > row.start)
     .sort((x, y) => x.start - y.start);
 
-  const conflicts: CalendarConflict[] = [];
+  const conflictByKey = new Map<string, CalendarConflict>();
 
   for (let i = 0; i < normalized.length; i += 1) {
     const cur = normalized[i]!;
@@ -53,21 +80,24 @@ export function detectTenantConflicts(events: CalendarEventLike[], opts?: { minO
       const overlapMs = overlapEndTs - overlapStartTs;
       if (overlapMs < minOverlapMs) continue;
 
-      const [idLow, idHigh] = sortPair(cur.e.id, next.e.id);
-      const key = `${idLow}|${idHigh}`;
+      const [a, b] = orderConflictPair(cur.e, next.e);
+      const [fpLow, fpHigh] = sortPair(eventFingerprint(a), eventFingerprint(b));
+      const key = `${fpLow}|${fpHigh}|${overlapStartTs}|${overlapEndTs}`;
 
-      conflicts.push({
+      if (conflictByKey.has(key)) continue;
+
+      conflictByKey.set(key, {
         key,
         overlapStart: new Date(overlapStartTs).toISOString(),
         overlapEnd: new Date(overlapEndTs).toISOString(),
-        a: cur.e,
-        b: next.e
+        a,
+        b
       });
     }
   }
 
   // Stable ordering: earliest overlap first.
+  const conflicts = [...conflictByKey.values()];
   conflicts.sort((x, y) => new Date(x.overlapStart).getTime() - new Date(y.overlapStart).getTime());
   return conflicts;
 }
-

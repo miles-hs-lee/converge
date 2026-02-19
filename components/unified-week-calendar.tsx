@@ -563,10 +563,19 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
               const dailyEvents = eventsByDay.get(key) ?? [];
               const isToday = sameDate(day, new Date());
               return (
-                <section className="min-h-44 rounded-xl border border-line bg-white/90 p-2" key={key}>
-                  <header className="mb-2 border-b border-line pb-2">
+                <section
+                  className={`min-h-44 rounded-xl border p-2 ${
+                    isToday ? "border-accent/60 bg-accent/5 shadow-[0_0_0_1px_rgba(8,145,178,0.18)]" : "border-line bg-white/90"
+                  }`}
+                  key={key}
+                >
+                  <header className={`mb-2 pb-2 ${isToday ? "border-b border-accent/30" : "border-b border-line"}`}>
                     <p className="text-xs uppercase tracking-[0.14em] text-muted">{day.toLocaleDateString(intl, { weekday: "short" })}</p>
-                    <p className={`text-sm font-semibold ${dateNumberClass(day, isToday)}`}>
+                    <p
+                      className={`mt-0.5 inline-flex items-center rounded-full px-2 py-0.5 text-sm font-semibold ${
+                        isToday ? "bg-accent/15 text-accent" : dateNumberClass(day, isToday)
+                      }`}
+                    >
                       {day.toLocaleDateString(intl, { month: "numeric", day: "numeric" })}
                     </p>
                   </header>
@@ -634,8 +643,17 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
                   const inCurrentMonth = day.getMonth() === monthDate.getMonth();
                   const isToday = sameDate(day, new Date());
                   return (
-                    <section className="min-h-28 rounded-xl border border-line bg-white/90 p-2" key={key}>
-                      <p className={`text-xs font-semibold ${dateNumberClass(day, isToday, inCurrentMonth)}`}>
+                    <section
+                      className={`min-h-28 rounded-xl border p-2 ${
+                        isToday ? "border-accent/60 bg-accent/5 shadow-[0_0_0_1px_rgba(8,145,178,0.18)]" : "border-line bg-white/90"
+                      }`}
+                      key={key}
+                    >
+                      <p
+                        className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${
+                          isToday ? "bg-accent/15 text-accent" : dateNumberClass(day, isToday, inCurrentMonth)
+                        }`}
+                      >
                         {day.getDate()}
                       </p>
                       <div className="mt-2 space-y-1">

@@ -119,8 +119,18 @@ export async function GET(request: NextRequest) {
     }
 
     const first = unsent[0]!;
-    const overlapStart = new Date(first.overlapStart).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
-    const overlapEnd = new Date(first.overlapEnd).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
+    const overlapStart = new Date(first.overlapStart).toLocaleString(locale, {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit"
+    });
+    const overlapEnd = new Date(first.overlapEnd).toLocaleString(locale, {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit"
+    });
     const payload = JSON.stringify({
       title: tt("alerts.notificationTitle", { count: unsent.length }),
       body: tt("alerts.notificationBody", {
@@ -162,4 +172,3 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({ ok: true, usersScanned, usersNotified, pushesSent, pushesFailed });
 }
-

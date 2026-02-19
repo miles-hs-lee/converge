@@ -15,6 +15,12 @@ export type MockCalendarEvent = {
   endAt: string;
   location: string;
   attendees: string[];
+  organizer?: string;
+  isAllDay?: boolean;
+  webLink?: string | null;
+  lastModifiedAt?: string | null;
+  calendarName?: string;
+  provider?: string;
 };
 
 export type MockPerson = {
@@ -27,6 +33,19 @@ export type MockPerson = {
   officeLocation: string;
   mobilePhone: string;
   businessPhones: string[];
+  sourceAccount: string;
+  provider: string;
+  upn: string;
+  externalPersonId: string;
+  managerExternalId: string;
+  companyName: string;
+  employeeId: string;
+  preferredLanguage: string;
+  city: string;
+  state: string;
+  country: string;
+  userType: string;
+  accountEnabled: boolean | null;
 };
 
 export const mockConnections: MockConnection[] = [
@@ -68,6 +87,12 @@ const tenantAccounts = [
   { tenantName: "Regional Tenant", sourceAccount: "you@regional.adatum.com" }
 ];
 
+function calendarNameForTenant(tenantName: string): string {
+  if (tenantName === "Partner Tenant") return "Partner Shared Calendar";
+  if (tenantName === "Regional Tenant") return "Regional Operations Calendar";
+  return "Primary Calendar";
+}
+
 function createBusyMockEvents(): MockCalendarEvent[] {
   const base = new Date();
   base.setHours(0, 0, 0, 0);
@@ -107,7 +132,13 @@ function createBusyMockEvents(): MockCalendarEvent[] {
           startAt: start.toISOString(),
           endAt: end.toISOString(),
           location: slot.location,
-          attendees
+          attendees,
+          organizer: tenant.sourceAccount,
+          isAllDay: false,
+          webLink: `https://outlook.office.com/calendar/item/evt-busy-${seq}`,
+          lastModifiedAt: new Date(start.getTime() - 1000 * 60 * 50).toISOString(),
+          calendarName: calendarNameForTenant(tenant.tenantName),
+          provider: "microsoft"
         });
         seq += 1;
       }
@@ -129,7 +160,13 @@ function createBusyMockEvents(): MockCalendarEvent[] {
         startAt: sharedStart.toISOString(),
         endAt: sharedEnd.toISOString(),
         location: "Auditorium / Teams",
-        attendees: ["all@example.com", "ops@example.com"]
+        attendees: ["all@example.com", "ops@example.com"],
+        organizer: tenant.sourceAccount,
+        isAllDay: false,
+        webLink: `https://outlook.office.com/calendar/item/evt-busy-${seq}`,
+        lastModifiedAt: new Date(sharedStart.getTime() - 1000 * 60 * 30).toISOString(),
+        calendarName: calendarNameForTenant(tenant.tenantName),
+        provider: "microsoft"
       });
       seq += 1;
     });
@@ -166,7 +203,13 @@ function createFutureMockEvents(count: number): MockCalendarEvent[] {
         `owner${(i % 8) + 1}@example.com`,
         `member${(i % 10) + 1}@example.com`,
         `partner${(i % 6) + 1}@example.com`
-      ]
+      ],
+      organizer: tenant.sourceAccount,
+      isAllDay: false,
+      webLink: `https://outlook.office.com/calendar/item/evt-future-${i + 1}`,
+      lastModifiedAt: new Date(start.getTime() - 1000 * 60 * (15 + (i % 7) * 5)).toISOString(),
+      calendarName: calendarNameForTenant(tenant.tenantName),
+      provider: "microsoft"
     });
   }
 
@@ -197,7 +240,13 @@ function createPastMockEvents(count: number): MockCalendarEvent[] {
       startAt: start.toISOString(),
       endAt: end.toISOString(),
       location: template.location,
-      attendees: [`lead${i + 1}@example.com`, `member${i + 1}@example.com`]
+      attendees: [`lead${i + 1}@example.com`, `member${i + 1}@example.com`],
+      organizer: tenant.sourceAccount,
+      isAllDay: false,
+      webLink: `https://outlook.office.com/calendar/item/evt-past-${i + 1}`,
+      lastModifiedAt: new Date(end.getTime() - 1000 * 60 * 20).toISOString(),
+      calendarName: calendarNameForTenant(tenant.tenantName),
+      provider: "microsoft"
     });
   }
 
@@ -251,6 +300,13 @@ const peopleSeed: Array<{
 
 export const mockPeople: MockPerson[] = peopleSeed.map((person, index) => {
   const local = person.displayName.toLowerCase().replace(/\s+/g, "");
+  const sourceAccount =
+    person.tenantName === "Partner Tenant"
+      ? "you@partner.fabrikam.com"
+      : person.tenantName === "Regional Tenant"
+        ? "you@regional.adatum.com"
+        : "you@primary.contoso.com";
+
   return {
     id: `p-${index + 1}`,
     displayName: person.displayName,
@@ -260,6 +316,19 @@ export const mockPeople: MockPerson[] = peopleSeed.map((person, index) => {
     tenantName: person.tenantName,
     officeLocation: `${person.officeLocation} Office`,
     mobilePhone: `010-${String(1000 + index).padStart(4, "0")}-${String(2000 + index).padStart(4, "0")}`,
-    businessPhones: [`02-${String(3000 + (index % 100)).padStart(4, "0")}-${String(4000 + (index % 100)).padStart(4, "0")}`]
+    businessPhones: [`02-${String(3000 + (index % 100)).padStart(4, "0")}-${String(4000 + (index % 100)).padStart(4, "0")}`],
+    sourceAccount,
+    provider: "microsoft",
+    upn: `${local}${index + 1}@contoso.onmicrosoft.com`,
+    externalPersonId: `ext-person-${index + 1}`,
+    managerExternalId: index % 5 === 0 ? "" : `ext-manager-${(index % 9) + 1}`,
+    companyName: person.tenantName.replace("Tenant", "Corp"),
+    employeeId: `E${String(10000 + index)}`,
+    preferredLanguage: index % 3 === 0 ? "ko-KR" : index % 3 === 1 ? "en-US" : "ja-JP",
+    city: person.officeLocation,
+    state: "N/A",
+    country: "KR",
+    userType: "Member",
+    accountEnabled: true
   };
 });

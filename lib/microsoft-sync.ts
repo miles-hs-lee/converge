@@ -46,10 +46,20 @@ type GraphCalendarEventsResponse = {
 type GraphUser = {
   id?: string;
   displayName?: string;
+  givenName?: string;
+  surname?: string;
   mail?: string;
   userPrincipalName?: string;
   jobTitle?: string;
   department?: string;
+  companyName?: string;
+  employeeId?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  preferredLanguage?: string;
+  userType?: string;
+  accountEnabled?: boolean;
   officeLocation?: string;
   mobilePhone?: string;
   businessPhones?: string[];
@@ -256,7 +266,7 @@ export async function syncMicrosoftPeopleSnapshot(params: {
   const nowIso = new Date().toISOString();
   let partial = false;
   let nextUrl: string | null =
-    "https://graph.microsoft.com/v1.0/users?$top=999&$select=id,displayName,mail,userPrincipalName,jobTitle,department,officeLocation,mobilePhone,businessPhones";
+    "https://graph.microsoft.com/v1.0/users?$top=999&$select=id,displayName,givenName,surname,mail,userPrincipalName,jobTitle,department,companyName,employeeId,city,state,country,preferredLanguage,userType,accountEnabled,officeLocation,mobilePhone,businessPhones";
   let pageCount = 0;
 
   while (nextUrl && rows.length < MAX_PEOPLE_ROWS && pageCount < MAX_PAGES) {
@@ -301,7 +311,7 @@ export async function syncMicrosoftPeopleSnapshot(params: {
 
   if (rows.length === 0) {
     const meResponse = await fetchGraphJson<GraphUser>(
-      "https://graph.microsoft.com/v1.0/me?$select=id,displayName,mail,userPrincipalName,jobTitle,department,officeLocation,mobilePhone,businessPhones",
+      "https://graph.microsoft.com/v1.0/me?$select=id,displayName,givenName,surname,mail,userPrincipalName,jobTitle,department,companyName,employeeId,city,state,country,preferredLanguage,userType,accountEnabled,officeLocation,mobilePhone,businessPhones",
       accessToken
     );
     if (!meResponse.ok || !meResponse.data?.id || !meResponse.data?.displayName) {

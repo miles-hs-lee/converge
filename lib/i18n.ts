@@ -44,6 +44,8 @@ export type I18nKey =
   | "common.day"
   | "common.week"
   | "common.month"
+  | "common.yes"
+  | "common.no"
   | "common.more"
   | "common.total"
   | "calendar.title"
@@ -99,7 +101,16 @@ export type I18nKey =
   | "event.detailTitle"
   | "event.sourceTenant"
   | "event.sourceAccount"
+  | "event.time"
+  | "event.duration"
+  | "event.allDay"
   | "event.location"
+  | "event.organizer"
+  | "event.calendar"
+  | "event.provider"
+  | "event.lastUpdated"
+  | "event.webLink"
+  | "event.openOriginal"
   | "event.attendees"
   | "event.attendeesEmpty"
   | "settings.title"
@@ -227,6 +238,21 @@ export type I18nKey =
   | "people.field.phone"
   | "people.field.office"
   | "people.field.tenant"
+  | "people.field.upn"
+  | "people.field.sourceAccount"
+  | "people.field.provider"
+  | "people.field.businessPhones"
+  | "people.field.company"
+  | "people.field.employeeId"
+  | "people.field.region"
+  | "people.field.preferredLanguage"
+  | "people.field.userType"
+  | "people.field.accountStatus"
+  | "people.field.objectId"
+  | "people.field.managerObjectId"
+  | "people.account.enabled"
+  | "people.account.disabled"
+  | "people.account.unknown"
   | "people.unknown.jobTitle"
   | "people.unknown.department"
   | "people.unknown.office"
@@ -258,6 +284,8 @@ const enUS: Dict = {
   "common.day": "Day",
   "common.week": "Week",
   "common.month": "Month",
+  "common.yes": "Yes",
+  "common.no": "No",
   "common.more": "{count} more",
   "common.total": "Total {count}",
   "calendar.title": "Unified Calendar",
@@ -313,7 +341,16 @@ const enUS: Dict = {
   "event.detailTitle": "Event Detail",
   "event.sourceTenant": "Source tenant",
   "event.sourceAccount": "Source account",
+  "event.time": "Time",
+  "event.duration": "Duration",
+  "event.allDay": "All day",
   "event.location": "Location",
+  "event.organizer": "Organizer",
+  "event.calendar": "Calendar",
+  "event.provider": "Provider",
+  "event.lastUpdated": "Last updated",
+  "event.webLink": "Original event link",
+  "event.openOriginal": "Open in provider",
   "event.attendees": "Attendees",
   "event.attendeesEmpty": "No attendee details available.",
   "settings.title": "Settings",
@@ -442,6 +479,21 @@ const enUS: Dict = {
   "people.field.phone": "Phone",
   "people.field.office": "Office",
   "people.field.tenant": "Tenant",
+  "people.field.upn": "User principal name",
+  "people.field.sourceAccount": "Connected account",
+  "people.field.provider": "Provider",
+  "people.field.businessPhones": "Business phones",
+  "people.field.company": "Company",
+  "people.field.employeeId": "Employee ID",
+  "people.field.region": "Region",
+  "people.field.preferredLanguage": "Preferred language",
+  "people.field.userType": "User type",
+  "people.field.accountStatus": "Account status",
+  "people.field.objectId": "Object ID",
+  "people.field.managerObjectId": "Manager object ID",
+  "people.account.enabled": "Enabled",
+  "people.account.disabled": "Disabled",
+  "people.account.unknown": "Unknown",
   "people.unknown.jobTitle": "(No title)",
   "people.unknown.department": "(No department)",
   "people.unknown.office": "(No location)",
@@ -472,6 +524,8 @@ const koKR: Dict = {
   "common.day": "일간",
   "common.week": "주간",
   "common.month": "월간",
+  "common.yes": "예",
+  "common.no": "아니오",
   "common.more": "+{count} more",
   "common.total": "총 {count}",
   "calendar.title": "통합 캘린더",
@@ -527,7 +581,16 @@ const koKR: Dict = {
   "event.detailTitle": "일정 상세",
   "event.sourceTenant": "원본 테넌트",
   "event.sourceAccount": "원본 계정",
+  "event.time": "시간",
+  "event.duration": "길이",
+  "event.allDay": "종일 일정",
   "event.location": "장소",
+  "event.organizer": "주최자",
+  "event.calendar": "캘린더",
+  "event.provider": "제공자",
+  "event.lastUpdated": "최근 수정",
+  "event.webLink": "원본 일정 링크",
+  "event.openOriginal": "원본에서 열기",
   "event.attendees": "참석자",
   "event.attendeesEmpty": "표시 가능한 참석자 정보가 없습니다.",
   "settings.title": "설정",
@@ -656,6 +719,21 @@ const koKR: Dict = {
   "people.field.phone": "전화번호",
   "people.field.office": "오피스 위치",
   "people.field.tenant": "소속 테넌트",
+  "people.field.upn": "사용자 주체 이름(UPN)",
+  "people.field.sourceAccount": "연결 계정",
+  "people.field.provider": "제공자",
+  "people.field.businessPhones": "회사 전화",
+  "people.field.company": "회사",
+  "people.field.employeeId": "사번",
+  "people.field.region": "지역",
+  "people.field.preferredLanguage": "기본 언어",
+  "people.field.userType": "사용자 유형",
+  "people.field.accountStatus": "계정 상태",
+  "people.field.objectId": "오브젝트 ID",
+  "people.field.managerObjectId": "매니저 오브젝트 ID",
+  "people.account.enabled": "활성",
+  "people.account.disabled": "비활성",
+  "people.account.unknown": "알 수 없음",
   "people.unknown.jobTitle": "(직책 없음)",
   "people.unknown.department": "(부서 없음)",
   "people.unknown.office": "(위치 없음)",
@@ -686,6 +764,8 @@ const jaJP: Dict = {
   "common.day": "日",
   "common.week": "週",
   "common.month": "月",
+  "common.yes": "はい",
+  "common.no": "いいえ",
   "common.more": "+{count} 件",
   "common.total": "合計 {count}",
   "calendar.title": "統合カレンダー",
@@ -741,7 +821,16 @@ const jaJP: Dict = {
   "event.detailTitle": "予定の詳細",
   "event.sourceTenant": "元テナント",
   "event.sourceAccount": "元アカウント",
+  "event.time": "時間",
+  "event.duration": "所要時間",
+  "event.allDay": "終日",
   "event.location": "場所",
+  "event.organizer": "主催者",
+  "event.calendar": "カレンダー",
+  "event.provider": "プロバイダー",
+  "event.lastUpdated": "最終更新",
+  "event.webLink": "元予定リンク",
+  "event.openOriginal": "元の予定を開く",
   "event.attendees": "参加者",
   "event.attendeesEmpty": "参加者情報がありません。",
   "settings.title": "設定",
@@ -870,6 +959,21 @@ const jaJP: Dict = {
   "people.field.phone": "電話番号",
   "people.field.office": "オフィス",
   "people.field.tenant": "テナント",
+  "people.field.upn": "ユーザー プリンシパル名 (UPN)",
+  "people.field.sourceAccount": "接続アカウント",
+  "people.field.provider": "プロバイダー",
+  "people.field.businessPhones": "会社電話",
+  "people.field.company": "会社",
+  "people.field.employeeId": "社員番号",
+  "people.field.region": "地域",
+  "people.field.preferredLanguage": "優先言語",
+  "people.field.userType": "ユーザー種別",
+  "people.field.accountStatus": "アカウント状態",
+  "people.field.objectId": "オブジェクト ID",
+  "people.field.managerObjectId": "マネージャー オブジェクト ID",
+  "people.account.enabled": "有効",
+  "people.account.disabled": "無効",
+  "people.account.unknown": "不明",
   "people.unknown.jobTitle": "(役職なし)",
   "people.unknown.department": "(部署なし)",
   "people.unknown.office": "(場所なし)",

@@ -27,6 +27,19 @@ type PersonRow = {
   officeLocation: string;
   mobilePhone: string;
   businessPhones: string[];
+  sourceAccount: string;
+  provider: string;
+  upn: string;
+  externalPersonId: string;
+  managerExternalId: string;
+  companyName: string;
+  employeeId: string;
+  preferredLanguage: string;
+  city: string;
+  state: string;
+  country: string;
+  userType: string;
+  accountEnabled: boolean | null;
 };
 
 type PeopleSearchPanelProps = {
@@ -156,8 +169,12 @@ export function PeopleSearchPanel({ people }: PeopleSearchPanelProps) {
       return (
         person.displayName.toLowerCase().includes(q) ||
         person.mail.toLowerCase().includes(q) ||
+        person.upn.toLowerCase().includes(q) ||
         person.department.toLowerCase().includes(q) ||
-        person.tenantName.toLowerCase().includes(q)
+        person.tenantName.toLowerCase().includes(q) ||
+        person.sourceAccount.toLowerCase().includes(q) ||
+        person.companyName.toLowerCase().includes(q) ||
+        person.employeeId.toLowerCase().includes(q)
       );
     });
   }, [people, query]);
@@ -190,6 +207,13 @@ export function PeopleSearchPanel({ people }: PeopleSearchPanelProps) {
 
   const actionLinks = selectedPerson ? buildActionLinks(selectedPerson) : null;
   const selectedPhone = selectedPerson ? getPrimaryPhone(selectedPerson) : "";
+  const providerLabel = (provider: string) =>
+    provider === "google" ? t("settings.providerGoogle") : provider === "microsoft" ? t("settings.providerMicrosoft") : provider;
+  const accountStatusLabel = (enabled: boolean | null) => {
+    if (enabled === true) return t("people.account.enabled");
+    if (enabled === false) return t("people.account.disabled");
+    return t("people.account.unknown");
+  };
   const showPinnedSections = query.trim().length === 0;
 
   function openPerson(personId: string) {
@@ -476,6 +500,56 @@ export function PeopleSearchPanel({ people }: PeopleSearchPanelProps) {
                 <div className="rounded-xl border border-line bg-white/85 p-3">
                   <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("people.field.tenant")}</p>
                   <p className="mt-1 font-medium">{selectedPerson.tenantName}</p>
+                </div>
+                <div className="rounded-xl border border-line bg-white/85 p-3">
+                  <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("people.field.upn")}</p>
+                  <p className="mt-1 font-medium">{selectedPerson.upn || "-"}</p>
+                </div>
+                <div className="rounded-xl border border-line bg-white/85 p-3">
+                  <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("people.field.sourceAccount")}</p>
+                  <p className="mt-1 font-medium">{selectedPerson.sourceAccount || "-"}</p>
+                </div>
+                <div className="rounded-xl border border-line bg-white/85 p-3">
+                  <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("people.field.provider")}</p>
+                  <p className="mt-1 font-medium">{providerLabel(selectedPerson.provider)}</p>
+                </div>
+                <div className="rounded-xl border border-line bg-white/85 p-3">
+                  <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("people.field.businessPhones")}</p>
+                  <p className="mt-1 font-medium">
+                    {selectedPerson.businessPhones.filter((p) => hasUsablePhone(p)).join(" · ") || "-"}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-line bg-white/85 p-3">
+                  <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("people.field.company")}</p>
+                  <p className="mt-1 font-medium">{selectedPerson.companyName || "-"}</p>
+                </div>
+                <div className="rounded-xl border border-line bg-white/85 p-3">
+                  <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("people.field.employeeId")}</p>
+                  <p className="mt-1 font-medium">{selectedPerson.employeeId || "-"}</p>
+                </div>
+                <div className="rounded-xl border border-line bg-white/85 p-3">
+                  <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("people.field.region")}</p>
+                  <p className="mt-1 font-medium">{[selectedPerson.city, selectedPerson.state, selectedPerson.country].filter(Boolean).join(", ") || "-"}</p>
+                </div>
+                <div className="rounded-xl border border-line bg-white/85 p-3">
+                  <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("people.field.preferredLanguage")}</p>
+                  <p className="mt-1 font-medium">{selectedPerson.preferredLanguage || "-"}</p>
+                </div>
+                <div className="rounded-xl border border-line bg-white/85 p-3">
+                  <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("people.field.userType")}</p>
+                  <p className="mt-1 font-medium">{selectedPerson.userType || "-"}</p>
+                </div>
+                <div className="rounded-xl border border-line bg-white/85 p-3">
+                  <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("people.field.accountStatus")}</p>
+                  <p className="mt-1 font-medium">{accountStatusLabel(selectedPerson.accountEnabled)}</p>
+                </div>
+                <div className="rounded-xl border border-line bg-white/85 p-3">
+                  <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("people.field.objectId")}</p>
+                  <p className="mt-1 break-all font-medium">{selectedPerson.externalPersonId || "-"}</p>
+                </div>
+                <div className="rounded-xl border border-line bg-white/85 p-3">
+                  <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("people.field.managerObjectId")}</p>
+                  <p className="mt-1 break-all font-medium">{selectedPerson.managerExternalId || "-"}</p>
                 </div>
               </div>
             </section>

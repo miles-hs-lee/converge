@@ -15,7 +15,32 @@ type PersonRow = {
   officeLocation: string;
   mobilePhone: string;
   businessPhones: string[];
+  sourceAccount: string;
+  provider: string;
+  upn: string;
+  externalPersonId: string;
+  managerExternalId: string;
+  companyName: string;
+  employeeId: string;
+  preferredLanguage: string;
+  city: string;
+  state: string;
+  country: string;
+  userType: string;
+  accountEnabled: boolean | null;
 };
+
+function rawString(raw: unknown, key: string): string {
+  if (!raw || typeof raw !== "object") return "";
+  const value = (raw as Record<string, unknown>)[key];
+  return typeof value === "string" ? value : "";
+}
+
+function rawBoolean(raw: unknown, key: string): boolean | null {
+  if (!raw || typeof raw !== "object") return null;
+  const value = (raw as Record<string, unknown>)[key];
+  return typeof value === "boolean" ? value : null;
+}
 
 export default async function PeoplePage() {
   const locale = await getServerLocale();
@@ -32,16 +57,20 @@ export default async function PeoplePage() {
     } = await supabase.auth.getUser();
 
     if (user) {
-      const { data: connections } = await supabase.from("m365_connections").select("id,tenant_name");
+      const { data: connections } = await supabase.from("m365_connections").select("id,provider,tenant_name,m365_user_principal_name");
       const { data: dbPeople } = await supabase
         .from("people_cache")
-        .select("id,display_name,mail,job_title,department,office_location,mobile_phone,business_phones,connection_id")
+        .select("id,external_person_id,display_name,mail,job_title,department,office_location,mobile_phone,business_phones,manager_external_id,raw,connection_id")
         .order("display_name", { ascending: true })
         .range(0, 4999);
 
       const tenantByConnection = new Map<string, string>();
+      const sourceByConnection = new Map<string, string>();
+      const providerByConnection = new Map<string, string>();
       (connections ?? []).forEach((connection) => {
         tenantByConnection.set(connection.id, connection.tenant_name ?? "Connected Tenant");
+        sourceByConnection.set(connection.id, connection.m365_user_principal_name ?? "");
+        providerByConnection.set(connection.id, connection.provider ?? "microsoft");
       });
 
       people = (dbPeople ?? []).map((person) => ({
@@ -53,7 +82,20 @@ export default async function PeoplePage() {
         tenantName: tenantByConnection.get(person.connection_id) ?? "Connected Tenant",
         officeLocation: person.office_location ?? tt("people.unknown.office"),
         mobilePhone: person.mobile_phone ?? tt("people.unknown.phone"),
-        businessPhones: person.business_phones ?? []
+        businessPhones: person.business_phones ?? [],
+        sourceAccount: sourceByConnection.get(person.connection_id) ?? "",
+        provider: providerByConnection.get(person.connection_id) ?? "microsoft",
+        upn: rawString(person.raw, "userPrincipalName"),
+        externalPersonId: person.external_person_id,
+        managerExternalId: person.manager_external_id ?? "",
+        companyName: rawString(person.raw, "companyName"),
+        employeeId: rawString(person.raw, "employeeId"),
+        preferredLanguage: rawString(person.raw, "preferredLanguage"),
+        city: rawString(person.raw, "city"),
+        state: rawString(person.raw, "state"),
+        country: rawString(person.raw, "country"),
+        userType: rawString(person.raw, "userType"),
+        accountEnabled: rawBoolean(person.raw, "accountEnabled")
       }));
     }
   }

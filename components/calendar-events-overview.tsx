@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { UnifiedWeekCalendar } from "@/components/unified-week-calendar";
+import { ModalPortal } from "@/components/modal-portal";
 import { colorForTenant } from "@/lib/tenant-colors";
 import { useT, useIntlLocale } from "@/components/locale-provider";
 import { detectTenantConflicts } from "@/lib/calendar-conflicts";
@@ -18,6 +19,12 @@ export type CalendarEventRow = {
   location: string;
   sourceAccount: string;
   attendees: string[];
+  organizer?: string;
+  isAllDay?: boolean;
+  webLink?: string | null;
+  lastModifiedAt?: string | null;
+  calendarName?: string;
+  provider?: string;
 };
 
 type CalendarEventsOverviewProps = {
@@ -43,13 +50,19 @@ function EventList({
   events,
   emptyText,
   attendeesLabel,
-  intl
+  intl,
+  onOpenEvent,
+  onHoverEvent,
+  onLeaveEvent
 }: {
   title: string;
   events: CalendarEventRow[];
   emptyText: string;
   attendeesLabel: (count: number) => string;
   intl: string;
+  onOpenEvent: (event: CalendarEventRow) => void;
+  onHoverEvent: (event: CalendarEventRow, el: HTMLElement) => void;
+  onLeaveEvent: () => void;
 }) {
   return (
     <section className="rounded-2xl border border-line bg-white/85 p-4">
@@ -59,7 +72,16 @@ function EventList({
       ) : (
         <div className="mt-3 space-y-2">
           {events.map((event) => (
-            <article className="rounded-xl border border-line bg-white p-3 transition hover:border-accent/45" key={event.id}>
+            <button
+              className="w-full rounded-xl border border-line bg-white p-3 text-left transition hover:border-accent/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
+              key={event.id}
+              onBlur={onLeaveEvent}
+              onClick={() => onOpenEvent(event)}
+              onFocus={(evt) => onHoverEvent(event, evt.currentTarget)}
+              onMouseEnter={(evt) => onHoverEvent(event, evt.currentTarget)}
+              onMouseLeave={onLeaveEvent}
+              type="button"
+            >
               <p className="text-sm font-medium">{event.subject}</p>
               <p className="mt-1 text-xs text-muted">
                 {new Date(event.startAt).toLocaleString(intl)} -{" "}
@@ -71,12 +93,32 @@ function EventList({
               {event.attendees.length > 0 ? (
                 <p className="mt-1 text-xs text-muted">{attendeesLabel(event.attendees.length)}</p>
               ) : null}
-            </article>
+            </button>
           ))}
         </div>
       )}
     </section>
   );
+}
+
+function formatDateTimeRange(startIso: string, endIso: string, intl: string): string {
+  const start = new Date(startIso);
+  const end = new Date(endIso);
+  const sameDay = start.toDateString() === end.toDateString();
+
+  if (sameDay) {
+    return `${start.toLocaleDateString(intl, { month: "short", day: "numeric", weekday: "short" })} ${start.toLocaleTimeString(intl, {
+      hour: "2-digit",
+      minute: "2-digit"
+    })} - ${end.toLocaleTimeString(intl, { hour: "2-digit", minute: "2-digit" })}`;
+  }
+
+  return `${start.toLocaleString(intl, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  })} - ${end.toLocaleString(intl, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}`;
 }
 
 export function CalendarEventsOverview({ events, tenants }: CalendarEventsOverviewProps) {
@@ -93,6 +135,9 @@ export function CalendarEventsOverview({ events, tenants }: CalendarEventsOvervi
   const [permissionBlocked, setPermissionBlocked] = useState(false);
   const [permissionLabel, setPermissionLabel] = useState<string>("unknown");
   const [lastSentIso, setLastSentIso] = useState<string | null>(null);
+  const [selectedEvent, setSelectedEvent] = useState<CalendarEventRow | null>(null);
+  const [canHover, setCanHover] = useState(false);
+  const [hovered, setHovered] = useState<{ event: CalendarEventRow; rect: DOMRect } | null>(null);
 
   const enabledTenants = useMemo(() => tenants.filter((tenant) => !disabledTenants.has(tenant)), [disabledTenants, tenants]);
 
@@ -116,6 +161,10 @@ export function CalendarEventsOverview({ events, tenants }: CalendarEventsOvervi
       );
     });
   }, [disabledTenants, localEvents, query]);
+
+  const eventsById = useMemo(() => {
+    return new Map(localEvents.map((event) => [event.id, event]));
+  }, [localEvents]);
 
   const nowTs = Date.now();
   const rangeMs = rangeDays * 24 * 60 * 60 * 1000;
@@ -168,6 +217,19 @@ export function CalendarEventsOverview({ events, tenants }: CalendarEventsOvervi
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    const media = window.matchMedia?.("(hover: hover) and (pointer: fine)");
+    if (!media) {
+      setCanHover(false);
+      return;
+    }
+    const update = () => setCanHover(Boolean(media.matches));
+    update();
+    media.addEventListener?.("change", update);
+    return () => media.removeEventListener?.("change", update);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
     const stored = localStorage.getItem("converge_notifications_enabled");
     setNotificationsEnabled(stored === "true");
     try {
@@ -198,8 +260,18 @@ export function CalendarEventsOverview({ events, tenants }: CalendarEventsOvervi
     if (notificationsEnabled) {
       const first = unseen[0]!;
       try {
-        const overlapStart = new Date(first.overlapStart).toLocaleTimeString(intl, { hour: "2-digit", minute: "2-digit" });
-        const overlapEnd = new Date(first.overlapEnd).toLocaleTimeString(intl, { hour: "2-digit", minute: "2-digit" });
+        const overlapStart = new Date(first.overlapStart).toLocaleString(intl, {
+          month: "short",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit"
+        });
+        const overlapEnd = new Date(first.overlapEnd).toLocaleString(intl, {
+          month: "short",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit"
+        });
         const title = t("alerts.notificationTitle", { count: unseen.length });
         const body = t("alerts.notificationBody", {
           a: first.a.tenantName,
@@ -221,7 +293,7 @@ export function CalendarEventsOverview({ events, tenants }: CalendarEventsOvervi
     }
 
     return () => window.clearTimeout(timer);
-  }, [notificationsEnabled, t, visibleConflicts]);
+  }, [intl, notificationsEnabled, t, visibleConflicts]);
 
   async function enableNotifications() {
     if (typeof window === "undefined" || typeof window.Notification === "undefined") {
@@ -309,6 +381,45 @@ export function CalendarEventsOverview({ events, tenants }: CalendarEventsOvervi
     ]);
   }
 
+  function providerLabel(provider?: string): string {
+    if (provider === "google") return t("settings.providerGoogle");
+    if (provider === "microsoft") return t("settings.providerMicrosoft");
+    return provider ?? "-";
+  }
+
+  function openEvent(event: CalendarEventRow) {
+    closeHover();
+    setSelectedEvent(event);
+  }
+
+  function closeEventModal() {
+    setSelectedEvent(null);
+  }
+
+  function openHover(event: CalendarEventRow, el: HTMLElement) {
+    if (!canHover) return;
+    setHovered({ event, rect: el.getBoundingClientRect() });
+  }
+
+  function closeHover() {
+    setHovered(null);
+  }
+
+  function conflictEventToRow(event: { id: string; tenantName: string; subject: string; startAt: string; endAt: string; location?: string; sourceAccount?: string }): CalendarEventRow {
+    return (
+      eventsById.get(event.id) ?? {
+        id: event.id,
+        tenantName: event.tenantName,
+        subject: event.subject,
+        startAt: event.startAt,
+        endAt: event.endAt,
+        location: event.location ?? t("common.locationUnknown"),
+        sourceAccount: event.sourceAccount ?? t("common.unknownAccount"),
+        attendees: []
+      }
+    );
+  }
+
   return (
     <>
       {toast ? (
@@ -392,6 +503,9 @@ export function CalendarEventsOverview({ events, tenants }: CalendarEventsOvervi
             emptyText={t("calendar.none")}
             events={pastEvents}
             intl={intl}
+            onHoverEvent={openHover}
+            onLeaveEvent={closeHover}
+            onOpenEvent={openEvent}
             title={t("calendar.past")}
           />
           <EventList
@@ -399,6 +513,9 @@ export function CalendarEventsOverview({ events, tenants }: CalendarEventsOvervi
             emptyText={t("calendar.none")}
             events={upcomingEvents}
             intl={intl}
+            onHoverEvent={openHover}
+            onLeaveEvent={closeHover}
+            onOpenEvent={openEvent}
             title={t("calendar.upcoming")}
           />
         </div>
@@ -465,25 +582,45 @@ export function CalendarEventsOverview({ events, tenants }: CalendarEventsOvervi
             {visibleConflicts.slice(0, 8).map((conflict) => {
               const aColor = colorForTenant(conflict.a.tenantName);
               const bColor = colorForTenant(conflict.b.tenantName);
-              const overlap = `${new Date(conflict.overlapStart).toLocaleTimeString(intl, { hour: "2-digit", minute: "2-digit" })} - ${new Date(
-                conflict.overlapEnd
-              ).toLocaleTimeString(intl, { hour: "2-digit", minute: "2-digit" })}`;
+              const overlap = formatDateTimeRange(conflict.overlapStart, conflict.overlapEnd, intl);
+              const eventA = conflictEventToRow(conflict.a);
+              const eventB = conflictEventToRow(conflict.b);
 
               return (
                 <article className="rounded-xl border border-line bg-white p-3" key={conflict.key}>
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div>
                       <p className="text-xs font-medium text-muted">{overlap}</p>
-                      <p className="mt-1 text-sm font-semibold text-text">{conflict.a.subject}</p>
-                      <p className="mt-1 text-sm font-semibold text-text">{conflict.b.subject}</p>
+                      <button
+                        className="mt-1 block text-left text-sm font-semibold text-text hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
+                        onBlur={closeHover}
+                        onClick={() => openEvent(eventA)}
+                        onFocus={(event) => openHover(eventA, event.currentTarget)}
+                        onMouseEnter={(event) => openHover(eventA, event.currentTarget)}
+                        onMouseLeave={closeHover}
+                        type="button"
+                      >
+                        {eventA.subject}
+                      </button>
+                      <button
+                        className="mt-1 block text-left text-sm font-semibold text-text hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
+                        onBlur={closeHover}
+                        onClick={() => openEvent(eventB)}
+                        onFocus={(event) => openHover(eventB, event.currentTarget)}
+                        onMouseEnter={(event) => openHover(eventB, event.currentTarget)}
+                        onMouseLeave={closeHover}
+                        type="button"
+                      >
+                        {eventB.subject}
+                      </button>
                       <div className="mt-2 flex flex-wrap gap-2 text-xs">
                         <span className="inline-flex items-center gap-2 rounded-full border border-line bg-white px-3 py-1" style={{ color: aColor }}>
                           <span className="h-2 w-2 rounded-full" style={{ backgroundColor: aColor }} />
-                          {conflict.a.tenantName}
+                          {eventA.tenantName}
                         </span>
                         <span className="inline-flex items-center gap-2 rounded-full border border-line bg-white px-3 py-1" style={{ color: bColor }}>
                           <span className="h-2 w-2 rounded-full" style={{ backgroundColor: bColor }} />
-                          {conflict.b.tenantName}
+                          {eventB.tenantName}
                         </span>
                       </div>
                     </div>
@@ -499,6 +636,132 @@ export function CalendarEventsOverview({ events, tenants }: CalendarEventsOvervi
           </div>
         )}
       </section>
+
+      {hovered ? (
+        <ModalPortal>
+          {(() => {
+            const centerX = hovered.rect.left + hovered.rect.width / 2;
+            const approxWidth = 340;
+            const vw = typeof window === "undefined" ? 1024 : window.innerWidth;
+            const vh = typeof window === "undefined" ? 768 : window.innerHeight;
+            const clampedLeft = Math.max(12 + approxWidth / 2, Math.min(vw - 12 - approxWidth / 2, centerX));
+            const preferAbove = hovered.rect.bottom + 12 + 180 > vh;
+            const top = preferAbove ? Math.max(12, hovered.rect.top - 12) : hovered.rect.bottom + 10;
+            const transform = preferAbove ? "translate(-50%, -100%)" : "translate(-50%, 0)";
+            const timeLine = formatDateTimeRange(hovered.event.startAt, hovered.event.endAt, intl);
+
+            return (
+              <div className="pointer-events-none fixed inset-0 z-[60]">
+                <div
+                  className="panel-glass card w-[min(340px,calc(100vw-24px))] rounded-2xl border border-line/70 bg-white/95 p-3 shadow-soft"
+                  style={{ left: clampedLeft, top, transform, position: "fixed" }}
+                >
+                  <p className="line-clamp-2 text-sm font-semibold text-text">{hovered.event.subject}</p>
+                  <p className="mt-1 text-xs text-muted">{timeLine}</p>
+                  <div className="mt-3 space-y-2 text-sm">
+                    <div className="rounded-xl border border-line bg-white/80 p-2.5">
+                      <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted">{t("event.sourceTenant")}</p>
+                      <p className="mt-1 text-xs font-semibold">{hovered.event.tenantName}</p>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <div className="rounded-xl border border-line bg-white/80 p-2.5">
+                        <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted">{t("event.location")}</p>
+                        <p className="mt-1 line-clamp-1 text-xs font-semibold">{hovered.event.location}</p>
+                      </div>
+                      <div className="rounded-xl border border-line bg-white/80 p-2.5">
+                        <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted">{t("event.sourceAccount")}</p>
+                        <p className="mt-1 line-clamp-1 text-xs font-semibold">{hovered.event.sourceAccount}</p>
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-line bg-white/80 p-2.5">
+                      <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted">{t("event.attendees")}</p>
+                      <p className="mt-1 text-xs text-muted">
+                        {hovered.event.attendees.length > 0 ? t("calendar.attendeesCount", { count: hovered.event.attendees.length }) : t("event.attendeesEmpty")}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+        </ModalPortal>
+      ) : null}
+
+      {selectedEvent ? (
+        <ModalPortal>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-3 sm:p-4" role="dialog" aria-modal="true">
+            <button aria-label={t("common.close")} className="absolute inset-0 cursor-default" onClick={closeEventModal} type="button" />
+            <section className="panel-glass card relative z-10 max-h-[86vh] w-full max-w-lg overflow-y-auto rounded-2xl p-4 pb-7 sm:p-5">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.14em] text-accent">{t("event.detailTitle")}</p>
+                  <h3 className="mt-1 text-lg font-semibold">{selectedEvent.subject}</h3>
+                  <p className="mt-1 text-xs text-muted">{formatDateTimeRange(selectedEvent.startAt, selectedEvent.endAt, intl)}</p>
+                </div>
+                <button className="btn btn-secondary px-3 py-1.5" onClick={closeEventModal} type="button">
+                  {t("common.close")}
+                </button>
+              </div>
+
+              <div className="mt-4 grid gap-3 text-sm md:grid-cols-2">
+                <div className="rounded-lg border border-line bg-white/85 p-3">
+                  <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("event.sourceTenant")}</p>
+                  <p className="mt-1 font-medium">{selectedEvent.tenantName}</p>
+                </div>
+                <div className="rounded-lg border border-line bg-white/85 p-3">
+                  <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("event.sourceAccount")}</p>
+                  <p className="mt-1 font-medium">{selectedEvent.sourceAccount}</p>
+                </div>
+                <div className="rounded-lg border border-line bg-white/85 p-3">
+                  <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("event.location")}</p>
+                  <p className="mt-1 font-medium">{selectedEvent.location}</p>
+                </div>
+                <div className="rounded-lg border border-line bg-white/85 p-3">
+                  <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("event.organizer")}</p>
+                  <p className="mt-1 font-medium">{selectedEvent.organizer ?? selectedEvent.sourceAccount}</p>
+                </div>
+                <div className="rounded-lg border border-line bg-white/85 p-3">
+                  <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("event.calendar")}</p>
+                  <p className="mt-1 font-medium">{selectedEvent.calendarName ?? "Calendar"}</p>
+                </div>
+                <div className="rounded-lg border border-line bg-white/85 p-3">
+                  <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("event.provider")}</p>
+                  <p className="mt-1 font-medium">{providerLabel(selectedEvent.provider)}</p>
+                </div>
+                <div className="rounded-lg border border-line bg-white/85 p-3">
+                  <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("event.lastUpdated")}</p>
+                  <p className="mt-1 font-medium">
+                    {selectedEvent.lastModifiedAt ? new Date(selectedEvent.lastModifiedAt).toLocaleString(intl) : "-"}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-line bg-white/85 p-3">
+                  <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("event.webLink")}</p>
+                  {selectedEvent.webLink ? (
+                    <a className="mt-1 inline-flex font-medium text-accent hover:underline" href={selectedEvent.webLink} rel="noreferrer" target="_blank">
+                      {t("event.openOriginal")}
+                    </a>
+                  ) : (
+                    <p className="mt-1 font-medium">-</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-3 rounded-lg border border-line bg-white/85 p-3 text-sm">
+                <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("event.attendees")}</p>
+                {selectedEvent.attendees.length > 0 ? (
+                  <ul className="mt-1 space-y-1">
+                    {selectedEvent.attendees.map((attendee) => (
+                      <li key={attendee}>{attendee}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-1 text-muted">{t("event.attendeesEmpty")}</p>
+                )}
+              </div>
+            </section>
+          </div>
+        </ModalPortal>
+      ) : null}
     </>
   );
 }

@@ -14,6 +14,12 @@ type CalendarEvent = {
   location: string;
   sourceAccount: string;
   attendees: string[];
+  organizer?: string;
+  isAllDay?: boolean;
+  webLink?: string | null;
+  lastModifiedAt?: string | null;
+  calendarName?: string;
+  provider?: string;
 };
 
 type UnifiedWeekCalendarProps = {
@@ -79,6 +85,20 @@ function minutesIntoDay(date: Date): number {
 
 function clamp(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, n));
+}
+
+function formatDuration(startIso: string, endIso: string): string {
+  const diffMs = new Date(endIso).getTime() - new Date(startIso).getTime();
+  if (!Number.isFinite(diffMs) || diffMs <= 0) {
+    return "-";
+  }
+  const minutes = Math.round(diffMs / 60000);
+  if (minutes < 60) {
+    return `${minutes}m`;
+  }
+  const hours = Math.floor(minutes / 60);
+  const remain = minutes % 60;
+  return remain === 0 ? `${hours}h` : `${hours}h ${remain}m`;
 }
 
 export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProps) {
@@ -660,10 +680,18 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
 
             const start = new Date(hovered.event.startAt);
             const end = new Date(hovered.event.endAt);
-            const timeLine = `${start.toLocaleDateString(intl, { month: "short", day: "numeric", weekday: "short" })} · ${start.toLocaleTimeString(intl, {
-              hour: "2-digit",
-              minute: "2-digit"
-            })} - ${end.toLocaleTimeString(intl, { hour: "2-digit", minute: "2-digit" })}`;
+            const sameDay = start.toDateString() === end.toDateString();
+            const timeLine = sameDay
+              ? `${start.toLocaleDateString(intl, { month: "short", day: "numeric", weekday: "short" })} · ${start.toLocaleTimeString(intl, {
+                  hour: "2-digit",
+                  minute: "2-digit"
+                })} - ${end.toLocaleTimeString(intl, { hour: "2-digit", minute: "2-digit" })}`
+              : `${start.toLocaleString(intl, {
+                  month: "short",
+                  day: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit"
+                })} - ${end.toLocaleString(intl, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}`;
 
             return (
               <div className="pointer-events-none fixed inset-0 z-[60]">
@@ -690,6 +718,19 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
                         <p className="mt-1 line-clamp-1 text-xs font-semibold">{hovered.event.sourceAccount}</p>
                       </div>
                     </div>
+
+                    {hovered.event.organizer ? (
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <div className="rounded-xl border border-line bg-white/80 p-2.5">
+                          <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted">{t("event.organizer")}</p>
+                          <p className="mt-1 line-clamp-1 text-xs font-semibold">{hovered.event.organizer}</p>
+                        </div>
+                        <div className="rounded-xl border border-line bg-white/80 p-2.5">
+                          <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted">{t("event.calendar")}</p>
+                          <p className="mt-1 line-clamp-1 text-xs font-semibold">{hovered.event.calendarName ?? "Calendar"}</p>
+                        </div>
+                      </div>
+                    ) : null}
 
                     <div className="rounded-xl border border-line bg-white/80 p-2.5">
                       <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted">{t("event.attendees")}</p>
@@ -789,19 +830,101 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
               </div>
 
               <div className="mt-4 space-y-3">
-                <div className="rounded-lg border border-line bg-white/85 p-3 text-sm">
-                  <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("event.sourceTenant")}</p>
-                  <p className="mt-1 font-medium">{selectedEvent.tenantName}</p>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="rounded-lg border border-line bg-white/85 p-3 text-sm">
+                    <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("event.sourceTenant")}</p>
+                    <p className="mt-1 font-medium">{selectedEvent.tenantName}</p>
+                  </div>
+
+                  <div className="rounded-lg border border-line bg-white/85 p-3 text-sm">
+                    <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("event.sourceAccount")}</p>
+                    <p className="mt-1 font-medium">{selectedEvent.sourceAccount}</p>
+                  </div>
+
+                  <div className="rounded-lg border border-line bg-white/85 p-3 text-sm">
+                    <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("event.time")}</p>
+                    <p className="mt-1 font-medium">
+                      {new Date(selectedEvent.startAt).toLocaleString(intl, {
+                        year: "numeric",
+                        month: "short",
+                        day: "numeric",
+                        weekday: "short",
+                        hour: "2-digit",
+                        minute: "2-digit"
+                      })}
+                      {" - "}
+                      {new Date(selectedEvent.endAt).toLocaleString(intl, {
+                        month: "short",
+                        day: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit"
+                      })}
+                    </p>
+                  </div>
+
+                  <div className="rounded-lg border border-line bg-white/85 p-3 text-sm">
+                    <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("event.duration")}</p>
+                    <p className="mt-1 font-medium">{formatDuration(selectedEvent.startAt, selectedEvent.endAt)}</p>
+                    <p className="mt-1 text-xs text-muted">
+                      {t("event.allDay")}: {selectedEvent.isAllDay ? t("common.yes") : t("common.no")}
+                    </p>
+                  </div>
                 </div>
 
-                <div className="rounded-lg border border-line bg-white/85 p-3 text-sm">
-                  <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("event.sourceAccount")}</p>
-                  <p className="mt-1 font-medium">{selectedEvent.sourceAccount}</p>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="rounded-lg border border-line bg-white/85 p-3 text-sm">
+                    <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("event.location")}</p>
+                    <p className="mt-1 font-medium">{selectedEvent.location}</p>
+                  </div>
+
+                  <div className="rounded-lg border border-line bg-white/85 p-3 text-sm">
+                    <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("event.organizer")}</p>
+                    <p className="mt-1 font-medium">{selectedEvent.organizer ?? selectedEvent.sourceAccount}</p>
+                  </div>
+
+                  <div className="rounded-lg border border-line bg-white/85 p-3 text-sm">
+                    <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("event.calendar")}</p>
+                    <p className="mt-1 font-medium">{selectedEvent.calendarName ?? "Calendar"}</p>
+                  </div>
+
+                  <div className="rounded-lg border border-line bg-white/85 p-3 text-sm">
+                    <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("event.provider")}</p>
+                    <p className="mt-1 font-medium">
+                      {selectedEvent.provider === "google"
+                        ? t("settings.providerGoogle")
+                        : selectedEvent.provider === "microsoft"
+                          ? t("settings.providerMicrosoft")
+                          : selectedEvent.provider ?? "-"}
+                    </p>
+                  </div>
                 </div>
 
-                <div className="rounded-lg border border-line bg-white/85 p-3 text-sm">
-                  <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("event.location")}</p>
-                  <p className="mt-1 font-medium">{selectedEvent.location}</p>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="rounded-lg border border-line bg-white/85 p-3 text-sm">
+                    <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("event.lastUpdated")}</p>
+                    <p className="mt-1 font-medium">
+                      {selectedEvent.lastModifiedAt
+                        ? new Date(selectedEvent.lastModifiedAt).toLocaleString(intl, {
+                            year: "numeric",
+                            month: "short",
+                            day: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit"
+                          })
+                        : "-"}
+                    </p>
+                  </div>
+
+                  <div className="rounded-lg border border-line bg-white/85 p-3 text-sm">
+                    <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("event.webLink")}</p>
+                    {selectedEvent.webLink ? (
+                      <a className="mt-1 inline-flex text-sm font-medium text-accent hover:underline" href={selectedEvent.webLink} rel="noreferrer" target="_blank">
+                        {t("event.openOriginal")}
+                      </a>
+                    ) : (
+                      <p className="mt-1 font-medium">-</p>
+                    )}
+                  </div>
                 </div>
 
                 <div className="rounded-lg border border-line bg-white/85 p-3 text-sm">

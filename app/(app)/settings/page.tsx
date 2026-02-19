@@ -56,6 +56,10 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
 
   const params = await searchParams;
   const status = params.status;
+  const syncStatus =
+    status === "manual_sync_done" || status === "manual_sync_partial" || status === "manual_sync_failed"
+      ? status
+      : null;
   const supabase = await createClient();
   const {
     data: { user }
@@ -135,6 +139,19 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
       <section className="panel-glass card p-5 md:p-6">
         <h2 className="title-lg">{tt("settings.syncTitle")}</h2>
         <p className="muted mt-1">{tt("settings.syncSubtitle")}</p>
+        {syncStatus ? (
+          <p
+            className={`mt-3 rounded-xl border px-3 py-2 text-sm ${
+              syncStatus === "manual_sync_done"
+                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                : syncStatus === "manual_sync_partial"
+                  ? "border-amber-200 bg-amber-50 text-amber-700"
+                  : "border-rose-200 bg-rose-50 text-rose-700"
+            }`}
+          >
+            {tt(statusMessageKey[syncStatus]!)}
+          </p>
+        ) : null}
         {user ? (
           <div className="mt-4 flex flex-wrap gap-2">
             <form action={manualSyncAction}>

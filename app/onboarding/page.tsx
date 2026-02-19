@@ -118,12 +118,6 @@ export default async function OnboardingPage() {
             </article>
           </div>
         </section>
-
-        <div className="mt-9 flex flex-wrap gap-3">
-          <Link className="btn btn-secondary" data-testid="onboarding-view-calendar" href="/calendar">
-            {tt("onboarding.viewCalendar")}
-          </Link>
-        </div>
       </section>
     </main>
   );

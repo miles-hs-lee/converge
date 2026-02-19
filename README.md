@@ -170,6 +170,26 @@ You can test the UI without Microsoft admin consent in two ways:
 - `npm run typecheck`: TypeScript typecheck
 - `npm run lint`: lint (requires an ESLint config; `next lint` may prompt on first run)
 
+## Data Sync (Calendar / People)
+
+- Manual sync:
+  - Open `Settings` and use the manual sync buttons (`all`, `calendar`, `people`).
+- Server sync endpoints (for schedulers):
+  - `GET /api/cron/sync-calendar`
+  - `GET /api/cron/sync-people`
+- Auth for cron endpoints:
+  - Set `CRON_SECRET` and pass `Authorization: Bearer <CRON_SECRET>`
+- Recommended cadence:
+  - Calendar: every 15 minutes
+  - People (directory): once per day
+
+Example:
+
+```bash
+curl -H "Authorization: Bearer $CRON_SECRET" https://<prod-domain>/api/cron/sync-calendar
+curl -H "Authorization: Bearer $CRON_SECRET" https://<prod-domain>/api/cron/sync-people
+```
+
 ## Deployment Notes (Vercel)
 
 - Configure the same `.env` values in Vercel Project Settings.

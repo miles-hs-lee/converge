@@ -1,0 +1,473 @@
+import { createAdminClient } from "@/lib/supabase/admin";
+import { serverEnv } from "@/lib/env/server";
+import { getMicrosoftScopeString } from "@/lib/microsoft";
+import { syncMicrosoftCalendarSnapshot, syncMicrosoftPeopleSnapshot } from "@/lib/microsoft-sync";
+import { syncGoogleCalendarSnapshot } from "@/lib/google-sync";
+
+export type SyncMode = "calendar" | "people" | "all";
+
+type ConnectionRow = {
+  id: string;
+  user_id: string;
+  provider: string;
+  m365_user_principal_name: string | null;
+  access_token_enc: string;
+  refresh_token_enc: string;
+  token_expires_at: string;
+  scopes: string[] | null;
+  sync_state: Record<string, unknown> | null;
+};
+
+type SyncResult = {
+  ok: boolean;
+  partial: boolean;
+  syncedCount: number;
+};
+
+export type SyncSummary = {
+  usersScanned: number;
+  connectionsScanned: number;
+  calendarSynced: number;
+  peopleSynced: number;
+  failures: number;
+  partials: number;
+  skipped: number;
+};
+
+function emptySummary(): SyncSummary {
+  return {
+    usersScanned: 0,
+    connectionsScanned: 0,
+    calendarSynced: 0,
+    peopleSynced: 0,
+    failures: 0,
+    partials: 0,
+    skipped: 0
+  };
+}
+
+function mergeSummary(target: SyncSummary, source: SyncSummary) {
+  target.usersScanned += source.usersScanned;
+  target.connectionsScanned += source.connectionsScanned;
+  target.calendarSynced += source.calendarSynced;
+  target.peopleSynced += source.peopleSynced;
+  target.failures += source.failures;
+  target.partials += source.partials;
+  target.skipped += source.skipped;
+}
+
+function parseSyncState(raw: unknown): Record<string, unknown> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return {};
+  }
+  return raw as Record<string, unknown>;
+}
+
+function readSyncedAt(raw: unknown): number | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return null;
+  }
+  const syncedAt = (raw as Record<string, unknown>).syncedAt;
+  if (typeof syncedAt !== "string") {
+    return null;
+  }
+  const parsed = Date.parse(syncedAt);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function shouldRunByStaleness(params: { state: Record<string, unknown>; key: "calendar" | "people"; staleMs?: number }): boolean {
+  const { state, key, staleMs } = params;
+  if (!staleMs || staleMs <= 0) {
+    return true;
+  }
+
+  const section = state[key];
+  const syncedAt = readSyncedAt(section);
+  if (!syncedAt) {
+    return true;
+  }
+  return Date.now() - syncedAt >= staleMs;
+}
+
+function tokenStillValid(tokenExpiresAt: string): boolean {
+  const expiresAt = Date.parse(tokenExpiresAt);
+  if (!Number.isFinite(expiresAt)) {
+    return false;
+  }
+  return expiresAt > Date.now() + 1000 * 60;
+}
+
+async function refreshMicrosoftAccessToken(connection: ConnectionRow): Promise<{ ok: true; accessToken: string } | { ok: false; error: string }> {
+  const scope = connection.scopes?.length ? connection.scopes.join(" ") : getMicrosoftScopeString();
+
+  const response = await fetch(`https://login.microsoftonline.com/${serverEnv.azureTenantId}/oauth2/v2.0/token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: serverEnv.azureClientId,
+      client_secret: serverEnv.azureClientSecret,
+      grant_type: "refresh_token",
+      refresh_token: connection.refresh_token_enc,
+      scope
+    })
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    return { ok: false, error: `ms_refresh_failed:${text.slice(0, 160)}` };
+  }
+
+  const payload = (await response.json()) as {
+    access_token?: string;
+    refresh_token?: string;
+    expires_in?: number;
+    scope?: string;
+  };
+  if (!payload.access_token) {
+    return { ok: false, error: "ms_refresh_payload_invalid" };
+  }
+
+  const expiresIn = Number(payload.expires_in || 3600);
+  const tokenExpiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
+  const scopes = (payload.scope ?? "").split(" ").filter(Boolean);
+
+  const admin = createAdminClient();
+  await admin
+    .from("m365_connections")
+    .update({
+      access_token_enc: payload.access_token,
+      refresh_token_enc: payload.refresh_token ?? connection.refresh_token_enc,
+      token_expires_at: tokenExpiresAt,
+      scopes: scopes.length > 0 ? scopes : connection.scopes ?? [],
+      status: "active",
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", connection.id);
+
+  connection.access_token_enc = payload.access_token;
+  connection.refresh_token_enc = payload.refresh_token ?? connection.refresh_token_enc;
+  connection.token_expires_at = tokenExpiresAt;
+  connection.scopes = scopes.length > 0 ? scopes : connection.scopes;
+
+  return { ok: true, accessToken: payload.access_token };
+}
+
+async function refreshGoogleAccessToken(connection: ConnectionRow): Promise<{ ok: true; accessToken: string } | { ok: false; error: string }> {
+  if (!serverEnv.googleClientId || !serverEnv.googleClientSecret) {
+    return { ok: false, error: "google_env_missing" };
+  }
+
+  const response = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: serverEnv.googleClientId,
+      client_secret: serverEnv.googleClientSecret,
+      grant_type: "refresh_token",
+      refresh_token: connection.refresh_token_enc
+    })
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    return { ok: false, error: `google_refresh_failed:${text.slice(0, 160)}` };
+  }
+
+  const payload = (await response.json()) as {
+    access_token?: string;
+    expires_in?: number;
+    scope?: string;
+  };
+  if (!payload.access_token) {
+    return { ok: false, error: "google_refresh_payload_invalid" };
+  }
+
+  const expiresIn = Number(payload.expires_in || 3600);
+  const tokenExpiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
+  const scopes = (payload.scope ?? "").split(" ").filter(Boolean);
+
+  const admin = createAdminClient();
+  await admin
+    .from("m365_connections")
+    .update({
+      access_token_enc: payload.access_token,
+      token_expires_at: tokenExpiresAt,
+      scopes: scopes.length > 0 ? scopes : connection.scopes ?? [],
+      status: "active",
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", connection.id);
+
+  connection.access_token_enc = payload.access_token;
+  connection.token_expires_at = tokenExpiresAt;
+  connection.scopes = scopes.length > 0 ? scopes : connection.scopes;
+
+  return { ok: true, accessToken: payload.access_token };
+}
+
+async function ensureAccessToken(connection: ConnectionRow): Promise<{ ok: true; accessToken: string } | { ok: false; error: string }> {
+  if (tokenStillValid(connection.token_expires_at) && connection.access_token_enc) {
+    return { ok: true, accessToken: connection.access_token_enc };
+  }
+
+  if (connection.provider === "microsoft") {
+    return refreshMicrosoftAccessToken(connection);
+  }
+  if (connection.provider === "google") {
+    return refreshGoogleAccessToken(connection);
+  }
+  return { ok: false, error: `unsupported_provider:${connection.provider}` };
+}
+
+async function insertSyncJob(params: {
+  userId: string;
+  connectionId: string;
+  jobType: "calendar" | "people";
+  status: "success" | "failed";
+  errorMessage?: string;
+}) {
+  const { userId, connectionId, jobType, status, errorMessage } = params;
+  const admin = createAdminClient();
+  const nowIso = new Date().toISOString();
+  await admin.from("sync_jobs").insert({
+    user_id: userId,
+    connection_id: connectionId,
+    job_type: jobType,
+    status,
+    started_at: nowIso,
+    finished_at: nowIso,
+    error_message: errorMessage ?? null
+  });
+}
+
+type RunConnectionParams = {
+  connection: ConnectionRow;
+  mode: SyncMode;
+  calendarStaleMs?: number;
+  peopleStaleMs?: number;
+};
+
+async function runConnectionSync(params: RunConnectionParams): Promise<SyncSummary> {
+  const { connection, mode, calendarStaleMs, peopleStaleMs } = params;
+  const admin = createAdminClient();
+  const summary = emptySummary();
+  summary.connectionsScanned = 1;
+
+  const syncState = parseSyncState(connection.sync_state);
+  let runCalendar = mode === "calendar" || mode === "all";
+  let runPeople = mode === "people" || mode === "all";
+
+  if (runCalendar && !shouldRunByStaleness({ state: syncState, key: "calendar", staleMs: calendarStaleMs })) {
+    runCalendar = false;
+    summary.skipped += 1;
+  }
+  if (runPeople && !shouldRunByStaleness({ state: syncState, key: "people", staleMs: peopleStaleMs })) {
+    runPeople = false;
+    summary.skipped += 1;
+  }
+
+  if (!runCalendar && !runPeople) {
+    return summary;
+  }
+
+  const token = await ensureAccessToken(connection);
+  if (!token.ok) {
+    summary.failures += 1;
+    if (runCalendar) {
+      await insertSyncJob({
+        userId: connection.user_id,
+        connectionId: connection.id,
+        jobType: "calendar",
+        status: "failed",
+        errorMessage: token.error
+      });
+    }
+    if (runPeople) {
+      await insertSyncJob({
+        userId: connection.user_id,
+        connectionId: connection.id,
+        jobType: "people",
+        status: "failed",
+        errorMessage: token.error
+      });
+    }
+    return summary;
+  }
+
+  const nowIso = new Date().toISOString();
+  const nextSyncState: Record<string, unknown> = { ...syncState };
+
+  if (runCalendar) {
+    let calendarResult: SyncResult = { ok: true, partial: false, syncedCount: 0 };
+    if (connection.provider === "microsoft") {
+      calendarResult = await syncMicrosoftCalendarSnapshot({
+        accessToken: token.accessToken,
+        accountEmail: connection.m365_user_principal_name ?? "unknown@account",
+        connectionId: connection.id,
+        adminClient: admin
+      });
+    } else if (connection.provider === "google") {
+      calendarResult = await syncGoogleCalendarSnapshot({
+        accessToken: token.accessToken,
+        accountEmail: connection.m365_user_principal_name ?? "unknown@account",
+        connectionId: connection.id,
+        adminClient: admin
+      });
+    } else {
+      calendarResult = { ok: false, partial: false, syncedCount: 0 };
+    }
+
+    if (calendarResult.ok) {
+      summary.calendarSynced += calendarResult.syncedCount;
+      if (calendarResult.partial) {
+        summary.partials += 1;
+      }
+      await insertSyncJob({
+        userId: connection.user_id,
+        connectionId: connection.id,
+        jobType: "calendar",
+        status: "success"
+      });
+    } else {
+      summary.failures += 1;
+      await insertSyncJob({
+        userId: connection.user_id,
+        connectionId: connection.id,
+        jobType: "calendar",
+        status: "failed",
+        errorMessage: "calendar_sync_failed"
+      });
+    }
+
+    nextSyncState.calendar = {
+      ok: calendarResult.ok,
+      partial: calendarResult.partial,
+      syncedCount: calendarResult.syncedCount,
+      syncedAt: nowIso
+    };
+  }
+
+  if (runPeople) {
+    let peopleResult: SyncResult = { ok: true, partial: false, syncedCount: 0 };
+    if (connection.provider === "microsoft") {
+      peopleResult = await syncMicrosoftPeopleSnapshot({
+        accessToken: token.accessToken,
+        connectionId: connection.id,
+        adminClient: admin
+      });
+    } else {
+      // Google provider does not expose org directory in this app's scope.
+      peopleResult = { ok: true, partial: false, syncedCount: 0 };
+      summary.skipped += 1;
+    }
+
+    if (peopleResult.ok) {
+      summary.peopleSynced += peopleResult.syncedCount;
+      if (peopleResult.partial) {
+        summary.partials += 1;
+      }
+      await insertSyncJob({
+        userId: connection.user_id,
+        connectionId: connection.id,
+        jobType: "people",
+        status: "success"
+      });
+    } else {
+      summary.failures += 1;
+      await insertSyncJob({
+        userId: connection.user_id,
+        connectionId: connection.id,
+        jobType: "people",
+        status: "failed",
+        errorMessage: "people_sync_failed"
+      });
+    }
+
+    nextSyncState.people = {
+      ok: peopleResult.ok,
+      partial: peopleResult.partial,
+      syncedCount: peopleResult.syncedCount,
+      syncedAt: nowIso
+    };
+  }
+
+  await admin
+    .from("m365_connections")
+    .update({
+      sync_state: nextSyncState,
+      updated_at: nowIso
+    })
+    .eq("id", connection.id);
+
+  return summary;
+}
+
+export async function syncUserConnections(params: {
+  userId: string;
+  mode: SyncMode;
+  connectionId?: string;
+  calendarStaleMs?: number;
+  peopleStaleMs?: number;
+}): Promise<SyncSummary> {
+  const { userId, mode, connectionId, calendarStaleMs, peopleStaleMs } = params;
+  const admin = createAdminClient();
+  const summary = emptySummary();
+  summary.usersScanned = 1;
+
+  let query = admin
+    .from("m365_connections")
+    .select("id,user_id,provider,m365_user_principal_name,access_token_enc,refresh_token_enc,token_expires_at,scopes,sync_state")
+    .eq("user_id", userId)
+    .eq("status", "active")
+    .order("created_at", { ascending: true });
+
+  if (connectionId) {
+    query = query.eq("id", connectionId);
+  }
+
+  const { data: connections, error } = await query;
+  if (error || !connections || connections.length === 0) {
+    return summary;
+  }
+
+  for (const row of connections as ConnectionRow[]) {
+    const one = await runConnectionSync({
+      connection: row,
+      mode,
+      calendarStaleMs,
+      peopleStaleMs
+    });
+    mergeSummary(summary, one);
+  }
+
+  return summary;
+}
+
+export async function syncAllUsers(params: {
+  mode: SyncMode;
+  calendarStaleMs?: number;
+  peopleStaleMs?: number;
+  maxUsers?: number;
+}): Promise<SyncSummary> {
+  const { mode, calendarStaleMs, peopleStaleMs, maxUsers = 200 } = params;
+  const admin = createAdminClient();
+  const summary = emptySummary();
+
+  const { data: userRows, error } = await admin.from("m365_connections").select("user_id").eq("status", "active").limit(5000);
+  if (error || !userRows || userRows.length === 0) {
+    return summary;
+  }
+
+  const uniqueUserIds = Array.from(new Set(userRows.map((row) => row.user_id))).slice(0, maxUsers);
+  for (const userId of uniqueUserIds) {
+    const one = await syncUserConnections({
+      userId,
+      mode,
+      calendarStaleMs,
+      peopleStaleMs
+    });
+    mergeSummary(summary, one);
+  }
+
+  return summary;
+}

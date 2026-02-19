@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { LOCALE_COOKIE } from "@/lib/i18n-server";
 import { normalizeLocale, type Locale } from "@/lib/i18n";
+import { syncUserConnections, type SyncMode, type SyncSummary } from "@/lib/connection-sync";
 
 export async function signOutAction(): Promise<void> {
   const supabase = await createClient();
@@ -29,4 +30,35 @@ export async function setLocaleAction(nextLocale: Locale): Promise<void> {
   await supabase
     .from("app_users")
     .upsert({ id: user.id, email: user.email, locale }, { onConflict: "id" });
+}
+
+function normalizeSyncMode(value: FormDataEntryValue | null): SyncMode {
+  if (value === "calendar" || value === "people" || value === "all") {
+    return value;
+  }
+  return "all";
+}
+
+export async function manualSyncAction(formData: FormData): Promise<void> {
+  const mode = normalizeSyncMode(formData.get("mode"));
+  const supabase = await createClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login?status=auth_required");
+  }
+
+  let result: SyncSummary;
+  try {
+    result = await syncUserConnections({ userId: user.id, mode });
+  } catch {
+    redirect("/settings?status=manual_sync_failed");
+  }
+
+  if (result.failures > 0) {
+    redirect("/settings?status=manual_sync_partial");
+  }
+  redirect("/settings?status=manual_sync_done");
 }

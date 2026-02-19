@@ -120,6 +120,11 @@ export type I18nKey =
   | "settings.language.ko"
   | "settings.language.en"
   | "settings.language.ja"
+  | "settings.syncTitle"
+  | "settings.syncSubtitle"
+  | "settings.syncAll"
+  | "settings.syncCalendar"
+  | "settings.syncPeople"
   | "pwa.title"
   | "pwa.subtitle"
   | "pwa.cta"
@@ -151,6 +156,9 @@ export type I18nKey =
   | "status.db_connection_read_failed"
   | "status.db_app_user_failed"
   | "status.db_connection_upsert_failed"
+  | "status.manual_sync_done"
+  | "status.manual_sync_partial"
+  | "status.manual_sync_failed"
   | "login.title"
   | "login.subtitle"
   | "login.feature.calendar"
@@ -326,6 +334,11 @@ const enUS: Dict = {
   "settings.language.ko": "Korean",
   "settings.language.en": "English",
   "settings.language.ja": "Japanese",
+  "settings.syncTitle": "Manual sync",
+  "settings.syncSubtitle": "Sync immediately when needed. Recommended: calendar every 15 minutes, people once daily.",
+  "settings.syncAll": "Sync all",
+  "settings.syncCalendar": "Sync calendar",
+  "settings.syncPeople": "Sync people",
   "pwa.title": "Install app",
   "pwa.subtitle": "Install Converge for faster launch and an app-like experience.",
   "pwa.cta": "Install",
@@ -357,6 +370,9 @@ const enUS: Dict = {
   "status.db_connection_read_failed": "Failed to read connections.",
   "status.db_app_user_failed": "Failed to save app user.",
   "status.db_connection_upsert_failed": "Failed to save connection.",
+  "status.manual_sync_done": "Sync completed.",
+  "status.manual_sync_partial": "Sync completed with partial errors.",
+  "status.manual_sync_failed": "Sync failed. Please retry.",
   "login.title": "Start with your primary account",
   "login.subtitle": "After signing in, you can use the unified calendar and multi-tenant people search right away.",
   "login.feature.calendar": "Unified calendar",
@@ -532,6 +548,11 @@ const koKR: Dict = {
   "settings.language.ko": "한국어",
   "settings.language.en": "영어",
   "settings.language.ja": "일본어",
+  "settings.syncTitle": "수동 동기화",
+  "settings.syncSubtitle": "필요할 때 즉시 동기화합니다. 권장 주기: 캘린더 15분, 조직도 1일 1회.",
+  "settings.syncAll": "전체 동기화",
+  "settings.syncCalendar": "캘린더 동기화",
+  "settings.syncPeople": "조직도 동기화",
   "pwa.title": "앱 설치",
   "pwa.subtitle": "Converge를 홈 화면에 설치해서 더 빠르게 실행하고 앱처럼 사용하세요.",
   "pwa.cta": "설치하기",
@@ -563,6 +584,9 @@ const koKR: Dict = {
   "status.db_connection_read_failed": "연결 계정 조회 중 오류가 발생했습니다.",
   "status.db_app_user_failed": "앱 사용자 저장에 실패했습니다.",
   "status.db_connection_upsert_failed": "연결 계정 저장에 실패했습니다.",
+  "status.manual_sync_done": "동기화가 완료되었습니다.",
+  "status.manual_sync_partial": "일부 오류와 함께 동기화가 완료되었습니다.",
+  "status.manual_sync_failed": "동기화에 실패했습니다. 다시 시도해 주세요.",
   "login.title": "메인 계정으로 시작",
   "login.subtitle": "로그인 후 통합 캘린더와 다중 테넌트 직원 검색을 바로 사용할 수 있습니다.",
   "login.feature.calendar": "통합 캘린더",
@@ -738,6 +762,11 @@ const jaJP: Dict = {
   "settings.language.ko": "韓国語",
   "settings.language.en": "英語",
   "settings.language.ja": "日本語",
+  "settings.syncTitle": "手動同期",
+  "settings.syncSubtitle": "必要時に即時同期します。推奨周期: カレンダー 15分、組織 1日1回。",
+  "settings.syncAll": "すべて同期",
+  "settings.syncCalendar": "カレンダー同期",
+  "settings.syncPeople": "組織同期",
   "pwa.title": "アプリをインストール",
   "pwa.subtitle": "Converge をインストールして、より速く起動しアプリのように使えます。",
   "pwa.cta": "インストール",
@@ -769,6 +798,9 @@ const jaJP: Dict = {
   "status.db_connection_read_failed": "接続アカウントの取得に失敗しました。",
   "status.db_app_user_failed": "ユーザー保存に失敗しました。",
   "status.db_connection_upsert_failed": "接続の保存に失敗しました。",
+  "status.manual_sync_done": "同期が完了しました。",
+  "status.manual_sync_partial": "一部エラーを含めて同期が完了しました。",
+  "status.manual_sync_failed": "同期に失敗しました。再試行してください。",
   "login.title": "メインアカウントで開始",
   "login.subtitle": "ログインすると、統合カレンダーと複数テナントの社員検索をすぐ使えます。",
   "login.feature.calendar": "統合カレンダー",

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { signOutAction } from "@/app/(app)/actions";
+import { manualSyncAction, signOutAction } from "@/app/(app)/actions";
 import { isMockMode } from "@/lib/mock-mode";
 import { mockConnections } from "@/lib/mock-data";
 import { LanguageSelector } from "@/components/language-selector";
@@ -34,7 +34,10 @@ const statusMessageKey: Record<string, I18nKey> = {
   db_primary_check_failed: "status.db_primary_check_failed",
   db_connection_read_failed: "status.db_connection_read_failed",
   db_app_user_failed: "status.db_app_user_failed",
-  db_connection_upsert_failed: "status.db_connection_upsert_failed"
+  db_connection_upsert_failed: "status.db_connection_upsert_failed",
+  manual_sync_done: "status.manual_sync_done",
+  manual_sync_partial: "status.manual_sync_partial",
+  manual_sync_failed: "status.manual_sync_failed"
 };
 
 type SettingsPageProps = {
@@ -120,6 +123,35 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
         <h2 className="title-lg">{tt("push.title")}</h2>
         <p className="muted mt-1">{tt("push.subtitle")}</p>
         <PushNotificationsPanel enabled={Boolean(user)} />
+      </section>
+
+      <section className="panel-glass card p-5 md:p-6">
+        <h2 className="title-lg">{tt("settings.syncTitle")}</h2>
+        <p className="muted mt-1">{tt("settings.syncSubtitle")}</p>
+        {user ? (
+          <div className="mt-4 flex flex-wrap gap-2">
+            <form action={manualSyncAction}>
+              <input name="mode" type="hidden" value="all" />
+              <button className="btn btn-primary" type="submit">
+                {tt("settings.syncAll")}
+              </button>
+            </form>
+            <form action={manualSyncAction}>
+              <input name="mode" type="hidden" value="calendar" />
+              <button className="btn btn-secondary" type="submit">
+                {tt("settings.syncCalendar")}
+              </button>
+            </form>
+            <form action={manualSyncAction}>
+              <input name="mode" type="hidden" value="people" />
+              <button className="btn btn-secondary" type="submit">
+                {tt("settings.syncPeople")}
+              </button>
+            </form>
+          </div>
+        ) : (
+          <p className="mt-3 text-sm text-muted">{tt("settings.connectionsLoginRequired")}</p>
+        )}
       </section>
 
       <section className="panel-glass card p-5 md:p-6">

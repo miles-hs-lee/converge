@@ -36,8 +36,18 @@ type ActionLinks = {
   disabled: boolean;
 };
 
+type ManagerSummary = {
+  id: string;
+  displayName: string;
+  mail: string;
+  jobTitle: string;
+  department: string;
+  tenantName: string;
+};
+
 type PeopleDetailModalProps = {
   person: PersonDetail | null;
+  manager: ManagerSummary | null;
   actionLinks: ActionLinks | null;
   selectedPhone: string;
   copiedField: "mail" | "phone" | null;
@@ -46,6 +56,7 @@ type PeopleDetailModalProps = {
   onClose: () => void;
   onCopyMail: () => void;
   onCopyPhone: () => void;
+  onOpenManager: () => void;
 };
 
 function initials(name: string): string {
@@ -85,6 +96,7 @@ function DetailField({ label, value, wide }: { label: string; value: string; wid
 
 export function PeopleDetailModal({
   person,
+  manager,
   actionLinks,
   selectedPhone,
   copiedField,
@@ -92,7 +104,8 @@ export function PeopleDetailModal({
   onToggleFavorite,
   onClose,
   onCopyMail,
-  onCopyPhone
+  onCopyPhone,
+  onOpenManager
 }: PeopleDetailModalProps) {
   const t = useT();
 
@@ -233,8 +246,27 @@ export function PeopleDetailModal({
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <DetailField label={t("people.field.upn")} value={person.upn} wide />
                 <DetailField label={t("people.field.sourceAccount")} value={person.sourceAccount} wide />
-                <DetailField label={t("people.field.objectId")} value={person.externalPersonId} wide />
-                <DetailField label={t("people.field.managerObjectId")} value={person.managerExternalId} wide />
+                <article className="rounded-xl border border-line bg-white/90 p-3.5 sm:col-span-2">
+                  <p className="text-[11px] font-medium uppercase tracking-[0.13em] text-muted">{t("people.field.manager")}</p>
+                  {manager ? (
+                    <>
+                      <p className="mt-1.5 text-sm font-semibold text-text">{manager.displayName}</p>
+                      <p className="mt-1 text-xs text-muted">
+                        {manager.jobTitle} · {manager.department} · {manager.tenantName}
+                      </p>
+                      <p className="mt-1 text-xs text-muted">{manager.mail || "-"}</p>
+                      <button
+                        className="mt-2 inline-flex min-h-10 items-center rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:border-accent/45"
+                        onClick={onOpenManager}
+                        type="button"
+                      >
+                        {t("people.manager.open")}
+                      </button>
+                    </>
+                  ) : (
+                    <p className="mt-1.5 text-sm font-medium text-muted">{t("people.manager.none")}</p>
+                  )}
+                </article>
               </div>
             </section>
           </div>

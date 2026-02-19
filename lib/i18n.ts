@@ -295,12 +295,15 @@ export type I18nKey =
   | "people.field.accountStatus"
   | "people.field.objectId"
   | "people.field.managerObjectId"
+  | "people.field.manager"
   | "people.detailTitle"
   | "people.quickActionsTitle"
   | "people.copyActionsTitle"
   | "people.sectionContact"
   | "people.sectionWork"
   | "people.sectionDirectory"
+  | "people.manager.none"
+  | "people.manager.open"
   | "people.account.enabled"
   | "people.account.disabled"
   | "people.account.unknown"
@@ -587,12 +590,15 @@ const enUS: Dict = {
   "people.field.accountStatus": "Account status",
   "people.field.objectId": "Object ID",
   "people.field.managerObjectId": "Manager object ID",
+  "people.field.manager": "Manager",
   "people.detailTitle": "Profile detail",
   "people.quickActionsTitle": "Quick actions",
   "people.copyActionsTitle": "Copy contact",
   "people.sectionContact": "Contact",
   "people.sectionWork": "Work profile",
   "people.sectionDirectory": "Directory metadata",
+  "people.manager.none": "No manager data available.",
+  "people.manager.open": "Open manager profile",
   "people.account.enabled": "Enabled",
   "people.account.disabled": "Disabled",
   "people.account.unknown": "Unknown",
@@ -878,12 +884,15 @@ const koKR: Dict = {
   "people.field.accountStatus": "계정 상태",
   "people.field.objectId": "오브젝트 ID",
   "people.field.managerObjectId": "매니저 오브젝트 ID",
+  "people.field.manager": "관리자",
   "people.detailTitle": "직원 상세",
   "people.quickActionsTitle": "빠른 액션",
   "people.copyActionsTitle": "연락처 복사",
   "people.sectionContact": "연락처 정보",
   "people.sectionWork": "업무 정보",
   "people.sectionDirectory": "디렉터리 메타데이터",
+  "people.manager.none": "관리자 정보가 없습니다.",
+  "people.manager.open": "관리자 프로필 열기",
   "people.account.enabled": "활성",
   "people.account.disabled": "비활성",
   "people.account.unknown": "알 수 없음",
@@ -1169,12 +1178,15 @@ const jaJP: Dict = {
   "people.field.accountStatus": "アカウント状態",
   "people.field.objectId": "オブジェクト ID",
   "people.field.managerObjectId": "マネージャー オブジェクト ID",
+  "people.field.manager": "上長",
   "people.detailTitle": "社員詳細",
   "people.quickActionsTitle": "クイックアクション",
   "people.copyActionsTitle": "連絡先をコピー",
   "people.sectionContact": "連絡先情報",
   "people.sectionWork": "業務情報",
   "people.sectionDirectory": "ディレクトリ メタデータ",
+  "people.manager.none": "上長情報がありません。",
+  "people.manager.open": "上長プロフィールを開く",
   "people.account.enabled": "有効",
   "people.account.disabled": "無効",
   "people.account.unknown": "不明",

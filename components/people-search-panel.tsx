@@ -133,6 +133,9 @@ export function PeopleSearchPanel({ people }: PeopleSearchPanelProps) {
   const peopleById = useMemo(() => {
     return new Map(people.map((person) => [person.id, person]));
   }, [people]);
+  const peopleByExternalId = useMemo(() => {
+    return new Map(people.map((person) => [person.externalPersonId, person]));
+  }, [people]);
 
   const favoritePeople = useMemo(() => {
     return favoriteIds.map((id) => peopleById.get(id)).filter((item): item is PersonRow => Boolean(item));
@@ -198,6 +201,12 @@ export function PeopleSearchPanel({ people }: PeopleSearchPanelProps) {
     }
     return people.find((person) => person.id === selectedPersonId) ?? null;
   }, [people, selectedPersonId]);
+  const selectedManager = useMemo(() => {
+    if (!selectedPerson?.managerExternalId) {
+      return null;
+    }
+    return peopleByExternalId.get(selectedPerson.managerExternalId) ?? null;
+  }, [peopleByExternalId, selectedPerson]);
 
   const actionLinks = selectedPerson ? buildActionLinks(selectedPerson) : null;
   const selectedPhone = selectedPerson ? getPrimaryPhone(selectedPerson) : "";
@@ -384,6 +393,7 @@ export function PeopleSearchPanel({ people }: PeopleSearchPanelProps) {
         actionLinks={actionLinks}
         copiedField={copiedField}
         isFavorite={selectedPerson ? favoriteIds.includes(selectedPerson.id) : false}
+        manager={selectedManager}
         onClose={() => setSelectedPersonId(null)}
         onCopyMail={() => {
           if (selectedPerson) {
@@ -398,6 +408,11 @@ export function PeopleSearchPanel({ people }: PeopleSearchPanelProps) {
         onToggleFavorite={() => {
           if (selectedPerson) {
             toggleFavorite(selectedPerson.id);
+          }
+        }}
+        onOpenManager={() => {
+          if (selectedManager) {
+            openPerson(selectedManager.id);
           }
         }}
         person={selectedPerson}

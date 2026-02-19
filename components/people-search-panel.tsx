@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import {
   ChevronDown,
   ChevronRight,
@@ -38,10 +38,12 @@ type PersonRow = {
 
 type PeopleSearchPanelProps = {
   people: PersonRow[];
+  serverSearchEnabled?: boolean;
 };
 
 const FAVORITES_STORAGE_KEY = "converge:favorites:people";
 const RECENTS_STORAGE_KEY = "converge:recent:people";
+const SEARCH_PAGE_SIZE = 60;
 
 function buildActionLinks(person: PersonRow) {
   const email = person.mail;
@@ -105,17 +107,25 @@ function getPrimaryPhone(person: PersonRow): string {
   return candidate ?? person.mobilePhone;
 }
 
-export function PeopleSearchPanel({ people }: PeopleSearchPanelProps) {
+export function PeopleSearchPanel({ people, serverSearchEnabled = false }: PeopleSearchPanelProps) {
   const t = useT();
   const intl = useIntlLocale();
 
   const [query, setQuery] = useState("");
+  const [loadedPeople, setLoadedPeople] = useState<PersonRow[]>(people);
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
   const [sortMode, setSortMode] = useState<"default" | "tenant">("default");
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
   const [recentIds, setRecentIds] = useState<string[]>([]);
   const [collapsedTenants, setCollapsedTenants] = useState<Record<string, boolean>>({});
   const [copiedField, setCopiedField] = useState<"mail" | "phone" | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [serverHasMore, setServerHasMore] = useState(false);
+  const [managerLookupTried, setManagerLookupTried] = useState<Set<string>>(() => new Set());
+
+  const deferredQuery = useDeferredValue(query.trim());
+  const activePeople = serverSearchEnabled ? loadedPeople : people;
 
   useEffect(() => {
     setFavoriteIds(readStoredIds(FAVORITES_STORAGE_KEY));
@@ -130,12 +140,60 @@ export function PeopleSearchPanel({ people }: PeopleSearchPanelProps) {
     writeStoredIds(RECENTS_STORAGE_KEY, recentIds);
   }, [recentIds]);
 
+  useEffect(() => {
+    setLoadedPeople(people);
+    setServerHasMore(false);
+  }, [people, serverSearchEnabled]);
+
+  async function fetchPeoplePage(params: { offset: number; append: boolean; queryValue: string }) {
+    const search = new URLSearchParams({
+      q: params.queryValue,
+      offset: String(params.offset),
+      limit: String(SEARCH_PAGE_SIZE)
+    });
+    const response = await fetch(`/api/people/search?${search.toString()}`, { cache: "no-store" });
+    if (!response.ok) {
+      throw new Error("people_search_failed");
+    }
+    const json = (await response.json()) as { ok: boolean; items: PersonRow[]; hasMore?: boolean };
+    if (!json.ok) {
+      throw new Error("people_search_failed");
+    }
+
+    setLoadedPeople((prev) => (params.append ? [...prev, ...json.items.filter((item) => !prev.some((p) => p.id === item.id))] : json.items));
+    setServerHasMore(Boolean(json.hasMore));
+  }
+
+  useEffect(() => {
+    if (!serverSearchEnabled) {
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    fetchPeoplePage({ offset: 0, append: false, queryValue: deferredQuery })
+      .catch(() => {
+        if (!cancelled) {
+          setLoadedPeople([]);
+          setServerHasMore(false);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [deferredQuery, serverSearchEnabled]);
+
   const peopleById = useMemo(() => {
-    return new Map(people.map((person) => [person.id, person]));
-  }, [people]);
+    return new Map(activePeople.map((person) => [person.id, person]));
+  }, [activePeople]);
   const peopleByExternalId = useMemo(() => {
-    return new Map(people.map((person) => [person.externalPersonId, person]));
-  }, [people]);
+    return new Map(activePeople.map((person) => [person.externalPersonId, person]));
+  }, [activePeople]);
 
   const favoritePeople = useMemo(() => {
     return favoriteIds.map((id) => peopleById.get(id)).filter((item): item is PersonRow => Boolean(item));
@@ -147,14 +205,18 @@ export function PeopleSearchPanel({ people }: PeopleSearchPanelProps) {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
+    if (serverSearchEnabled) {
+      return activePeople;
+    }
+
     if (!q) {
-      return people;
+      return activePeople;
     }
 
     const qDigits = digitsOnly(q);
     const wantsPhone = qDigits.length > 0;
 
-    return people.filter((person) => {
+    return activePeople.filter((person) => {
       if (wantsPhone) {
         const mobileDigits = digitsOnly(person.mobilePhone);
         const businessDigits = (person.businessPhones ?? []).map((phone) => digitsOnly(phone));
@@ -174,7 +236,7 @@ export function PeopleSearchPanel({ people }: PeopleSearchPanelProps) {
         person.employeeId.toLowerCase().includes(q)
       );
     });
-  }, [people, query]);
+  }, [activePeople, query, serverSearchEnabled]);
 
   const sortedByTenant = useMemo(() => {
     return [...filtered].sort((a, b) => {
@@ -199,14 +261,51 @@ export function PeopleSearchPanel({ people }: PeopleSearchPanelProps) {
     if (!selectedPersonId) {
       return null;
     }
-    return people.find((person) => person.id === selectedPersonId) ?? null;
-  }, [people, selectedPersonId]);
+    return activePeople.find((person) => person.id === selectedPersonId) ?? null;
+  }, [activePeople, selectedPersonId]);
   const selectedManager = useMemo(() => {
     if (!selectedPerson?.managerExternalId) {
       return null;
     }
     return peopleByExternalId.get(selectedPerson.managerExternalId) ?? null;
   }, [peopleByExternalId, selectedPerson]);
+
+  useEffect(() => {
+    if (!serverSearchEnabled || !selectedPerson?.managerExternalId || selectedManager) {
+      return;
+    }
+    if (managerLookupTried.has(selectedPerson.managerExternalId)) {
+      return;
+    }
+
+    let cancelled = false;
+    const managerExternalId = selectedPerson.managerExternalId;
+    setManagerLookupTried((prev) => new Set(prev).add(managerExternalId));
+
+    const run = async () => {
+      const search = new URLSearchParams({
+        externalPersonId: managerExternalId,
+        limit: "1"
+      });
+      const response = await fetch(`/api/people/search?${search.toString()}`, { cache: "no-store" });
+      if (!response.ok) return;
+      const json = (await response.json()) as { ok: boolean; items: PersonRow[] };
+      if (!json.ok || !json.items || json.items.length === 0) return;
+      if (cancelled) return;
+      setLoadedPeople((prev) => {
+        const manager = json.items[0]!;
+        if (prev.some((item) => item.id === manager.id)) {
+          return prev;
+        }
+        return [...prev, manager];
+      });
+    };
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [managerLookupTried, selectedManager, selectedPerson, serverSearchEnabled]);
 
   const actionLinks = selectedPerson ? buildActionLinks(selectedPerson) : null;
   const selectedPhone = selectedPerson ? getPrimaryPhone(selectedPerson) : "";
@@ -228,6 +327,22 @@ export function PeopleSearchPanel({ people }: PeopleSearchPanelProps) {
 
   function toggleTenant(tenantName: string) {
     setCollapsedTenants((prev) => ({ ...prev, [tenantName]: !prev[tenantName] }));
+  }
+
+  async function loadMore() {
+    if (!serverSearchEnabled || !serverHasMore || loadingMore) {
+      return;
+    }
+    setLoadingMore(true);
+    try {
+      await fetchPeoplePage({
+        offset: loadedPeople.length,
+        append: true,
+        queryValue: deferredQuery
+      });
+    } finally {
+      setLoadingMore(false);
+    }
   }
 
   async function copyToClipboard(value: string, field: "mail" | "phone") {
@@ -360,6 +475,8 @@ export function PeopleSearchPanel({ people }: PeopleSearchPanelProps) {
       ) : null}
 
       <div className="mt-3 space-y-2 text-sm">
+        {loading ? <p className="text-xs text-muted">{t("people.loading")}</p> : null}
+
         {sortMode === "default"
           ? filtered.map((person) => renderPersonCard(person))
           : tenantGroups.map((group) => {
@@ -382,9 +499,17 @@ export function PeopleSearchPanel({ people }: PeopleSearchPanelProps) {
               );
             })}
 
-        {filtered.length === 0 ? (
+        {!loading && filtered.length === 0 ? (
           <div className="rounded-xl border border-dashed border-line bg-white/70 px-3 py-6 text-center text-muted">
             {t("people.noResults")}
+          </div>
+        ) : null}
+
+        {serverSearchEnabled && !loading && serverHasMore ? (
+          <div className="pt-1 text-center">
+            <button className="btn btn-secondary px-3 py-1.5" disabled={loadingMore} onClick={() => void loadMore()} type="button">
+              {loadingMore ? t("people.loading") : t("people.loadMore")}
+            </button>
           </div>
         ) : null}
       </div>

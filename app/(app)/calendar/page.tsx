@@ -91,15 +91,21 @@ export default async function CalendarPage() {
       const eventSelectExpanded =
         "id,subject,start_at,end_at,is_all_day,location,connection_id,organizer,organizer_name,attendees,web_link,last_modified_external,created_external,calendar_source_id,body_preview,importance,sensitivity,show_as,response_status,response_time,is_cancelled,is_online_meeting,online_meeting_url,event_type,categories,timezone_start,timezone_end";
       const eventSelectFallback = "id,subject,start_at,end_at,is_all_day,location,connection_id,organizer,attendees,web_link,last_modified_external,calendar_source_id";
-      const queryEvents = (selectText: string) =>
-        supabase
+      const queryEvents = (selectText: string) => {
+        let query = supabase
           .from("calendar_events_cache")
           .select(selectText)
           .gte("start_at", from)
           .lte("start_at", to)
           .order("start_at", { ascending: true })
           .limit(120);
-      const expandedResult = await queryEvents(eventSelectExpanded);
+
+        if (connectionIds.length > 0) {
+          query = query.in("connection_id", connectionIds);
+        }
+        return query;
+      };
+      const expandedResult = connectionIds.length === 0 ? { data: [] as Array<Record<string, any>>, error: null } : await queryEvents(eventSelectExpanded);
       const { data: dbEvents } = expandedResult.error ? await queryEvents(eventSelectFallback) : expandedResult;
 
       const tenantByConnection = new Map<string, string>();

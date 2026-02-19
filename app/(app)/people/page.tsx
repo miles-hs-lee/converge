@@ -47,9 +47,12 @@ export default async function PeoplePage() {
   const tt = (key: Parameters<typeof t>[1], vars?: Parameters<typeof t>[2]) => t(locale, key, vars);
 
   let people: PersonRow[] = [];
+  let totalPeopleCount = 0;
+  let serverSearchEnabled = false;
 
   if (isMockMode) {
     people = mockPeople;
+    totalPeopleCount = mockPeople.length;
   } else {
     const supabase = await createClient();
     const {
@@ -57,15 +60,21 @@ export default async function PeoplePage() {
     } = await supabase.auth.getUser();
 
     if (user) {
+      serverSearchEnabled = true;
       const { data: connections } = await supabase.from("m365_connections").select("id,provider,tenant_name,m365_user_principal_name");
+      const connectionIds = (connections ?? []).map((connection) => connection.id);
+
+      if (connectionIds.length > 0) {
+        const { count } = await supabase.from("people_cache").select("id", { count: "exact", head: true }).in("connection_id", connectionIds);
+        totalPeopleCount = count ?? 0;
+      }
+
       const peopleSelectExpanded =
         "id,external_person_id,display_name,mail,job_title,department,office_location,mobile_phone,business_phones,manager_external_id,given_name,surname,user_principal_name,company_name,employee_id,preferred_language,city,state,country,user_type,account_enabled,raw,connection_id";
       const peopleSelectFallback =
         "id,external_person_id,display_name,mail,job_title,department,office_location,mobile_phone,business_phones,manager_external_id,raw,connection_id";
       const queryPeople = (selectText: string) =>
-        supabase.from("people_cache").select(selectText).order("display_name", { ascending: true }).range(0, 4999);
-      const expandedPeople = await queryPeople(peopleSelectExpanded);
-      const { data: dbPeople } = expandedPeople.error ? await queryPeople(peopleSelectFallback) : expandedPeople;
+        supabase.from("people_cache").select(selectText).in("connection_id", connectionIds).order("display_name", { ascending: true }).range(0, 79);
 
       const tenantByConnection = new Map<string, string>();
       const sourceByConnection = new Map<string, string>();
@@ -76,7 +85,18 @@ export default async function PeoplePage() {
         providerByConnection.set(connection.id, connection.provider ?? "microsoft");
       });
 
-      people = ((dbPeople ?? []) as Array<Record<string, any>>).map((person) => ({
+      let resolvedRows: Array<Record<string, any>> = [];
+      if (connectionIds.length > 0) {
+        const expandedPeople = await queryPeople(peopleSelectExpanded);
+        if (expandedPeople.error) {
+          const fallbackPeople = await queryPeople(peopleSelectFallback);
+          resolvedRows = (fallbackPeople.data ?? []) as Array<Record<string, any>>;
+        } else {
+          resolvedRows = (expandedPeople.data ?? []) as Array<Record<string, any>>;
+        }
+      }
+
+      people = resolvedRows.map((person) => ({
         id: person.id,
         displayName: person.display_name,
         mail: person.mail ?? "",
@@ -113,12 +133,12 @@ export default async function PeoplePage() {
             <h1 className="title-xl">{tt("people.title")}</h1>
             <p className="muted mt-1">{tt("people.subtitle")}</p>
           </div>
-          <span className="surface-chip">{tt("people.searchCount", { count: people.length })}</span>
+          <span className="surface-chip">{tt("people.searchCount", { count: totalPeopleCount || people.length })}</span>
         </div>
       </section>
 
       <section className="panel-glass card p-5 md:p-6">
-        <PeopleSearchPanel people={people} />
+        <PeopleSearchPanel people={people} serverSearchEnabled={serverSearchEnabled} />
       </section>
     </div>
   );

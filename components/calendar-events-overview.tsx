@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { UnifiedWeekCalendar } from "@/components/unified-week-calendar";
 import { ModalPortal } from "@/components/modal-portal";
@@ -164,29 +164,29 @@ export function CalendarEventsOverview({ events, tenants }: CalendarEventsOvervi
   const [selectedEvent, setSelectedEvent] = useState<CalendarEventRow | null>(null);
   const [canHover, setCanHover] = useState(false);
   const [hovered, setHovered] = useState<{ event: CalendarEventRow; rect: DOMRect } | null>(null);
+  const deferredQuery = useDeferredValue(query.trim().toLowerCase());
 
   const enabledTenants = useMemo(() => tenants.filter((tenant) => !disabledTenants.has(tenant)), [disabledTenants, tenants]);
 
   const filteredEvents = useMemo(() => {
-    const q = query.trim().toLowerCase();
     return localEvents.filter((event) => {
       if (disabledTenants.has(event.tenantName)) {
         return false;
       }
 
-      if (!q) {
+      if (!deferredQuery) {
         return true;
       }
 
       return (
-        event.subject.toLowerCase().includes(q) ||
-        event.location.toLowerCase().includes(q) ||
-        event.tenantName.toLowerCase().includes(q) ||
-        event.sourceAccount.toLowerCase().includes(q) ||
-        event.attendees.some((attendee) => attendee.toLowerCase().includes(q))
+        event.subject.toLowerCase().includes(deferredQuery) ||
+        event.location.toLowerCase().includes(deferredQuery) ||
+        event.tenantName.toLowerCase().includes(deferredQuery) ||
+        event.sourceAccount.toLowerCase().includes(deferredQuery) ||
+        event.attendees.some((attendee) => attendee.toLowerCase().includes(deferredQuery))
       );
     });
-  }, [disabledTenants, localEvents, query]);
+  }, [deferredQuery, disabledTenants, localEvents]);
 
   const eventsById = useMemo(() => {
     return new Map(localEvents.map((event) => [event.id, event]));
@@ -219,10 +219,11 @@ export function CalendarEventsOverview({ events, tenants }: CalendarEventsOvervi
     // Conflicts should not be affected by search query; only the tenant toggles.
     return localEvents.filter((event) => !disabledTenants.has(event.tenantName));
   }, [disabledTenants, localEvents]);
+  const deferredConflictEvents = useDeferredValue(conflictEvents);
 
   const conflicts = useMemo(() => {
     return detectTenantConflicts(
-      conflictEvents.map((event) => ({
+      deferredConflictEvents.map((event) => ({
         id: event.id,
         tenantName: event.tenantName,
         subject: event.subject,
@@ -232,7 +233,11 @@ export function CalendarEventsOverview({ events, tenants }: CalendarEventsOvervi
         sourceAccount: event.sourceAccount
       }))
     );
-  }, [conflictEvents]);
+  }, [deferredConflictEvents]);
+
+  useEffect(() => {
+    setLocalEvents(events);
+  }, [events]);
 
   const [dismissedKeys, setDismissedKeys] = useState<Set<string>>(() => {
     if (typeof window === "undefined") return new Set();

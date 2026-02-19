@@ -281,6 +281,8 @@ export type I18nKey =
   | "people.recentsTitle"
   | "people.recentsHint"
   | "people.noResults"
+  | "people.loading"
+  | "people.loadMore"
   | "people.favoriteAdd"
   | "people.favoriteRemove"
   | "people.action.favorite"
@@ -588,6 +590,8 @@ const enUS: Dict = {
   "people.recentsTitle": "Recently viewed",
   "people.recentsHint": "Open a profile to add it to your recent list.",
   "people.noResults": "No results found.",
+  "people.loading": "Loading...",
+  "people.loadMore": "Load more",
   "people.favoriteAdd": "Add to favorites",
   "people.favoriteRemove": "Remove from favorites",
   "people.action.favorite": "Favorite",
@@ -894,6 +898,8 @@ const koKR: Dict = {
   "people.recentsTitle": "최근 조회 직원",
   "people.recentsHint": "직원 카드를 열어보면 최근 조회 목록이 쌓입니다.",
   "people.noResults": "검색 결과가 없습니다.",
+  "people.loading": "불러오는 중...",
+  "people.loadMore": "더 불러오기",
   "people.favoriteAdd": "즐겨찾기 추가",
   "people.favoriteRemove": "즐겨찾기 해제",
   "people.action.favorite": "즐겨찾기",
@@ -1200,6 +1206,8 @@ const jaJP: Dict = {
   "people.recentsTitle": "最近見た人",
   "people.recentsHint": "プロフィールを開くと最近一覧に追加されます。",
   "people.noResults": "結果がありません。",
+  "people.loading": "読み込み中...",
+  "people.loadMore": "さらに表示",
   "people.favoriteAdd": "お気に入りに追加",
   "people.favoriteRemove": "お気に入り解除",
   "people.action.favorite": "お気に入り",

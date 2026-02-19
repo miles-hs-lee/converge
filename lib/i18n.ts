@@ -113,6 +113,51 @@ export type I18nKey =
   | "event.openOriginal"
   | "event.attendees"
   | "event.attendeesEmpty"
+  | "event.sectionOverview"
+  | "event.sectionMeeting"
+  | "event.sectionAttendees"
+  | "event.sectionNotes"
+  | "event.sectionMeta"
+  | "event.importance"
+  | "event.sensitivity"
+  | "event.showAs"
+  | "event.eventType"
+  | "event.responseStatus"
+  | "event.responseTime"
+  | "event.created"
+  | "event.onlineMeeting"
+  | "event.joinLink"
+  | "event.categories"
+  | "event.startTimezone"
+  | "event.endTimezone"
+  | "event.defaultCalendar"
+  | "event.cancelled"
+  | "event.value.importance.low"
+  | "event.value.importance.normal"
+  | "event.value.importance.high"
+  | "event.value.sensitivity.normal"
+  | "event.value.sensitivity.personal"
+  | "event.value.sensitivity.private"
+  | "event.value.sensitivity.confidential"
+  | "event.value.showAs.free"
+  | "event.value.showAs.tentative"
+  | "event.value.showAs.busy"
+  | "event.value.showAs.oof"
+  | "event.value.showAs.workingElsewhere"
+  | "event.value.showAs.unknown"
+  | "event.value.response.accepted"
+  | "event.value.response.declined"
+  | "event.value.response.tentative"
+  | "event.value.response.notResponded"
+  | "event.value.response.organizer"
+  | "event.value.response.none"
+  | "event.value.eventType.singleInstance"
+  | "event.value.eventType.occurrence"
+  | "event.value.eventType.exception"
+  | "event.value.eventType.seriesMaster"
+  | "event.value.attendeeType.required"
+  | "event.value.attendeeType.optional"
+  | "event.value.attendeeType.resource"
   | "settings.title"
   | "settings.subtitle"
   | "settings.addMicrosoft"
@@ -353,6 +398,51 @@ const enUS: Dict = {
   "event.openOriginal": "Open in provider",
   "event.attendees": "Attendees",
   "event.attendeesEmpty": "No attendee details available.",
+  "event.sectionOverview": "Overview",
+  "event.sectionMeeting": "Meeting context",
+  "event.sectionAttendees": "Attendees",
+  "event.sectionNotes": "Notes",
+  "event.sectionMeta": "Metadata",
+  "event.importance": "Importance",
+  "event.sensitivity": "Sensitivity",
+  "event.showAs": "Show as",
+  "event.eventType": "Event type",
+  "event.responseStatus": "Response status",
+  "event.responseTime": "Response time",
+  "event.created": "Created",
+  "event.onlineMeeting": "Online meeting",
+  "event.joinLink": "Join meeting",
+  "event.categories": "Categories",
+  "event.startTimezone": "Start timezone",
+  "event.endTimezone": "End timezone",
+  "event.defaultCalendar": "Default calendar",
+  "event.cancelled": "Cancelled",
+  "event.value.importance.low": "Low",
+  "event.value.importance.normal": "Normal",
+  "event.value.importance.high": "High",
+  "event.value.sensitivity.normal": "Normal",
+  "event.value.sensitivity.personal": "Personal",
+  "event.value.sensitivity.private": "Private",
+  "event.value.sensitivity.confidential": "Confidential",
+  "event.value.showAs.free": "Free",
+  "event.value.showAs.tentative": "Tentative",
+  "event.value.showAs.busy": "Busy",
+  "event.value.showAs.oof": "Out of office",
+  "event.value.showAs.workingElsewhere": "Working elsewhere",
+  "event.value.showAs.unknown": "Unknown",
+  "event.value.response.accepted": "Accepted",
+  "event.value.response.declined": "Declined",
+  "event.value.response.tentative": "Tentative",
+  "event.value.response.notResponded": "Not responded",
+  "event.value.response.organizer": "Organizer",
+  "event.value.response.none": "None",
+  "event.value.eventType.singleInstance": "Single event",
+  "event.value.eventType.occurrence": "Occurrence",
+  "event.value.eventType.exception": "Exception",
+  "event.value.eventType.seriesMaster": "Series master",
+  "event.value.attendeeType.required": "Required",
+  "event.value.attendeeType.optional": "Optional",
+  "event.value.attendeeType.resource": "Resource",
   "settings.title": "Settings",
   "settings.subtitle": "Manage connections and sessions.",
   "settings.addMicrosoft": "Add Microsoft account",
@@ -593,6 +683,51 @@ const koKR: Dict = {
   "event.openOriginal": "원본에서 열기",
   "event.attendees": "참석자",
   "event.attendeesEmpty": "표시 가능한 참석자 정보가 없습니다.",
+  "event.sectionOverview": "기본 정보",
+  "event.sectionMeeting": "회의 상태",
+  "event.sectionAttendees": "참석자",
+  "event.sectionNotes": "설명",
+  "event.sectionMeta": "메타 정보",
+  "event.importance": "중요도",
+  "event.sensitivity": "민감도",
+  "event.showAs": "일정 상태",
+  "event.eventType": "일정 유형",
+  "event.responseStatus": "응답 상태",
+  "event.responseTime": "응답 시간",
+  "event.created": "생성 시각",
+  "event.onlineMeeting": "온라인 회의",
+  "event.joinLink": "회의 참여 링크",
+  "event.categories": "카테고리",
+  "event.startTimezone": "시작 시간대",
+  "event.endTimezone": "종료 시간대",
+  "event.defaultCalendar": "기본 캘린더",
+  "event.cancelled": "취소됨",
+  "event.value.importance.low": "낮음",
+  "event.value.importance.normal": "보통",
+  "event.value.importance.high": "높음",
+  "event.value.sensitivity.normal": "일반",
+  "event.value.sensitivity.personal": "개인",
+  "event.value.sensitivity.private": "비공개",
+  "event.value.sensitivity.confidential": "기밀",
+  "event.value.showAs.free": "한가함",
+  "event.value.showAs.tentative": "미정",
+  "event.value.showAs.busy": "바쁨",
+  "event.value.showAs.oof": "부재 중",
+  "event.value.showAs.workingElsewhere": "다른 위치 근무",
+  "event.value.showAs.unknown": "알 수 없음",
+  "event.value.response.accepted": "수락",
+  "event.value.response.declined": "거절",
+  "event.value.response.tentative": "미정",
+  "event.value.response.notResponded": "미응답",
+  "event.value.response.organizer": "주최자",
+  "event.value.response.none": "없음",
+  "event.value.eventType.singleInstance": "단일 일정",
+  "event.value.eventType.occurrence": "반복 일정",
+  "event.value.eventType.exception": "예외 일정",
+  "event.value.eventType.seriesMaster": "반복 마스터",
+  "event.value.attendeeType.required": "필수",
+  "event.value.attendeeType.optional": "선택",
+  "event.value.attendeeType.resource": "리소스",
   "settings.title": "설정",
   "settings.subtitle": "M365 계정 연결 상태와 세션을 관리합니다.",
   "settings.addMicrosoft": "Microsoft 계정 추가",
@@ -738,7 +873,7 @@ const koKR: Dict = {
   "people.unknown.department": "(부서 없음)",
   "people.unknown.office": "(위치 없음)",
   "people.unknown.phone": "(연락처 없음)",
-  "common.unknownAccount": "Unknown account",
+  "common.unknownAccount": "알 수 없는 계정",
   "common.untitled": "(제목 없음)",
   "common.locationUnknown": "미지정"
 };
@@ -833,6 +968,51 @@ const jaJP: Dict = {
   "event.openOriginal": "元の予定を開く",
   "event.attendees": "参加者",
   "event.attendeesEmpty": "参加者情報がありません。",
+  "event.sectionOverview": "基本情報",
+  "event.sectionMeeting": "会議ステータス",
+  "event.sectionAttendees": "参加者",
+  "event.sectionNotes": "説明",
+  "event.sectionMeta": "メタ情報",
+  "event.importance": "重要度",
+  "event.sensitivity": "機密度",
+  "event.showAs": "表示状態",
+  "event.eventType": "予定タイプ",
+  "event.responseStatus": "回答ステータス",
+  "event.responseTime": "回答日時",
+  "event.created": "作成日時",
+  "event.onlineMeeting": "オンライン会議",
+  "event.joinLink": "会議リンク",
+  "event.categories": "カテゴリ",
+  "event.startTimezone": "開始タイムゾーン",
+  "event.endTimezone": "終了タイムゾーン",
+  "event.defaultCalendar": "既定のカレンダー",
+  "event.cancelled": "キャンセル済み",
+  "event.value.importance.low": "低",
+  "event.value.importance.normal": "通常",
+  "event.value.importance.high": "高",
+  "event.value.sensitivity.normal": "通常",
+  "event.value.sensitivity.personal": "個人",
+  "event.value.sensitivity.private": "非公開",
+  "event.value.sensitivity.confidential": "機密",
+  "event.value.showAs.free": "空き",
+  "event.value.showAs.tentative": "仮",
+  "event.value.showAs.busy": "予定あり",
+  "event.value.showAs.oof": "外出中",
+  "event.value.showAs.workingElsewhere": "別の場所で勤務",
+  "event.value.showAs.unknown": "不明",
+  "event.value.response.accepted": "承諾",
+  "event.value.response.declined": "辞退",
+  "event.value.response.tentative": "仮承諾",
+  "event.value.response.notResponded": "未回答",
+  "event.value.response.organizer": "主催者",
+  "event.value.response.none": "なし",
+  "event.value.eventType.singleInstance": "単発予定",
+  "event.value.eventType.occurrence": "繰り返し予定",
+  "event.value.eventType.exception": "例外予定",
+  "event.value.eventType.seriesMaster": "シリーズマスター",
+  "event.value.attendeeType.required": "必須",
+  "event.value.attendeeType.optional": "任意",
+  "event.value.attendeeType.resource": "リソース",
   "settings.title": "設定",
   "settings.subtitle": "接続状態とセッションを管理します。",
   "settings.addMicrosoft": "Microsoft アカウント追加",
@@ -978,7 +1158,7 @@ const jaJP: Dict = {
   "people.unknown.department": "(部署なし)",
   "people.unknown.office": "(場所なし)",
   "people.unknown.phone": "(連絡先なし)",
-  "common.unknownAccount": "Unknown account",
+  "common.unknownAccount": "不明なアカウント",
   "common.untitled": "(無題)",
   "common.locationUnknown": "未指定"
 };

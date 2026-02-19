@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ModalPortal } from "@/components/modal-portal";
+import { EventDetailModal } from "@/components/event-detail-modal";
 import { colorForTenant } from "@/lib/tenant-colors";
 import { useIntlLocale, useT } from "@/components/locale-provider";
 
@@ -107,20 +108,6 @@ function minutesIntoDay(date: Date): number {
 
 function clamp(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, n));
-}
-
-function formatDuration(startIso: string, endIso: string): string {
-  const diffMs = new Date(endIso).getTime() - new Date(startIso).getTime();
-  if (!Number.isFinite(diffMs) || diffMs <= 0) {
-    return "-";
-  }
-  const minutes = Math.round(diffMs / 60000);
-  if (minutes < 60) {
-    return `${minutes}m`;
-  }
-  const hours = Math.floor(minutes / 60);
-  const remain = minutes % 60;
-  return remain === 0 ? `${hours}h` : `${hours}h ${remain}m`;
 }
 
 export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProps) {
@@ -749,7 +736,7 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
                         </div>
                         <div className="rounded-xl border border-line bg-white/80 p-2.5">
                           <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted">{t("event.calendar")}</p>
-                          <p className="mt-1 line-clamp-1 text-xs font-semibold">{hovered.event.calendarName ?? "Calendar"}</p>
+                          <p className="mt-1 line-clamp-1 text-xs font-semibold">{hovered.event.calendarName ?? t("event.defaultCalendar")}</p>
                         </div>
                       </div>
                     ) : null}
@@ -833,222 +820,7 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
         </ModalPortal>
       ) : null}
 
-      {selectedEvent ? (
-        <ModalPortal>
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-3 sm:p-4" role="dialog" aria-modal="true">
-            <button aria-label={t("common.close")} className="absolute inset-0 cursor-default" onClick={closeEventModal} type="button" />
-            <section className="panel-glass card relative z-10 max-h-[86vh] w-full max-w-lg overflow-y-auto rounded-2xl p-4 pb-7 sm:p-5">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.14em] text-accent">{t("event.detailTitle")}</p>
-                  <h3 className="mt-1 text-lg font-semibold">{selectedEvent.subject}</h3>
-                  <p className="mt-1 text-xs text-muted">
-                    {new Date(selectedEvent.startAt).toLocaleString(intl)} - {new Date(selectedEvent.endAt).toLocaleTimeString(intl)}
-                  </p>
-                </div>
-                <button className="btn btn-secondary px-3 py-1.5" onClick={closeEventModal} type="button">
-                  {t("common.close")}
-                </button>
-              </div>
-
-              <div className="mt-4 space-y-3">
-                <div className="grid gap-3 md:grid-cols-2">
-                  <div className="rounded-lg border border-line bg-white/85 p-3 text-sm">
-                    <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("event.sourceTenant")}</p>
-                    <p className="mt-1 font-medium">{selectedEvent.tenantName}</p>
-                  </div>
-
-                  <div className="rounded-lg border border-line bg-white/85 p-3 text-sm">
-                    <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("event.sourceAccount")}</p>
-                    <p className="mt-1 font-medium">{selectedEvent.sourceAccount}</p>
-                  </div>
-
-                  <div className="rounded-lg border border-line bg-white/85 p-3 text-sm">
-                    <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("event.time")}</p>
-                    <p className="mt-1 font-medium">
-                      {new Date(selectedEvent.startAt).toLocaleString(intl, {
-                        year: "numeric",
-                        month: "short",
-                        day: "numeric",
-                        weekday: "short",
-                        hour: "2-digit",
-                        minute: "2-digit"
-                      })}
-                      {" - "}
-                      {new Date(selectedEvent.endAt).toLocaleString(intl, {
-                        month: "short",
-                        day: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit"
-                      })}
-                    </p>
-                  </div>
-
-                  <div className="rounded-lg border border-line bg-white/85 p-3 text-sm">
-                    <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("event.duration")}</p>
-                    <p className="mt-1 font-medium">{formatDuration(selectedEvent.startAt, selectedEvent.endAt)}</p>
-                    <p className="mt-1 text-xs text-muted">
-                      {t("event.allDay")}: {selectedEvent.isAllDay ? t("common.yes") : t("common.no")}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="grid gap-3 md:grid-cols-2">
-                  <div className="rounded-lg border border-line bg-white/85 p-3 text-sm">
-                    <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("event.location")}</p>
-                    <p className="mt-1 font-medium">{selectedEvent.location}</p>
-                  </div>
-
-                  <div className="rounded-lg border border-line bg-white/85 p-3 text-sm">
-                    <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("event.organizer")}</p>
-                    <p className="mt-1 font-medium">{selectedEvent.organizer ?? selectedEvent.sourceAccount}</p>
-                  </div>
-
-                  <div className="rounded-lg border border-line bg-white/85 p-3 text-sm">
-                    <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("event.calendar")}</p>
-                    <p className="mt-1 font-medium">{selectedEvent.calendarName ?? "Calendar"}</p>
-                  </div>
-
-                  <div className="rounded-lg border border-line bg-white/85 p-3 text-sm">
-                    <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("event.provider")}</p>
-                    <p className="mt-1 font-medium">
-                      {selectedEvent.provider === "google"
-                        ? t("settings.providerGoogle")
-                        : selectedEvent.provider === "microsoft"
-                          ? t("settings.providerMicrosoft")
-                          : selectedEvent.provider ?? "-"}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="grid gap-3 md:grid-cols-2">
-                  <div className="rounded-lg border border-line bg-white/85 p-3 text-sm">
-                    <p className="text-xs uppercase tracking-[0.12em] text-muted">Importance</p>
-                    <p className="mt-1 font-medium">{selectedEvent.importance ?? "-"}</p>
-                  </div>
-
-                  <div className="rounded-lg border border-line bg-white/85 p-3 text-sm">
-                    <p className="text-xs uppercase tracking-[0.12em] text-muted">Sensitivity</p>
-                    <p className="mt-1 font-medium">{selectedEvent.sensitivity ?? "-"}</p>
-                  </div>
-
-                  <div className="rounded-lg border border-line bg-white/85 p-3 text-sm">
-                    <p className="text-xs uppercase tracking-[0.12em] text-muted">Show as</p>
-                    <p className="mt-1 font-medium">{selectedEvent.showAs ?? "-"}</p>
-                  </div>
-
-                  <div className="rounded-lg border border-line bg-white/85 p-3 text-sm">
-                    <p className="text-xs uppercase tracking-[0.12em] text-muted">Event type</p>
-                    <p className="mt-1 font-medium">{selectedEvent.eventType ?? "-"}</p>
-                  </div>
-
-                  <div className="rounded-lg border border-line bg-white/85 p-3 text-sm">
-                    <p className="text-xs uppercase tracking-[0.12em] text-muted">Response status</p>
-                    <p className="mt-1 font-medium">{selectedEvent.responseStatus ?? "-"}</p>
-                  </div>
-
-                  <div className="rounded-lg border border-line bg-white/85 p-3 text-sm">
-                    <p className="text-xs uppercase tracking-[0.12em] text-muted">Response time</p>
-                    <p className="mt-1 font-medium">{selectedEvent.responseTime ? new Date(selectedEvent.responseTime).toLocaleString(intl) : "-"}</p>
-                  </div>
-
-                  <div className="rounded-lg border border-line bg-white/85 p-3 text-sm">
-                    <p className="text-xs uppercase tracking-[0.12em] text-muted">Created</p>
-                    <p className="mt-1 font-medium">{selectedEvent.createdAt ? new Date(selectedEvent.createdAt).toLocaleString(intl) : "-"}</p>
-                  </div>
-
-                  <div className="rounded-lg border border-line bg-white/85 p-3 text-sm">
-                    <p className="text-xs uppercase tracking-[0.12em] text-muted">Online meeting</p>
-                    <p className="mt-1 font-medium">{selectedEvent.isOnlineMeeting ? t("common.yes") : t("common.no")}</p>
-                    {selectedEvent.onlineMeetingUrl ? (
-                      <a
-                        className="mt-1 inline-flex text-xs font-medium text-accent hover:underline"
-                        href={selectedEvent.onlineMeetingUrl}
-                        rel="noreferrer"
-                        target="_blank"
-                      >
-                        Join link
-                      </a>
-                    ) : null}
-                  </div>
-
-                  <div className="rounded-lg border border-line bg-white/85 p-3 text-sm md:col-span-2">
-                    <p className="text-xs uppercase tracking-[0.12em] text-muted">Categories</p>
-                    <p className="mt-1 font-medium">{selectedEvent.categories && selectedEvent.categories.length > 0 ? selectedEvent.categories.join(", ") : "-"}</p>
-                  </div>
-
-                  <div className="rounded-lg border border-line bg-white/85 p-3 text-sm">
-                    <p className="text-xs uppercase tracking-[0.12em] text-muted">Start timezone</p>
-                    <p className="mt-1 font-medium">{selectedEvent.timezoneStart ?? "-"}</p>
-                  </div>
-
-                  <div className="rounded-lg border border-line bg-white/85 p-3 text-sm">
-                    <p className="text-xs uppercase tracking-[0.12em] text-muted">End timezone</p>
-                    <p className="mt-1 font-medium">{selectedEvent.timezoneEnd ?? "-"}</p>
-                  </div>
-
-                  <div className="rounded-lg border border-line bg-white/85 p-3 text-sm">
-                    <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("event.lastUpdated")}</p>
-                    <p className="mt-1 font-medium">
-                      {selectedEvent.lastModifiedAt
-                        ? new Date(selectedEvent.lastModifiedAt).toLocaleString(intl, {
-                            year: "numeric",
-                            month: "short",
-                            day: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit"
-                          })
-                        : "-"}
-                    </p>
-                  </div>
-
-                  <div className="rounded-lg border border-line bg-white/85 p-3 text-sm">
-                    <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("event.webLink")}</p>
-                    {selectedEvent.webLink ? (
-                      <a className="mt-1 inline-flex text-sm font-medium text-accent hover:underline" href={selectedEvent.webLink} rel="noreferrer" target="_blank">
-                        {t("event.openOriginal")}
-                      </a>
-                    ) : (
-                      <p className="mt-1 font-medium">-</p>
-                    )}
-                  </div>
-                </div>
-
-                {selectedEvent.bodyPreview ? (
-                  <div className="rounded-lg border border-line bg-white/85 p-3 text-sm">
-                    <p className="text-xs uppercase tracking-[0.12em] text-muted">Body preview</p>
-                    <p className="mt-1 whitespace-pre-wrap text-sm text-muted">{selectedEvent.bodyPreview}</p>
-                  </div>
-                ) : null}
-
-                <div className="rounded-lg border border-line bg-white/85 p-3 text-sm">
-                  <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("event.attendees")}</p>
-                  {selectedEvent.attendeeDetails && selectedEvent.attendeeDetails.length > 0 ? (
-                    <ul className="mt-1 space-y-1">
-                      {selectedEvent.attendeeDetails.map((attendee, index) => (
-                        <li key={`${attendee.email}-${index}`}>
-                          {attendee.name ? `${attendee.name} ` : ""}
-                          {attendee.email}
-                          {attendee.type ? ` · ${attendee.type}` : ""}
-                          {attendee.response ? ` · ${attendee.response}` : ""}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : selectedEvent.attendees.length > 0 ? (
-                    <ul className="mt-1 space-y-1">
-                      {selectedEvent.attendees.map((attendee) => (
-                        <li key={attendee}>{attendee}</li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="mt-1 text-muted">{t("event.attendeesEmpty")}</p>
-                  )}
-                </div>
-              </div>
-            </section>
-          </div>
-        </ModalPortal>
-      ) : null}
+      <EventDetailModal event={selectedEvent} onClose={closeEventModal} />
     </>
   );
 }

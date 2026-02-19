@@ -6,11 +6,11 @@ export const microsoftScopes = [
   "User.Read",
   "User.Read.All",
   "Calendars.Read",
-  "Calendars.Read.All",
+  "Calendars.Read.Shared",
   "User.ReadBasic.All"
 ] as const;
 
-export const requiredMicrosoftGraphScopes = ["User.Read.All", "Calendars.Read.All"] as const;
+export const requiredMicrosoftGraphScopes = ["User.Read", "User.Read.All", "Calendars.Read", "Calendars.Read.Shared"] as const;
 
 export function getMicrosoftScopeString(): string {
   return microsoftScopes.join(" ");

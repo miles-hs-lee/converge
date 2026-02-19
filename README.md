@@ -155,7 +155,7 @@ Microsoft Graph permission recommendation for richer sync/detail pages:
 - `User.Read`
 - `User.Read.All` (directory-wide people profile fields)
 - `Calendars.Read`
-- `Calendars.Read.All` (tenant-wide calendar read scope)
+- `Calendars.Read.Shared` (shared calendar read scope)
 - `offline_access`
 
 ### Start

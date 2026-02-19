@@ -2,19 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  CalendarPlus,
-  Check,
   ChevronDown,
   ChevronRight,
   Clock3,
-  Copy,
-  Mail,
-  MessageSquareText,
   Search,
-  Star,
-  X
+  Star
 } from "lucide-react";
-import { ModalPortal } from "@/components/modal-portal";
+import { PeopleDetailModal } from "@/components/people-detail-modal";
 import { useIntlLocale, useT } from "@/components/locale-provider";
 
 type PersonRow = {
@@ -207,13 +201,6 @@ export function PeopleSearchPanel({ people }: PeopleSearchPanelProps) {
 
   const actionLinks = selectedPerson ? buildActionLinks(selectedPerson) : null;
   const selectedPhone = selectedPerson ? getPrimaryPhone(selectedPerson) : "";
-  const providerLabel = (provider: string) =>
-    provider === "google" ? t("settings.providerGoogle") : provider === "microsoft" ? t("settings.providerMicrosoft") : provider;
-  const accountStatusLabel = (enabled: boolean | null) => {
-    if (enabled === true) return t("people.account.enabled");
-    if (enabled === false) return t("people.account.disabled");
-    return t("people.account.unknown");
-  };
   const showPinnedSections = query.trim().length === 0;
 
   function openPerson(personId: string) {
@@ -375,8 +362,8 @@ export function PeopleSearchPanel({ people }: PeopleSearchPanelProps) {
                     onClick={() => toggleTenant(group.tenantName)}
                     type="button"
                   >
-                  <p className="text-xs font-semibold uppercase tracking-[0.1em] text-muted">{group.tenantName}</p>
-                  <span className="inline-flex items-center gap-1 text-xs text-muted">
+                    <p className="text-xs font-semibold uppercase tracking-[0.1em] text-muted">{group.tenantName}</p>
+                    <span className="inline-flex items-center gap-1 text-xs text-muted">
                       {t("people.searchCount", { count: group.items.length })}
                       {collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
                     </span>
@@ -393,169 +380,29 @@ export function PeopleSearchPanel({ people }: PeopleSearchPanelProps) {
         ) : null}
       </div>
 
-      {selectedPerson && actionLinks ? (
-        <ModalPortal>
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-3 sm:p-4" role="dialog" aria-modal="true">
-            <button
-              aria-label={t("common.close")}
-              className="absolute inset-0 cursor-default"
-              onClick={() => setSelectedPersonId(null)}
-              type="button"
-            />
-
-            <section className="panel-glass card relative z-10 max-h-[88vh] w-full max-w-2xl overflow-y-auto rounded-2xl p-4 pb-7 sm:p-5">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.14em] text-accent">{t("people.title")}</p>
-                  <h3 className="mt-1 text-xl font-semibold">{selectedPerson.displayName}</h3>
-                  <p className="mt-1 text-sm text-muted">
-                    {selectedPerson.jobTitle} · {selectedPerson.department} · {selectedPerson.tenantName}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    className={`btn btn-secondary px-3 py-1.5 ${favoriteIds.includes(selectedPerson.id) ? "border-amber-200 bg-amber-50 text-amber-700" : ""}`}
-                    onClick={() => toggleFavorite(selectedPerson.id)}
-                    type="button"
-                  >
-                    <Star className={favoriteIds.includes(selectedPerson.id) ? "fill-current" : ""} size={14} />
-                    {t("people.action.favorite")}
-                  </button>
-                  <button
-                    className="btn btn-secondary px-3 py-1.5"
-                    onClick={() => setSelectedPersonId(null)}
-                    type="button"
-                  >
-                    <X size={14} /> {t("common.close")}
-                  </button>
-                </div>
-              </div>
-
-              <div className="mt-4 grid gap-2 md:grid-cols-3">
-                <a
-                  className={`inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium ${actionLinks.disabled ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400" : "border-line bg-white hover:border-accent/45"}`}
-                  href={actionLinks.disabled ? undefined : actionLinks.mailto}
-                  rel="noreferrer"
-                  target="_blank"
-                >
-                  <Mail size={16} /> {t("people.action.mail")}
-                </a>
-                <a
-                  className={`inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium ${actionLinks.disabled ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400" : "border-line bg-white hover:border-accent/45"}`}
-                  href={actionLinks.disabled ? undefined : actionLinks.teams}
-                  rel="noreferrer"
-                  target="_blank"
-                >
-                  <MessageSquareText size={16} /> {t("people.action.teams")}
-                </a>
-                <a
-                  className={`inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium ${actionLinks.disabled ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400" : "border-line bg-white hover:border-accent/45"}`}
-                  href={actionLinks.disabled ? undefined : actionLinks.calendar}
-                  rel="noreferrer"
-                  target="_blank"
-                >
-                  <CalendarPlus size={16} /> {t("people.action.meeting")}
-                </a>
-              </div>
-
-              <div className="mt-3 grid gap-2 md:grid-cols-2">
-                <button
-                  className={`inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium ${selectedPerson.mail ? "border-line bg-white hover:border-accent/45" : "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400"}`}
-                  disabled={!selectedPerson.mail}
-                  onClick={() => copyToClipboard(selectedPerson.mail, "mail")}
-                  type="button"
-                >
-                  {copiedField === "mail" ? <Check size={16} /> : <Copy size={16} />}
-                  {copiedField === "mail" ? t("people.copyMailDone") : t("people.copyMail")}
-                </button>
-                <button
-                  className={`inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium ${hasUsablePhone(selectedPhone) ? "border-line bg-white hover:border-accent/45" : "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400"}`}
-                  disabled={!hasUsablePhone(selectedPhone)}
-                  onClick={() => copyToClipboard(selectedPhone, "phone")}
-                  type="button"
-                >
-                  {copiedField === "phone" ? <Check size={16} /> : <Copy size={16} />}
-                  {copiedField === "phone" ? t("people.copyPhoneDone") : t("people.copyPhone")}
-                </button>
-              </div>
-
-              <div className="mt-4 grid gap-3 text-sm md:grid-cols-2">
-                <div className="rounded-xl border border-line bg-white/85 p-3">
-                  <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("people.field.mail")}</p>
-                  <p className="mt-1 font-medium">{selectedPerson.mail || "-"}</p>
-                </div>
-                <div className="rounded-xl border border-line bg-white/85 p-3">
-                  <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("people.field.phone")}</p>
-                  <p className="mt-1 font-medium">{selectedPhone}</p>
-                  {selectedPerson.businessPhones.length > 0 ? (
-                    <p className="mt-1 text-xs text-muted">
-                      {selectedPerson.businessPhones.filter((p) => p !== selectedPhone && hasUsablePhone(p)).slice(0, 2).join(" · ")}
-                    </p>
-                  ) : null}
-                </div>
-                <div className="rounded-xl border border-line bg-white/85 p-3">
-                  <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("people.field.office")}</p>
-                  <p className="mt-1 font-medium">{selectedPerson.officeLocation}</p>
-                </div>
-                <div className="rounded-xl border border-line bg-white/85 p-3">
-                  <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("people.field.tenant")}</p>
-                  <p className="mt-1 font-medium">{selectedPerson.tenantName}</p>
-                </div>
-                <div className="rounded-xl border border-line bg-white/85 p-3">
-                  <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("people.field.upn")}</p>
-                  <p className="mt-1 font-medium">{selectedPerson.upn || "-"}</p>
-                </div>
-                <div className="rounded-xl border border-line bg-white/85 p-3">
-                  <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("people.field.sourceAccount")}</p>
-                  <p className="mt-1 font-medium">{selectedPerson.sourceAccount || "-"}</p>
-                </div>
-                <div className="rounded-xl border border-line bg-white/85 p-3">
-                  <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("people.field.provider")}</p>
-                  <p className="mt-1 font-medium">{providerLabel(selectedPerson.provider)}</p>
-                </div>
-                <div className="rounded-xl border border-line bg-white/85 p-3">
-                  <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("people.field.businessPhones")}</p>
-                  <p className="mt-1 font-medium">
-                    {selectedPerson.businessPhones.filter((p) => hasUsablePhone(p)).join(" · ") || "-"}
-                  </p>
-                </div>
-                <div className="rounded-xl border border-line bg-white/85 p-3">
-                  <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("people.field.company")}</p>
-                  <p className="mt-1 font-medium">{selectedPerson.companyName || "-"}</p>
-                </div>
-                <div className="rounded-xl border border-line bg-white/85 p-3">
-                  <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("people.field.employeeId")}</p>
-                  <p className="mt-1 font-medium">{selectedPerson.employeeId || "-"}</p>
-                </div>
-                <div className="rounded-xl border border-line bg-white/85 p-3">
-                  <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("people.field.region")}</p>
-                  <p className="mt-1 font-medium">{[selectedPerson.city, selectedPerson.state, selectedPerson.country].filter(Boolean).join(", ") || "-"}</p>
-                </div>
-                <div className="rounded-xl border border-line bg-white/85 p-3">
-                  <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("people.field.preferredLanguage")}</p>
-                  <p className="mt-1 font-medium">{selectedPerson.preferredLanguage || "-"}</p>
-                </div>
-                <div className="rounded-xl border border-line bg-white/85 p-3">
-                  <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("people.field.userType")}</p>
-                  <p className="mt-1 font-medium">{selectedPerson.userType || "-"}</p>
-                </div>
-                <div className="rounded-xl border border-line bg-white/85 p-3">
-                  <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("people.field.accountStatus")}</p>
-                  <p className="mt-1 font-medium">{accountStatusLabel(selectedPerson.accountEnabled)}</p>
-                </div>
-                <div className="rounded-xl border border-line bg-white/85 p-3">
-                  <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("people.field.objectId")}</p>
-                  <p className="mt-1 break-all font-medium">{selectedPerson.externalPersonId || "-"}</p>
-                </div>
-                <div className="rounded-xl border border-line bg-white/85 p-3">
-                  <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("people.field.managerObjectId")}</p>
-                  <p className="mt-1 break-all font-medium">{selectedPerson.managerExternalId || "-"}</p>
-                </div>
-              </div>
-            </section>
-          </div>
-        </ModalPortal>
-      ) : null}
+      <PeopleDetailModal
+        actionLinks={actionLinks}
+        copiedField={copiedField}
+        isFavorite={selectedPerson ? favoriteIds.includes(selectedPerson.id) : false}
+        onClose={() => setSelectedPersonId(null)}
+        onCopyMail={() => {
+          if (selectedPerson) {
+            void copyToClipboard(selectedPerson.mail, "mail");
+          }
+        }}
+        onCopyPhone={() => {
+          if (selectedPerson) {
+            void copyToClipboard(selectedPhone, "phone");
+          }
+        }}
+        onToggleFavorite={() => {
+          if (selectedPerson) {
+            toggleFavorite(selectedPerson.id);
+          }
+        }}
+        person={selectedPerson}
+        selectedPhone={selectedPhone}
+      />
     </>
   );
 }

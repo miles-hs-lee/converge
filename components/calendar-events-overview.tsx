@@ -5,7 +5,7 @@ import { Search } from "lucide-react";
 import { UnifiedWeekCalendar } from "@/components/unified-week-calendar";
 import { ModalPortal } from "@/components/modal-portal";
 import { EventDetailModal } from "@/components/event-detail-modal";
-import { colorForTenant } from "@/lib/tenant-colors";
+import { useAppPreferences } from "@/components/app-preferences-provider";
 import { useT, useIntlLocale } from "@/components/locale-provider";
 import { detectTenantConflicts } from "@/lib/calendar-conflicts";
 import { isMockMode } from "@/lib/mock-mode";
@@ -149,6 +149,7 @@ function formatDateTimeRange(startIso: string, endIso: string, intl: string): st
 export function CalendarEventsOverview({ events, tenants }: CalendarEventsOverviewProps) {
   const t = useT();
   const intl = useIntlLocale();
+  const { getTenantColor } = useAppPreferences();
 
   // In MOCK mode, allow generating additional conflicts without changing server data.
   const [localEvents, setLocalEvents] = useState<CalendarEventRow[]>(() => events);
@@ -465,7 +466,7 @@ export function CalendarEventsOverview({ events, tenants }: CalendarEventsOvervi
       <div className="mt-3 flex flex-wrap gap-2">
         {tenants.map((tenant) => {
           const enabled = !disabledTenants.has(tenant);
-          const color = colorForTenant(tenant);
+          const color = getTenantColor(tenant);
           return (
             <button
               aria-pressed={enabled}
@@ -599,8 +600,8 @@ export function CalendarEventsOverview({ events, tenants }: CalendarEventsOvervi
         ) : (
           <div className="mt-3 space-y-2">
             {visibleConflicts.slice(0, 8).map((conflict) => {
-              const aColor = colorForTenant(conflict.a.tenantName);
-              const bColor = colorForTenant(conflict.b.tenantName);
+              const aColor = getTenantColor(conflict.a.tenantName);
+              const bColor = getTenantColor(conflict.b.tenantName);
               const overlap = formatDateTimeRange(conflict.overlapStart, conflict.overlapEnd, intl);
               const eventA = conflictEventToRow(conflict.a);
               const eventB = conflictEventToRow(conflict.b);

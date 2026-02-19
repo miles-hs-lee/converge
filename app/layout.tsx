@@ -2,9 +2,11 @@ import type { Metadata, Viewport } from "next";
 import { Plus_Jakarta_Sans, Noto_Sans_KR } from "next/font/google";
 import "./globals.css";
 import { LocaleProvider } from "@/components/locale-provider";
+import { AppPreferencesProvider } from "@/components/app-preferences-provider";
 import { getServerLocale } from "@/lib/i18n-server";
 import { htmlLang } from "@/lib/i18n";
 import { PwaRegister } from "@/components/pwa-register";
+import { THEME_MODE_STORAGE_KEY } from "@/lib/preferences";
 
 const jakarta = Plus_Jakarta_Sans({
   subsets: ["latin"],
@@ -42,16 +44,35 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: "#0891B2",
-  colorScheme: "light"
+  colorScheme: "light dark"
 };
+
+const themeBootScript = `
+(() => {
+  try {
+    const key = ${JSON.stringify(THEME_MODE_STORAGE_KEY)};
+    const saved = localStorage.getItem(key);
+    const mode = saved === "light" || saved === "dark" || saved === "system" ? saved : "system";
+    const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+    const resolved = mode === "dark" || (mode === "system" && prefersDark) ? "dark" : "light";
+    const root = document.documentElement;
+    root.classList.remove("theme-light", "theme-dark");
+    root.classList.add(resolved === "dark" ? "theme-dark" : "theme-light");
+    root.style.colorScheme = resolved;
+  } catch {}
+})();
+`;
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const locale = await getServerLocale();
   return (
-    <html lang={htmlLang(locale)}>
+    <html className="theme-light" lang={htmlLang(locale)} suppressHydrationWarning>
       <body className={`${jakarta.variable} ${noto.variable}`}>
+        <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
         <PwaRegister />
-        <LocaleProvider initialLocale={locale}>{children}</LocaleProvider>
+        <AppPreferencesProvider>
+          <LocaleProvider initialLocale={locale}>{children}</LocaleProvider>
+        </AppPreferencesProvider>
       </body>
     </html>
   );

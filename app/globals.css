@@ -2,8 +2,25 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
+:root,
+html.theme-light {
   color-scheme: light;
+  --color-bg: 237 244 251;
+  --color-panel: 255 255 255;
+  --color-text: 15 29 51;
+  --color-muted: 90 109 132;
+  --color-accent: 8 145 178;
+  --color-line: 211 228 243;
+}
+
+html.theme-dark {
+  color-scheme: dark;
+  --color-bg: 12 20 35;
+  --color-panel: 16 27 44;
+  --color-text: 224 234 248;
+  --color-muted: 152 170 194;
+  --color-accent: 45 212 191;
+  --color-line: 50 70 96;
 }
 
 * {
@@ -22,9 +39,21 @@ body {
     radial-gradient(circle at 12% 10%, rgba(56, 189, 248, 0.23), transparent 36%),
     radial-gradient(circle at 88% 5%, rgba(125, 211, 252, 0.2), transparent 32%),
     linear-gradient(180deg, #f5faff 0%, #eef6fc 42%, #eaf2fb 100%);
-  color: #0f1d33;
+  color: rgb(var(--color-text));
   font-family: "Plus Jakarta Sans", "Noto Sans KR", sans-serif;
   letter-spacing: -0.01em;
+}
+
+html.theme-dark ::selection {
+  background: rgba(45, 212, 191, 0.33);
+  color: #02131b;
+}
+
+html.theme-dark body {
+  background:
+    radial-gradient(circle at 12% 10%, rgba(15, 120, 136, 0.26), transparent 34%),
+    radial-gradient(circle at 88% 5%, rgba(30, 64, 112, 0.34), transparent 36%),
+    linear-gradient(180deg, #0c1626 0%, #111d31 42%, #162338 100%);
 }
 
 a {
@@ -65,7 +94,7 @@ button {
   }
 
   .input-control {
-    @apply w-full rounded-xl border border-line bg-white px-3 py-2.5 text-sm text-text outline-none transition focus-visible:ring-2 focus-visible:ring-accent/40;
+    @apply w-full rounded-xl border border-line bg-panel px-3 py-2.5 text-sm text-text outline-none transition focus-visible:ring-2 focus-visible:ring-accent/40;
   }
 
   .btn {
@@ -77,7 +106,7 @@ button {
   }
 
   .btn-secondary {
-    @apply border-line bg-white/90 text-slate-700 hover:border-accent/45 hover:bg-white;
+    @apply border-line bg-panel/90 text-text hover:border-accent/45 hover:bg-panel;
   }
 
   .btn-danger {
@@ -85,12 +114,45 @@ button {
   }
 
   .badge {
-    @apply inline-flex items-center rounded-full border border-line bg-white/85 px-3 py-1 text-xs font-medium text-slate-700;
+    @apply inline-flex items-center rounded-full border border-line bg-panel/85 px-3 py-1 text-xs font-medium text-text;
   }
 
   .surface-chip {
-    @apply inline-flex items-center gap-2 rounded-xl border border-line bg-white/80 px-3 py-2 text-xs font-medium text-slate-700;
+    @apply inline-flex items-center gap-2 rounded-xl border border-line bg-panel/80 px-3 py-2 text-xs font-medium text-text;
   }
+}
+
+html.theme-dark .panel-glass {
+  background: linear-gradient(165deg, rgba(18, 31, 51, 0.92), rgba(14, 24, 40, 0.86));
+}
+
+html.theme-dark .card {
+  box-shadow: 0 18px 42px rgba(2, 8, 23, 0.45);
+}
+
+html.theme-dark .input-control::placeholder {
+  color: rgba(152, 170, 194, 0.88);
+}
+
+html.theme-dark :is(.bg-white, .bg-white\/95, .bg-white\/90, .bg-white\/85, .bg-white\/80, .bg-white\/78, .bg-white\/75, .bg-white\/70) {
+  background-color: rgba(16, 27, 44, 0.92) !important;
+}
+
+html.theme-dark :is(.text-slate-700, .text-slate-600) {
+  color: rgb(214 228 246) !important;
+}
+
+html.theme-dark .text-slate-400 {
+  color: rgb(151 173 201) !important;
+}
+
+html.theme-dark .border-slate-200 {
+  border-color: rgba(82, 105, 132, 0.75) !important;
+}
+
+html.theme-dark .bg-slate-100 {
+  background-color: rgba(27, 42, 65, 0.9) !important;
+  color: rgb(151 173 201) !important;
 }
 
 @media (prefers-reduced-motion: reduce) {

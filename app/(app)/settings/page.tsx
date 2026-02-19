@@ -6,6 +6,8 @@ import { mockConnections } from "@/lib/mock-data";
 import { LanguageSelector } from "@/components/language-selector";
 import { PwaInstall } from "@/components/pwa-install";
 import { PushNotificationsPanel } from "@/components/push-notifications-panel";
+import { ThemeSelector } from "@/components/theme-selector";
+import { TenantColorSettings } from "@/components/tenant-color-settings";
 import { getServerLocale } from "@/lib/i18n-server";
 import { intlLocale, t, type I18nKey } from "@/lib/i18n";
 import { requiredMicrosoftGraphScopes } from "@/lib/microsoft";
@@ -68,6 +70,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
   let connections: Array<{
     id: string;
     provider: string;
+    tenant_name: string | null;
     m365_user_principal_name: string | null;
     status: string;
     token_expires_at: string;
@@ -78,6 +81,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
     connections = mockConnections.map((connection) => ({
       id: connection.id,
       provider: "microsoft",
+      tenant_name: connection.tenantName,
       m365_user_principal_name: connection.principalName,
       status: connection.status,
       token_expires_at: connection.tokenExpiresAt,
@@ -86,10 +90,12 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
   } else if (user) {
     const { data } = await supabase
       .from("m365_connections")
-      .select("id,provider,m365_user_principal_name,status,token_expires_at,scopes")
+      .select("id,provider,tenant_name,m365_user_principal_name,status,token_expires_at,scopes")
       .order("updated_at", { ascending: false });
     connections = data ?? [];
   }
+
+  const tenantNames = connections.map((connection) => connection.tenant_name ?? "").filter(Boolean);
 
   return (
     <div className="space-y-4">
@@ -122,6 +128,20 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
         <div className="mt-4">
           <LanguageSelector initialLocale={locale} />
         </div>
+      </section>
+
+      <section className="panel-glass card p-5 md:p-6">
+        <h2 className="title-lg">{tt("settings.appearanceTitle")}</h2>
+        <p className="muted mt-1">{tt("settings.appearanceSubtitle")}</p>
+        <div className="mt-4">
+          <ThemeSelector />
+        </div>
+      </section>
+
+      <section className="panel-glass card p-5 md:p-6">
+        <h2 className="title-lg">{tt("settings.tenantColorsTitle")}</h2>
+        <p className="muted mt-1">{tt("settings.tenantColorsSubtitle")}</p>
+        <TenantColorSettings tenants={tenantNames} />
       </section>
 
       <section className="panel-glass card p-5 md:p-6">

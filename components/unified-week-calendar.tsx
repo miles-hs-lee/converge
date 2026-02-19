@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ModalPortal } from "@/components/modal-portal";
 import { EventDetailModal } from "@/components/event-detail-modal";
-import { colorForTenant } from "@/lib/tenant-colors";
+import { useAppPreferences } from "@/components/app-preferences-provider";
 import { useIntlLocale, useT } from "@/components/locale-provider";
 
 type CalendarEvent = {
@@ -113,6 +113,7 @@ function clamp(n: number, min: number, max: number): number {
 export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProps) {
   const t = useT();
   const intl = useIntlLocale();
+  const { getTenantColor } = useAppPreferences();
 
   const [viewMode, setViewMode] = useState<ViewMode>("week");
   const [offsetDay, setOffsetDay] = useState(0);
@@ -484,7 +485,7 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
 
                     {dayLayout.map((item) => {
                       const { event, startMin, endMin, col, colCount } = item;
-                      const color = colorForTenant(event.tenantName);
+                      const color = getTenantColor(event.tenantName);
                       const top = (startMin / 60) * 56;
                       const height = Math.max(28, ((endMin - startMin) / 60) * 56);
                       const gap = colCount >= 4 ? 4 : colCount === 3 ? 6 : 8;
@@ -572,7 +573,7 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
 
                   <div className="space-y-2">
                     {dailyEvents.slice(0, inlineLimitWeek).map((event) => {
-                      const color = colorForTenant(event.tenantName);
+                      const color = getTenantColor(event.tenantName);
                       return (
                         <button
                           className="w-full rounded-lg border border-line bg-white p-2 text-left transition hover:border-accent/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
@@ -639,7 +640,7 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
                       </p>
                       <div className="mt-2 space-y-1">
                         {dailyEvents.slice(0, inlineLimitMonth).map((event) => {
-                          const color = colorForTenant(event.tenantName);
+                          const color = getTenantColor(event.tenantName);
                           return (
                             <button
                               className="block w-full truncate rounded-md px-1.5 py-1 text-left text-[11px] transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
@@ -779,7 +780,7 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
 
               <div className="mt-4 space-y-2">
                 {moreEvents.map((event) => {
-                  const color = colorForTenant(event.tenantName);
+                  const color = getTenantColor(event.tenantName);
                   return (
                     <button
                       className="w-full rounded-xl border border-line bg-white/90 p-3 text-left transition hover:border-accent/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"

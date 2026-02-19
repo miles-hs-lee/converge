@@ -176,6 +176,18 @@ export type I18nKey =
   | "settings.language.ko"
   | "settings.language.en"
   | "settings.language.ja"
+  | "settings.appearanceTitle"
+  | "settings.appearanceSubtitle"
+  | "settings.theme.system"
+  | "settings.theme.light"
+  | "settings.theme.dark"
+  | "settings.theme.current"
+  | "settings.tenantColorsTitle"
+  | "settings.tenantColorsSubtitle"
+  | "settings.tenantColorsEmpty"
+  | "settings.tenantColorLabel"
+  | "settings.tenantColorReset"
+  | "settings.tenantColorResetAll"
   | "settings.syncTitle"
   | "settings.syncSubtitle"
   | "settings.syncAll"
@@ -470,6 +482,18 @@ const enUS: Dict = {
   "settings.language.ko": "Korean",
   "settings.language.en": "English",
   "settings.language.ja": "Japanese",
+  "settings.appearanceTitle": "Appearance",
+  "settings.appearanceSubtitle": "Switch between light and dark modes to fit your environment.",
+  "settings.theme.system": "System",
+  "settings.theme.light": "Light",
+  "settings.theme.dark": "Dark",
+  "settings.theme.current": "Current theme: {value}",
+  "settings.tenantColorsTitle": "Tenant colors",
+  "settings.tenantColorsSubtitle": "Customize tenant colors used in calendar chips and events.",
+  "settings.tenantColorsEmpty": "No tenant found yet. Connect an account first.",
+  "settings.tenantColorLabel": "Color",
+  "settings.tenantColorReset": "Reset",
+  "settings.tenantColorResetAll": "Reset all",
   "settings.syncTitle": "Manual sync",
   "settings.syncSubtitle": "Sync immediately when needed. Recommended: calendar every 15 minutes, people once daily.",
   "settings.syncAll": "Sync all",
@@ -764,6 +788,18 @@ const koKR: Dict = {
   "settings.language.ko": "한국어",
   "settings.language.en": "영어",
   "settings.language.ja": "일본어",
+  "settings.appearanceTitle": "화면 테마",
+  "settings.appearanceSubtitle": "사용 환경에 맞게 라이트/다크 모드를 전환합니다.",
+  "settings.theme.system": "시스템",
+  "settings.theme.light": "라이트",
+  "settings.theme.dark": "다크",
+  "settings.theme.current": "현재 테마: {value}",
+  "settings.tenantColorsTitle": "테넌트 색상",
+  "settings.tenantColorsSubtitle": "캘린더 일정/칩에 표시되는 테넌트 색상을 직접 설정합니다.",
+  "settings.tenantColorsEmpty": "표시할 테넌트가 없습니다. 먼저 계정을 연결하세요.",
+  "settings.tenantColorLabel": "색상",
+  "settings.tenantColorReset": "초기화",
+  "settings.tenantColorResetAll": "전체 초기화",
   "settings.syncTitle": "수동 동기화",
   "settings.syncSubtitle": "필요할 때 즉시 동기화합니다. 권장 주기: 캘린더 15분, 조직도 1일 1회.",
   "settings.syncAll": "전체 동기화",
@@ -1058,6 +1094,18 @@ const jaJP: Dict = {
   "settings.language.ko": "韓国語",
   "settings.language.en": "英語",
   "settings.language.ja": "日本語",
+  "settings.appearanceTitle": "表示テーマ",
+  "settings.appearanceSubtitle": "利用環境に合わせてライト/ダークモードを切り替えます。",
+  "settings.theme.system": "システム",
+  "settings.theme.light": "ライト",
+  "settings.theme.dark": "ダーク",
+  "settings.theme.current": "現在のテーマ: {value}",
+  "settings.tenantColorsTitle": "テナントカラー",
+  "settings.tenantColorsSubtitle": "カレンダー予定やチップで使うテナント色を設定します。",
+  "settings.tenantColorsEmpty": "表示できるテナントがありません。先にアカウントを接続してください。",
+  "settings.tenantColorLabel": "色",
+  "settings.tenantColorReset": "リセット",
+  "settings.tenantColorResetAll": "すべてリセット",
   "settings.syncTitle": "手動同期",
   "settings.syncSubtitle": "必要時に即時同期します。推奨周期: カレンダー 15分、組織 1日1回。",
   "settings.syncAll": "すべて同期",

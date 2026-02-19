@@ -9,12 +9,12 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        bg: "#edf4fb",
-        panel: "#ffffff",
-        text: "#0f1d33",
-        muted: "#5a6d84",
-        accent: "#0891b2",
-        line: "#d3e4f3"
+        bg: "rgb(var(--color-bg) / <alpha-value>)",
+        panel: "rgb(var(--color-panel) / <alpha-value>)",
+        text: "rgb(var(--color-text) / <alpha-value>)",
+        muted: "rgb(var(--color-muted) / <alpha-value>)",
+        accent: "rgb(var(--color-accent) / <alpha-value>)",
+        line: "rgb(var(--color-line) / <alpha-value>)"
       },
       boxShadow: {
         soft: "0 12px 36px rgba(14, 38, 64, 0.1)"

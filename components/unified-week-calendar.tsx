@@ -14,12 +14,34 @@ type CalendarEvent = {
   location: string;
   sourceAccount: string;
   attendees: string[];
+  attendeeDetails?: Array<{
+    email: string;
+    name?: string | null;
+    type?: string | null;
+    response?: string | null;
+    respondedAt?: string | null;
+  }>;
   organizer?: string;
+  organizerName?: string | null;
   isAllDay?: boolean;
   webLink?: string | null;
   lastModifiedAt?: string | null;
+  createdAt?: string | null;
   calendarName?: string;
   provider?: string;
+  bodyPreview?: string | null;
+  importance?: string | null;
+  sensitivity?: string | null;
+  showAs?: string | null;
+  responseStatus?: string | null;
+  responseTime?: string | null;
+  isCancelled?: boolean;
+  isOnlineMeeting?: boolean;
+  onlineMeetingUrl?: string | null;
+  eventType?: string | null;
+  categories?: string[];
+  timezoneStart?: string | null;
+  timezoneEnd?: string | null;
 };
 
 type UnifiedWeekCalendarProps = {
@@ -901,6 +923,71 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
 
                 <div className="grid gap-3 md:grid-cols-2">
                   <div className="rounded-lg border border-line bg-white/85 p-3 text-sm">
+                    <p className="text-xs uppercase tracking-[0.12em] text-muted">Importance</p>
+                    <p className="mt-1 font-medium">{selectedEvent.importance ?? "-"}</p>
+                  </div>
+
+                  <div className="rounded-lg border border-line bg-white/85 p-3 text-sm">
+                    <p className="text-xs uppercase tracking-[0.12em] text-muted">Sensitivity</p>
+                    <p className="mt-1 font-medium">{selectedEvent.sensitivity ?? "-"}</p>
+                  </div>
+
+                  <div className="rounded-lg border border-line bg-white/85 p-3 text-sm">
+                    <p className="text-xs uppercase tracking-[0.12em] text-muted">Show as</p>
+                    <p className="mt-1 font-medium">{selectedEvent.showAs ?? "-"}</p>
+                  </div>
+
+                  <div className="rounded-lg border border-line bg-white/85 p-3 text-sm">
+                    <p className="text-xs uppercase tracking-[0.12em] text-muted">Event type</p>
+                    <p className="mt-1 font-medium">{selectedEvent.eventType ?? "-"}</p>
+                  </div>
+
+                  <div className="rounded-lg border border-line bg-white/85 p-3 text-sm">
+                    <p className="text-xs uppercase tracking-[0.12em] text-muted">Response status</p>
+                    <p className="mt-1 font-medium">{selectedEvent.responseStatus ?? "-"}</p>
+                  </div>
+
+                  <div className="rounded-lg border border-line bg-white/85 p-3 text-sm">
+                    <p className="text-xs uppercase tracking-[0.12em] text-muted">Response time</p>
+                    <p className="mt-1 font-medium">{selectedEvent.responseTime ? new Date(selectedEvent.responseTime).toLocaleString(intl) : "-"}</p>
+                  </div>
+
+                  <div className="rounded-lg border border-line bg-white/85 p-3 text-sm">
+                    <p className="text-xs uppercase tracking-[0.12em] text-muted">Created</p>
+                    <p className="mt-1 font-medium">{selectedEvent.createdAt ? new Date(selectedEvent.createdAt).toLocaleString(intl) : "-"}</p>
+                  </div>
+
+                  <div className="rounded-lg border border-line bg-white/85 p-3 text-sm">
+                    <p className="text-xs uppercase tracking-[0.12em] text-muted">Online meeting</p>
+                    <p className="mt-1 font-medium">{selectedEvent.isOnlineMeeting ? t("common.yes") : t("common.no")}</p>
+                    {selectedEvent.onlineMeetingUrl ? (
+                      <a
+                        className="mt-1 inline-flex text-xs font-medium text-accent hover:underline"
+                        href={selectedEvent.onlineMeetingUrl}
+                        rel="noreferrer"
+                        target="_blank"
+                      >
+                        Join link
+                      </a>
+                    ) : null}
+                  </div>
+
+                  <div className="rounded-lg border border-line bg-white/85 p-3 text-sm md:col-span-2">
+                    <p className="text-xs uppercase tracking-[0.12em] text-muted">Categories</p>
+                    <p className="mt-1 font-medium">{selectedEvent.categories && selectedEvent.categories.length > 0 ? selectedEvent.categories.join(", ") : "-"}</p>
+                  </div>
+
+                  <div className="rounded-lg border border-line bg-white/85 p-3 text-sm">
+                    <p className="text-xs uppercase tracking-[0.12em] text-muted">Start timezone</p>
+                    <p className="mt-1 font-medium">{selectedEvent.timezoneStart ?? "-"}</p>
+                  </div>
+
+                  <div className="rounded-lg border border-line bg-white/85 p-3 text-sm">
+                    <p className="text-xs uppercase tracking-[0.12em] text-muted">End timezone</p>
+                    <p className="mt-1 font-medium">{selectedEvent.timezoneEnd ?? "-"}</p>
+                  </div>
+
+                  <div className="rounded-lg border border-line bg-white/85 p-3 text-sm">
                     <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("event.lastUpdated")}</p>
                     <p className="mt-1 font-medium">
                       {selectedEvent.lastModifiedAt
@@ -927,9 +1014,27 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
                   </div>
                 </div>
 
+                {selectedEvent.bodyPreview ? (
+                  <div className="rounded-lg border border-line bg-white/85 p-3 text-sm">
+                    <p className="text-xs uppercase tracking-[0.12em] text-muted">Body preview</p>
+                    <p className="mt-1 whitespace-pre-wrap text-sm text-muted">{selectedEvent.bodyPreview}</p>
+                  </div>
+                ) : null}
+
                 <div className="rounded-lg border border-line bg-white/85 p-3 text-sm">
                   <p className="text-xs uppercase tracking-[0.12em] text-muted">{t("event.attendees")}</p>
-                  {selectedEvent.attendees.length > 0 ? (
+                  {selectedEvent.attendeeDetails && selectedEvent.attendeeDetails.length > 0 ? (
+                    <ul className="mt-1 space-y-1">
+                      {selectedEvent.attendeeDetails.map((attendee, index) => (
+                        <li key={`${attendee.email}-${index}`}>
+                          {attendee.name ? `${attendee.name} ` : ""}
+                          {attendee.email}
+                          {attendee.type ? ` · ${attendee.type}` : ""}
+                          {attendee.response ? ` · ${attendee.response}` : ""}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : selectedEvent.attendees.length > 0 ? (
                     <ul className="mt-1 space-y-1">
                       {selectedEvent.attendees.map((attendee) => (
                         <li key={attendee}>{attendee}</li>

@@ -18,25 +18,50 @@ type GraphCalendarListResponse = {
 type GraphEvent = {
   id?: string;
   subject?: string;
+  bodyPreview?: string;
+  importance?: string;
+  sensitivity?: string;
+  categories?: string[];
+  type?: string;
   start?: GraphDateTimeField;
   end?: GraphDateTimeField;
+  originalStartTimeZone?: string;
+  originalEndTimeZone?: string;
   isAllDay?: boolean;
+  isCancelled?: boolean;
+  isOnlineMeeting?: boolean;
+  onlineMeeting?: {
+    joinUrl?: string;
+  };
   location?: {
     displayName?: string;
   };
   organizer?: {
     emailAddress?: {
+      name?: string;
       address?: string;
     };
   };
   attendees?: Array<{
+    type?: string;
+    status?: {
+      response?: string;
+      time?: string;
+    };
     emailAddress?: {
+      name?: string;
       address?: string;
     };
   }>;
   webLink?: string;
+  createdDateTime?: string;
   lastModifiedDateTime?: string;
   showAs?: string;
+  responseStatus?: {
+    response?: string;
+    time?: string;
+  };
+  recurrence?: Record<string, unknown>;
 };
 
 type GraphCalendarEventsResponse = {
@@ -75,6 +100,41 @@ type SyncResult = {
   partial: boolean;
   syncedCount: number;
 };
+
+function upsertCalendarEventsFallbackRows(row: Record<string, unknown>): Record<string, unknown> {
+  return {
+    connection_id: row.connection_id,
+    calendar_source_id: row.calendar_source_id,
+    external_event_id: row.external_event_id,
+    subject: row.subject,
+    start_at: row.start_at,
+    end_at: row.end_at,
+    is_all_day: row.is_all_day,
+    location: row.location,
+    organizer: row.organizer,
+    attendees: row.attendees,
+    web_link: row.web_link,
+    last_modified_external: row.last_modified_external,
+    synced_at: row.synced_at
+  };
+}
+
+function upsertPeopleFallbackRows(row: Record<string, unknown>): Record<string, unknown> {
+  return {
+    connection_id: row.connection_id,
+    external_person_id: row.external_person_id,
+    display_name: row.display_name,
+    mail: row.mail,
+    job_title: row.job_title,
+    department: row.department,
+    office_location: row.office_location,
+    mobile_phone: row.mobile_phone,
+    business_phones: row.business_phones,
+    manager_external_id: row.manager_external_id,
+    raw: row.raw,
+    synced_at: row.synced_at
+  };
+}
 
 function toIso(dateField?: GraphDateTimeField): string | null {
   if (!dateField?.dateTime) {
@@ -194,7 +254,8 @@ export async function syncMicrosoftCalendarSnapshot(params: {
       startDateTime: fromIso,
       endDateTime: toIsoDate,
       $top: "120",
-      $select: "id,subject,start,end,isAllDay,location,organizer,attendees,webLink,lastModifiedDateTime,showAs"
+      $select:
+        "id,subject,bodyPreview,importance,sensitivity,categories,type,start,end,originalStartTimeZone,originalEndTimeZone,isAllDay,isCancelled,isOnlineMeeting,onlineMeeting,location,organizer,attendees,webLink,createdDateTime,lastModifiedDateTime,showAs,responseStatus,recurrence"
     });
 
     const eventsResponse = await fetchGraphJson<GraphCalendarEventsResponse>(
@@ -220,33 +281,69 @@ export async function syncMicrosoftCalendarSnapshot(params: {
       const isAllDay = Boolean(event.isAllDay);
       const endAt = toIso(event.end) ?? fallbackEnd(startAt, isAllDay);
       const attendees = (event.attendees ?? [])
-        .map((attendee) => attendee.emailAddress?.address)
-        .filter((email): email is string => Boolean(email));
+        .map((attendee) => ({
+          email: attendee.emailAddress?.address ?? null,
+          name: attendee.emailAddress?.name ?? null,
+          type: attendee.type ?? null,
+          response: attendee.status?.response ?? null,
+          respondedAt: attendee.status?.time ?? null
+        }))
+        .filter((attendee) => Boolean(attendee.email || attendee.name));
+
+      const organizerEmail = event.organizer?.emailAddress?.address ?? accountEmail;
+      const organizerName = event.organizer?.emailAddress?.name ?? null;
+
+      const responseStatus = event.responseStatus?.response ?? null;
+      const responseTimeRaw = event.responseStatus?.time;
+      const responseTime = responseTimeRaw && Number.isFinite(new Date(responseTimeRaw).getTime()) ? new Date(responseTimeRaw).toISOString() : null;
+      const createdTimeRaw = event.createdDateTime;
+      const createdExternal = createdTimeRaw && Number.isFinite(new Date(createdTimeRaw).getTime()) ? new Date(createdTimeRaw).toISOString() : null;
+      const lastModifiedRaw = event.lastModifiedDateTime;
+      const lastModifiedExternal = lastModifiedRaw && Number.isFinite(new Date(lastModifiedRaw).getTime()) ? new Date(lastModifiedRaw).toISOString() : null;
 
       eventRows.push({
         connection_id: connectionId,
         calendar_source_id: sourceId,
         external_event_id: `${calendar.id}:${event.id}`,
         subject: event.subject ?? "(제목 없음)",
+        body_preview: event.bodyPreview ?? null,
+        importance: event.importance ?? null,
+        sensitivity: event.sensitivity ?? null,
+        categories: event.categories ?? [],
+        event_type: event.type ?? null,
         start_at: startAt,
         end_at: endAt,
+        timezone_start: event.originalStartTimeZone ?? event.start?.timeZone ?? null,
+        timezone_end: event.originalEndTimeZone ?? event.end?.timeZone ?? null,
         is_all_day: isAllDay,
+        is_cancelled: Boolean(event.isCancelled),
+        is_online_meeting: Boolean(event.isOnlineMeeting),
+        online_meeting_url: event.onlineMeeting?.joinUrl ?? null,
+        show_as: event.showAs ?? null,
+        response_status: responseStatus,
+        response_time: responseTime,
         location: event.location?.displayName ?? null,
-        organizer: event.organizer?.emailAddress?.address ?? accountEmail,
+        organizer: organizerEmail,
+        organizer_name: organizerName,
         attendees,
         web_link: event.webLink ?? null,
-        last_modified_external: event.lastModifiedDateTime ?? null,
+        created_external: createdExternal,
+        last_modified_external: lastModifiedExternal,
+        recurrence: event.recurrence ?? {},
+        raw: event,
         synced_at: nowIso
       });
     });
   }
 
   if (eventRows.length > 0) {
-    const { error: eventUpsertError } = await adminClient
-      .from("calendar_events_cache")
-      .upsert(eventRows, { onConflict: "connection_id,external_event_id" });
-    if (eventUpsertError) {
-      return { ok: false, partial: partialFailure, syncedCount: 0 };
+    const eventUpsert = await adminClient.from("calendar_events_cache").upsert(eventRows, { onConflict: "connection_id,external_event_id" });
+    if (eventUpsert.error) {
+      const fallbackRows = eventRows.map(upsertCalendarEventsFallbackRows);
+      const fallbackUpsert = await adminClient.from("calendar_events_cache").upsert(fallbackRows, { onConflict: "connection_id,external_event_id" });
+      if (fallbackUpsert.error) {
+        return { ok: false, partial: partialFailure, syncedCount: 0 };
+      }
     }
   }
 
@@ -289,9 +386,20 @@ export async function syncMicrosoftPeopleSnapshot(params: {
         connection_id: connectionId,
         external_person_id: person.id,
         display_name: person.displayName,
+        given_name: person.givenName ?? null,
+        surname: person.surname ?? null,
+        user_principal_name: person.userPrincipalName ?? null,
         mail: person.mail ?? person.userPrincipalName ?? null,
         job_title: person.jobTitle ?? null,
         department: person.department ?? null,
+        company_name: person.companyName ?? null,
+        employee_id: person.employeeId ?? null,
+        preferred_language: person.preferredLanguage ?? null,
+        city: person.city ?? null,
+        state: person.state ?? null,
+        country: person.country ?? null,
+        user_type: person.userType ?? null,
+        account_enabled: typeof person.accountEnabled === "boolean" ? person.accountEnabled : null,
         office_location: person.officeLocation ?? null,
         mobile_phone: person.mobilePhone ?? null,
         business_phones: person.businessPhones ?? [],
@@ -322,9 +430,20 @@ export async function syncMicrosoftPeopleSnapshot(params: {
       connection_id: connectionId,
       external_person_id: meResponse.data.id,
       display_name: meResponse.data.displayName,
+      given_name: meResponse.data.givenName ?? null,
+      surname: meResponse.data.surname ?? null,
+      user_principal_name: meResponse.data.userPrincipalName ?? null,
       mail: meResponse.data.mail ?? meResponse.data.userPrincipalName ?? null,
       job_title: meResponse.data.jobTitle ?? null,
       department: meResponse.data.department ?? null,
+      company_name: meResponse.data.companyName ?? null,
+      employee_id: meResponse.data.employeeId ?? null,
+      preferred_language: meResponse.data.preferredLanguage ?? null,
+      city: meResponse.data.city ?? null,
+      state: meResponse.data.state ?? null,
+      country: meResponse.data.country ?? null,
+      user_type: meResponse.data.userType ?? null,
+      account_enabled: typeof meResponse.data.accountEnabled === "boolean" ? meResponse.data.accountEnabled : null,
       office_location: meResponse.data.officeLocation ?? null,
       mobile_phone: meResponse.data.mobilePhone ?? null,
       business_phones: meResponse.data.businessPhones ?? [],
@@ -334,12 +453,14 @@ export async function syncMicrosoftPeopleSnapshot(params: {
     });
   }
 
-  const { error: peopleUpsertError } = await adminClient
-    .from("people_cache")
-    .upsert(rows, { onConflict: "connection_id,external_person_id" });
+  const peopleUpsert = await adminClient.from("people_cache").upsert(rows, { onConflict: "connection_id,external_person_id" });
 
-  if (peopleUpsertError) {
-    return { ok: false, partial, syncedCount: 0 };
+  if (peopleUpsert.error) {
+    const fallbackRows = rows.map(upsertPeopleFallbackRows);
+    const fallbackUpsert = await adminClient.from("people_cache").upsert(fallbackRows, { onConflict: "connection_id,external_person_id" });
+    if (fallbackUpsert.error) {
+      return { ok: false, partial, syncedCount: 0 };
+    }
   }
 
   return { ok: true, partial, syncedCount: rows.length };

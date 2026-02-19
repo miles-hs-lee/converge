@@ -58,11 +58,14 @@ export default async function PeoplePage() {
 
     if (user) {
       const { data: connections } = await supabase.from("m365_connections").select("id,provider,tenant_name,m365_user_principal_name");
-      const { data: dbPeople } = await supabase
-        .from("people_cache")
-        .select("id,external_person_id,display_name,mail,job_title,department,office_location,mobile_phone,business_phones,manager_external_id,raw,connection_id")
-        .order("display_name", { ascending: true })
-        .range(0, 4999);
+      const peopleSelectExpanded =
+        "id,external_person_id,display_name,mail,job_title,department,office_location,mobile_phone,business_phones,manager_external_id,given_name,surname,user_principal_name,company_name,employee_id,preferred_language,city,state,country,user_type,account_enabled,raw,connection_id";
+      const peopleSelectFallback =
+        "id,external_person_id,display_name,mail,job_title,department,office_location,mobile_phone,business_phones,manager_external_id,raw,connection_id";
+      const queryPeople = (selectText: string) =>
+        supabase.from("people_cache").select(selectText).order("display_name", { ascending: true }).range(0, 4999);
+      const expandedPeople = await queryPeople(peopleSelectExpanded);
+      const { data: dbPeople } = expandedPeople.error ? await queryPeople(peopleSelectFallback) : expandedPeople;
 
       const tenantByConnection = new Map<string, string>();
       const sourceByConnection = new Map<string, string>();
@@ -73,7 +76,7 @@ export default async function PeoplePage() {
         providerByConnection.set(connection.id, connection.provider ?? "microsoft");
       });
 
-      people = (dbPeople ?? []).map((person) => ({
+      people = ((dbPeople ?? []) as Array<Record<string, any>>).map((person) => ({
         id: person.id,
         displayName: person.display_name,
         mail: person.mail ?? "",
@@ -85,17 +88,19 @@ export default async function PeoplePage() {
         businessPhones: person.business_phones ?? [],
         sourceAccount: sourceByConnection.get(person.connection_id) ?? "",
         provider: providerByConnection.get(person.connection_id) ?? "microsoft",
-        upn: rawString(person.raw, "userPrincipalName"),
+        upn: ("user_principal_name" in person && typeof person.user_principal_name === "string" ? person.user_principal_name : "") || rawString(person.raw, "userPrincipalName"),
         externalPersonId: person.external_person_id,
         managerExternalId: person.manager_external_id ?? "",
-        companyName: rawString(person.raw, "companyName"),
-        employeeId: rawString(person.raw, "employeeId"),
-        preferredLanguage: rawString(person.raw, "preferredLanguage"),
-        city: rawString(person.raw, "city"),
-        state: rawString(person.raw, "state"),
-        country: rawString(person.raw, "country"),
-        userType: rawString(person.raw, "userType"),
-        accountEnabled: rawBoolean(person.raw, "accountEnabled")
+        companyName: ("company_name" in person && typeof person.company_name === "string" ? person.company_name : "") || rawString(person.raw, "companyName"),
+        employeeId: ("employee_id" in person && typeof person.employee_id === "string" ? person.employee_id : "") || rawString(person.raw, "employeeId"),
+        preferredLanguage:
+          ("preferred_language" in person && typeof person.preferred_language === "string" ? person.preferred_language : "") || rawString(person.raw, "preferredLanguage"),
+        city: ("city" in person && typeof person.city === "string" ? person.city : "") || rawString(person.raw, "city"),
+        state: ("state" in person && typeof person.state === "string" ? person.state : "") || rawString(person.raw, "state"),
+        country: ("country" in person && typeof person.country === "string" ? person.country : "") || rawString(person.raw, "country"),
+        userType: ("user_type" in person && typeof person.user_type === "string" ? person.user_type : "") || rawString(person.raw, "userType"),
+        accountEnabled:
+          ("account_enabled" in person && typeof person.account_enabled === "boolean" ? person.account_enabled : null) ?? rawBoolean(person.raw, "accountEnabled")
       }));
     }
   }

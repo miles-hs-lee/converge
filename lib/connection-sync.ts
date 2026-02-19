@@ -1,6 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { serverEnv } from "@/lib/env/server";
-import { getMicrosoftScopeString } from "@/lib/microsoft";
+import { getMicrosoftScopeString, requiredMicrosoftGraphScopes } from "@/lib/microsoft";
 import { syncMicrosoftCalendarSnapshot, syncMicrosoftPeopleSnapshot } from "@/lib/microsoft-sync";
 import { syncGoogleCalendarSnapshot } from "@/lib/google-sync";
 
@@ -98,7 +98,9 @@ function tokenStillValid(tokenExpiresAt: string): boolean {
 }
 
 async function refreshMicrosoftAccessToken(connection: ConnectionRow): Promise<{ ok: true; accessToken: string } | { ok: false; error: string }> {
-  const scope = connection.scopes?.length ? connection.scopes.join(" ") : getMicrosoftScopeString();
+  const mergedScopes = new Set<string>(connection.scopes?.length ? connection.scopes : getMicrosoftScopeString().split(" "));
+  requiredMicrosoftGraphScopes.forEach((scope) => mergedScopes.add(scope));
+  const scope = [...mergedScopes].join(" ");
 
   const response = await fetch(`https://login.microsoftonline.com/${serverEnv.azureTenantId}/oauth2/v2.0/token`, {
     method: "POST",

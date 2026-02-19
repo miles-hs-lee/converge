@@ -148,6 +148,15 @@ Run these SQL migrations in the Supabase SQL editor:
 - `supabase/migrations/0001_init.sql`
 - `supabase/migrations/0002_provider_expansion.sql`
 - `supabase/migrations/0003_web_push.sql`
+- `supabase/migrations/0004_graph_detail_expansion.sql`
+
+Microsoft Graph permission recommendation for richer sync/detail pages:
+
+- `User.Read`
+- `User.Read.All` (directory-wide people profile fields)
+- `Calendars.Read`
+- `Calendars.Read.All` (tenant-wide calendar read scope)
+- `offline_access`
 
 ### Start
 

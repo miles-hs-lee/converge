@@ -8,6 +8,7 @@ import { PwaInstall } from "@/components/pwa-install";
 import { PushNotificationsPanel } from "@/components/push-notifications-panel";
 import { getServerLocale } from "@/lib/i18n-server";
 import { intlLocale, t, type I18nKey } from "@/lib/i18n";
+import { requiredMicrosoftGraphScopes } from "@/lib/microsoft";
 
 const statusMessageKey: Record<string, I18nKey> = {
   oauth_connected: "status.oauth_connected",
@@ -62,6 +63,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
     m365_user_principal_name: string | null;
     status: string;
     token_expires_at: string;
+    scopes: string[] | null;
   }> = [];
 
   if (isMockMode) {
@@ -70,12 +72,13 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
       provider: "microsoft",
       m365_user_principal_name: connection.principalName,
       status: connection.status,
-      token_expires_at: connection.tokenExpiresAt
+      token_expires_at: connection.tokenExpiresAt,
+      scopes: ["User.Read", "User.Read.All", "Calendars.Read", "Calendars.Read.All"]
     }));
   } else if (user) {
     const { data } = await supabase
       .from("m365_connections")
-      .select("id,provider,m365_user_principal_name,status,token_expires_at")
+      .select("id,provider,m365_user_principal_name,status,token_expires_at,scopes")
       .order("updated_at", { ascending: false });
     connections = data ?? [];
   }
@@ -169,6 +172,27 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
                   {connection.provider === "google" ? tt("settings.providerGoogle") : tt("settings.providerMicrosoft")} · {connection.status} ·{" "}
                   {tt("settings.expires")} {new Date(connection.token_expires_at).toLocaleString(intl)}
                 </p>
+                {connection.provider === "microsoft" ? (
+                  <div className="mt-2 space-y-1">
+                    <p className="text-[11px] font-medium text-slate-600">Graph scope check</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {requiredMicrosoftGraphScopes.map((scope) => {
+                        const granted = (connection.scopes ?? []).includes(scope);
+                        return (
+                          <span
+                            className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${granted ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}
+                            key={scope}
+                          >
+                            {scope} · {granted ? "granted" : "missing"}
+                          </span>
+                        );
+                      })}
+                    </div>
+                    {requiredMicrosoftGraphScopes.some((scope) => !(connection.scopes ?? []).includes(scope)) ? (
+                      <p className="text-[11px] text-muted">Missing scopes require reconnecting this account with admin-consented permissions.</p>
+                    ) : null}
+                  </div>
+                ) : null}
               </article>
             ))}
           </div>

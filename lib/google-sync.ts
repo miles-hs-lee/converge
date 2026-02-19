@@ -19,13 +19,24 @@ type GoogleCalendarEvent = {
   id?: string;
   status?: string;
   summary?: string;
+  description?: string;
+  created?: string;
   start?: GoogleEventDateField;
   end?: GoogleEventDateField;
   location?: string;
+  eventType?: string;
+  recurringEventId?: string;
+  hangoutLink?: string;
+  colorId?: string;
+  creator?: {
+    email?: string;
+  };
   organizer?: {
     email?: string;
   };
   attendees?: Array<{
+    displayName?: string;
+    responseStatus?: string;
     email?: string;
   }>;
   htmlLink?: string;
@@ -41,6 +52,24 @@ export type CalendarSyncResult = {
   partial: boolean;
   syncedCount: number;
 };
+
+function upsertCalendarEventsFallbackRows(row: Record<string, unknown>): Record<string, unknown> {
+  return {
+    connection_id: row.connection_id,
+    calendar_source_id: row.calendar_source_id,
+    external_event_id: row.external_event_id,
+    subject: row.subject,
+    start_at: row.start_at,
+    end_at: row.end_at,
+    is_all_day: row.is_all_day,
+    location: row.location,
+    organizer: row.organizer,
+    attendees: row.attendees,
+    web_link: row.web_link,
+    last_modified_external: row.last_modified_external,
+    synced_at: row.synced_at
+  };
+}
 
 function toIso(dateField?: GoogleEventDateField): string | null {
   if (!dateField) {
@@ -171,32 +200,64 @@ export async function syncGoogleCalendarSnapshot(params: {
       }
       const endAt = toIso(event.end) ?? fallbackEnd(startAt, isAllDay);
 
-      const attendees = (event.attendees ?? []).map((attendee) => attendee.email).filter((email): email is string => Boolean(email));
+      const attendees = (event.attendees ?? [])
+        .map((attendee) => ({
+          email: attendee.email ?? null,
+          name: attendee.displayName ?? null,
+          type: "required",
+          response: attendee.responseStatus ?? null,
+          respondedAt: null
+        }))
+        .filter((attendee) => Boolean(attendee.email || attendee.name));
+
+      const createdExternal =
+        event.created && Number.isFinite(new Date(event.created).getTime()) ? new Date(event.created).toISOString() : null;
+      const lastModifiedExternal =
+        event.updated && Number.isFinite(new Date(event.updated).getTime()) ? new Date(event.updated).toISOString() : null;
 
       eventRows.push({
         connection_id: connectionId,
         calendar_source_id: sourceId,
         external_event_id: `${calendar.id}:${event.id}`,
         subject: event.summary ?? "(제목 없음)",
+        body_preview: event.description?.slice(0, 1200) ?? null,
+        importance: "normal",
+        sensitivity: "normal",
+        categories: event.colorId ? [event.colorId] : [],
+        event_type: event.eventType ?? (event.recurringEventId ? "occurrence" : "singleInstance"),
         start_at: startAt,
         end_at: endAt,
+        timezone_start: null,
+        timezone_end: null,
         is_all_day: isAllDay,
+        is_cancelled: event.status === "cancelled",
+        is_online_meeting: Boolean(event.hangoutLink),
+        online_meeting_url: event.hangoutLink ?? null,
+        show_as: null,
+        response_status: null,
+        response_time: null,
         location: event.location ?? null,
         organizer: event.organizer?.email ?? accountEmail,
+        organizer_name: null,
         attendees,
         web_link: event.htmlLink ?? null,
-        last_modified_external: event.updated ?? null,
+        created_external: createdExternal,
+        last_modified_external: lastModifiedExternal,
+        recurrence: {},
+        raw: event,
         synced_at: nowIso
       });
     });
   }
 
   if (eventRows.length > 0) {
-    const { error: eventUpsertError } = await adminClient
-      .from("calendar_events_cache")
-      .upsert(eventRows, { onConflict: "connection_id,external_event_id" });
-    if (eventUpsertError) {
-      return { ok: false, partial: partialFailure, syncedCount: 0 };
+    const eventUpsert = await adminClient.from("calendar_events_cache").upsert(eventRows, { onConflict: "connection_id,external_event_id" });
+    if (eventUpsert.error) {
+      const fallbackRows = eventRows.map(upsertCalendarEventsFallbackRows);
+      const fallbackUpsert = await adminClient.from("calendar_events_cache").upsert(fallbackRows, { onConflict: "connection_id,external_event_id" });
+      if (fallbackUpsert.error) {
+        return { ok: false, partial: partialFailure, syncedCount: 0 };
+      }
     }
   }
 

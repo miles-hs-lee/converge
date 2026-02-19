@@ -4,9 +4,13 @@ export const microsoftScopes = [
   "email",
   "offline_access",
   "User.Read",
+  "User.Read.All",
   "Calendars.Read",
+  "Calendars.Read.All",
   "User.ReadBasic.All"
 ] as const;
+
+export const requiredMicrosoftGraphScopes = ["User.Read.All", "Calendars.Read.All"] as const;
 
 export function getMicrosoftScopeString(): string {
   return microsoftScopes.join(" ");

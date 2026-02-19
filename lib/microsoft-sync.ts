@@ -250,14 +250,16 @@ export async function syncMicrosoftPeopleSnapshot(params: {
 }): Promise<SyncResult> {
   const { accessToken, connectionId, adminClient } = params;
 
+  const MAX_PEOPLE_ROWS = 5000;
+  const MAX_PAGES = 20;
   const rows: Array<Record<string, unknown>> = [];
   const nowIso = new Date().toISOString();
   let partial = false;
   let nextUrl: string | null =
-    "https://graph.microsoft.com/v1.0/users?$top=80&$select=id,displayName,mail,userPrincipalName,jobTitle,department,officeLocation,mobilePhone,businessPhones";
+    "https://graph.microsoft.com/v1.0/users?$top=999&$select=id,displayName,mail,userPrincipalName,jobTitle,department,officeLocation,mobilePhone,businessPhones";
   let pageCount = 0;
 
-  while (nextUrl && rows.length < 300 && pageCount < 5) {
+  while (nextUrl && rows.length < MAX_PEOPLE_ROWS && pageCount < MAX_PAGES) {
     const graphPage: { ok: boolean; data?: GraphUsersResponse } = await fetchGraphJson<GraphUsersResponse>(nextUrl, accessToken);
     if (!graphPage.ok) {
       if (rows.length === 0) {
@@ -291,6 +293,10 @@ export async function syncMicrosoftPeopleSnapshot(params: {
 
     nextUrl = graphPage.data?.["@odata.nextLink"] ?? null;
     pageCount += 1;
+  }
+
+  if (nextUrl) {
+    partial = true;
   }
 
   if (rows.length === 0) {

@@ -37,7 +37,7 @@ export default async function PeoplePage() {
         .from("people_cache")
         .select("id,display_name,mail,job_title,department,office_location,mobile_phone,business_phones,connection_id")
         .order("display_name", { ascending: true })
-        .limit(150);
+        .range(0, 4999);
 
       const tenantByConnection = new Map<string, string>();
       (connections ?? []).forEach((connection) => {

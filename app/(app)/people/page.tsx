@@ -49,6 +49,7 @@ export default async function PeoplePage() {
   let people: PersonRow[] = [];
   let totalPeopleCount = 0;
   let serverSearchEnabled = false;
+  let initialHasMore = false;
 
   if (isMockMode) {
     people = mockPeople;
@@ -65,7 +66,7 @@ export default async function PeoplePage() {
       const connectionIds = (connections ?? []).map((connection) => connection.id);
 
       if (connectionIds.length > 0) {
-        const { count } = await supabase.from("people_cache").select("id", { count: "exact", head: true }).in("connection_id", connectionIds);
+        const { count } = await supabase.from("people_cache").select("id", { count: "planned", head: true }).in("connection_id", connectionIds);
         totalPeopleCount = count ?? 0;
       }
 
@@ -74,7 +75,7 @@ export default async function PeoplePage() {
       const peopleSelectFallback =
         "id,external_person_id,display_name,mail,job_title,department,office_location,mobile_phone,business_phones,manager_external_id,raw,connection_id";
       const queryPeople = (selectText: string) =>
-        supabase.from("people_cache").select(selectText).in("connection_id", connectionIds).order("display_name", { ascending: true }).range(0, 79);
+        supabase.from("people_cache").select(selectText).in("connection_id", connectionIds).order("display_name", { ascending: true }).range(0, 80);
 
       const tenantByConnection = new Map<string, string>();
       const sourceByConnection = new Map<string, string>();
@@ -96,7 +97,10 @@ export default async function PeoplePage() {
         }
       }
 
-      people = resolvedRows.map((person) => ({
+      initialHasMore = resolvedRows.length > 80;
+      const initialRows = initialHasMore ? resolvedRows.slice(0, 80) : resolvedRows;
+
+      people = initialRows.map((person) => ({
         id: person.id,
         displayName: person.display_name,
         mail: person.mail ?? "",
@@ -138,7 +142,7 @@ export default async function PeoplePage() {
       </section>
 
       <section className="panel-glass card p-5 md:p-6">
-        <PeopleSearchPanel people={people} serverSearchEnabled={serverSearchEnabled} />
+        <PeopleSearchPanel initialHasMore={initialHasMore} people={people} serverSearchEnabled={serverSearchEnabled} />
       </section>
     </div>
   );

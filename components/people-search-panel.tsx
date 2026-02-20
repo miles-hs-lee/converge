@@ -39,6 +39,7 @@ type PersonRow = {
 type PeopleSearchPanelProps = {
   people: PersonRow[];
   serverSearchEnabled?: boolean;
+  initialHasMore?: boolean;
 };
 
 const FAVORITES_STORAGE_KEY = "converge:favorites:people";
@@ -107,7 +108,16 @@ function getPrimaryPhone(person: PersonRow): string {
   return candidate ?? person.mobilePhone;
 }
 
-export function PeopleSearchPanel({ people, serverSearchEnabled = false }: PeopleSearchPanelProps) {
+function isGuestPerson(person: PersonRow): boolean {
+  const userType = (person.userType ?? "").trim().toLowerCase();
+  if (userType === "guest") {
+    return true;
+  }
+  const upn = (person.upn ?? "").toLowerCase();
+  return upn.includes("#ext#");
+}
+
+export function PeopleSearchPanel({ people, serverSearchEnabled = false, initialHasMore = false }: PeopleSearchPanelProps) {
   const t = useT();
   const intl = useIntlLocale();
 
@@ -121,11 +131,19 @@ export function PeopleSearchPanel({ people, serverSearchEnabled = false }: Peopl
   const [copiedField, setCopiedField] = useState<"mail" | "phone" | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [serverHasMore, setServerHasMore] = useState(false);
+  const [serverHasMore, setServerHasMore] = useState(initialHasMore);
   const [managerLookupTried, setManagerLookupTried] = useState<Set<string>>(() => new Set());
+  const [includeGuests, setIncludeGuests] = useState(false);
 
   const deferredQuery = useDeferredValue(query.trim());
+  const [debouncedQuery, setDebouncedQuery] = useState(deferredQuery);
   const activePeople = serverSearchEnabled ? loadedPeople : people;
+  const visiblePeople = useMemo(() => {
+    if (includeGuests) {
+      return activePeople;
+    }
+    return activePeople.filter((person) => !isGuestPerson(person));
+  }, [activePeople, includeGuests]);
 
   useEffect(() => {
     setFavoriteIds(readStoredIds(FAVORITES_STORAGE_KEY));
@@ -142,16 +160,23 @@ export function PeopleSearchPanel({ people, serverSearchEnabled = false }: Peopl
 
   useEffect(() => {
     setLoadedPeople(people);
-    setServerHasMore(false);
-  }, [people, serverSearchEnabled]);
+    setServerHasMore(initialHasMore);
+  }, [initialHasMore, people, serverSearchEnabled]);
 
-  async function fetchPeoplePage(params: { offset: number; append: boolean; queryValue: string }) {
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedQuery(deferredQuery);
+    }, 220);
+    return () => window.clearTimeout(timer);
+  }, [deferredQuery]);
+
+  async function fetchPeoplePage(params: { offset: number; append: boolean; queryValue: string; signal?: AbortSignal }) {
     const search = new URLSearchParams({
       q: params.queryValue,
       offset: String(params.offset),
       limit: String(SEARCH_PAGE_SIZE)
     });
-    const response = await fetch(`/api/people/search?${search.toString()}`, { cache: "no-store" });
+    const response = await fetch(`/api/people/search?${search.toString()}`, { cache: "no-store", signal: params.signal });
     if (!response.ok) {
       throw new Error("people_search_failed");
     }
@@ -160,7 +185,14 @@ export function PeopleSearchPanel({ people, serverSearchEnabled = false }: Peopl
       throw new Error("people_search_failed");
     }
 
-    setLoadedPeople((prev) => (params.append ? [...prev, ...json.items.filter((item) => !prev.some((p) => p.id === item.id))] : json.items));
+    setLoadedPeople((prev) => {
+      if (!params.append) {
+        return json.items;
+      }
+      const existing = new Set(prev.map((item) => item.id));
+      const next = json.items.filter((item) => !existing.has(item.id));
+      return next.length > 0 ? [...prev, ...next] : prev;
+    });
     setServerHasMore(Boolean(json.hasMore));
   }
 
@@ -168,32 +200,38 @@ export function PeopleSearchPanel({ people, serverSearchEnabled = false }: Peopl
     if (!serverSearchEnabled) {
       return;
     }
-    let cancelled = false;
+    if (!debouncedQuery && people.length > 0) {
+      setLoadedPeople(people);
+      setServerHasMore(initialHasMore);
+      setLoading(false);
+      return;
+    }
+    const controller = new AbortController();
     setLoading(true);
-    fetchPeoplePage({ offset: 0, append: false, queryValue: deferredQuery })
+    fetchPeoplePage({ offset: 0, append: false, queryValue: debouncedQuery, signal: controller.signal })
       .catch(() => {
-        if (!cancelled) {
+        if (!controller.signal.aborted) {
           setLoadedPeople([]);
           setServerHasMore(false);
         }
       })
       .finally(() => {
-        if (!cancelled) {
+        if (!controller.signal.aborted) {
           setLoading(false);
         }
       });
 
     return () => {
-      cancelled = true;
+      controller.abort();
     };
-  }, [deferredQuery, serverSearchEnabled]);
+  }, [debouncedQuery, initialHasMore, people, serverSearchEnabled]);
 
   const peopleById = useMemo(() => {
-    return new Map(activePeople.map((person) => [person.id, person]));
-  }, [activePeople]);
+    return new Map(visiblePeople.map((person) => [person.id, person]));
+  }, [visiblePeople]);
   const peopleByExternalId = useMemo(() => {
-    return new Map(activePeople.map((person) => [person.externalPersonId, person]));
-  }, [activePeople]);
+    return new Map(visiblePeople.map((person) => [person.externalPersonId, person]));
+  }, [visiblePeople]);
 
   const favoritePeople = useMemo(() => {
     return favoriteIds.map((id) => peopleById.get(id)).filter((item): item is PersonRow => Boolean(item));
@@ -206,17 +244,17 @@ export function PeopleSearchPanel({ people, serverSearchEnabled = false }: Peopl
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (serverSearchEnabled) {
-      return activePeople;
+      return visiblePeople;
     }
 
     if (!q) {
-      return activePeople;
+      return visiblePeople;
     }
 
     const qDigits = digitsOnly(q);
     const wantsPhone = qDigits.length > 0;
 
-    return activePeople.filter((person) => {
+    return visiblePeople.filter((person) => {
       if (wantsPhone) {
         const mobileDigits = digitsOnly(person.mobilePhone);
         const businessDigits = (person.businessPhones ?? []).map((phone) => digitsOnly(phone));
@@ -236,7 +274,7 @@ export function PeopleSearchPanel({ people, serverSearchEnabled = false }: Peopl
         person.employeeId.toLowerCase().includes(q)
       );
     });
-  }, [activePeople, query, serverSearchEnabled]);
+  }, [query, serverSearchEnabled, visiblePeople]);
 
   const sortedByTenant = useMemo(() => {
     return [...filtered].sort((a, b) => {
@@ -338,7 +376,7 @@ export function PeopleSearchPanel({ people, serverSearchEnabled = false }: Peopl
       await fetchPeoplePage({
         offset: loadedPeople.length,
         append: true,
-        queryValue: deferredQuery
+        queryValue: debouncedQuery
       });
     } finally {
       setLoadingMore(false);
@@ -404,21 +442,32 @@ export function PeopleSearchPanel({ people, serverSearchEnabled = false }: Peopl
 
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs text-muted">{t("common.total", { count: filtered.length })}</p>
-        <div className="inline-flex rounded-xl border border-line bg-white p-0.5 text-sm">
+        <div className="flex items-center gap-2">
           <button
-            className={`rounded-lg px-3 py-1.5 font-medium ${sortMode === "default" ? "bg-accent text-white" : "text-slate-700"}`}
-            onClick={() => setSortMode("default")}
+            aria-pressed={includeGuests}
+            className={`badge px-3 py-1.5 text-xs font-medium transition ${includeGuests ? "border-accent/50 bg-accent/10 text-accent" : "bg-white/90 text-muted"}`}
+            onClick={() => setIncludeGuests((prev) => !prev)}
             type="button"
           >
-            {t("people.sort.default")}
+            {t("people.filter.includeGuests")}
           </button>
-          <button
-            className={`rounded-lg px-3 py-1.5 font-medium ${sortMode === "tenant" ? "bg-accent text-white" : "text-slate-700"}`}
-            onClick={() => setSortMode("tenant")}
-            type="button"
-          >
-            {t("people.sort.tenant")}
-          </button>
+
+          <div className="inline-flex rounded-xl border border-line bg-white p-0.5 text-sm">
+            <button
+              className={`rounded-lg px-3 py-1.5 font-medium ${sortMode === "default" ? "bg-accent text-white" : "text-slate-700"}`}
+              onClick={() => setSortMode("default")}
+              type="button"
+            >
+              {t("people.sort.default")}
+            </button>
+            <button
+              className={`rounded-lg px-3 py-1.5 font-medium ${sortMode === "tenant" ? "bg-accent text-white" : "text-slate-700"}`}
+              onClick={() => setSortMode("tenant")}
+              type="button"
+            >
+              {t("people.sort.tenant")}
+            </button>
+          </div>
         </div>
       </div>
 

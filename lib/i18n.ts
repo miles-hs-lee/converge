@@ -287,6 +287,7 @@ export type I18nKey =
   | "people.searchPlaceholder"
   | "people.sort.default"
   | "people.sort.tenant"
+  | "people.filter.includeGuests"
   | "people.favoritesTitle"
   | "people.favoritesHint"
   | "people.recentsTitle"
@@ -607,6 +608,7 @@ const enUS: Dict = {
   "people.searchPlaceholder": "Search name, email, phone, department, tenant",
   "people.sort.default": "Default",
   "people.sort.tenant": "Group by tenant",
+  "people.filter.includeGuests": "Include guests",
   "people.favoritesTitle": "Favorite people",
   "people.favoritesHint": "Add favorites using the star button in the profile popup.",
   "people.recentsTitle": "Recently viewed",
@@ -926,6 +928,7 @@ const koKR: Dict = {
   "people.searchPlaceholder": "이름, 이메일, 전화번호, 부서, 테넌트 검색",
   "people.sort.default": "기본",
   "people.sort.tenant": "테넌트 정렬",
+  "people.filter.includeGuests": "Guest 계정 포함",
   "people.favoritesTitle": "즐겨찾기 직원",
   "people.favoritesHint": "직원 상세에서 별 버튼으로 즐겨찾기를 추가하세요.",
   "people.recentsTitle": "최근 조회 직원",
@@ -1245,6 +1248,7 @@ const jaJP: Dict = {
   "people.searchPlaceholder": "名前、メール、電話、部署、テナントで検索",
   "people.sort.default": "既定",
   "people.sort.tenant": "テナント別",
+  "people.filter.includeGuests": "ゲストを含む",
   "people.favoritesTitle": "お気に入り",
   "people.favoritesHint": "プロフィールの星ボタンでお気に入りに追加できます。",
   "people.recentsTitle": "最近見た人",

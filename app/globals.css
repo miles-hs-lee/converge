@@ -120,6 +120,20 @@ button {
   .surface-chip {
     @apply inline-flex items-center gap-2 rounded-xl border border-line bg-panel/80 px-3 py-2 text-xs font-medium text-text;
   }
+
+  .sync-progress-track {
+    @apply relative h-2 w-full overflow-hidden rounded-full border border-line bg-panel/80;
+  }
+
+  .sync-progress-indeterminate {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 34%;
+    border-radius: 9999px;
+    background: linear-gradient(90deg, rgba(8, 145, 178, 0.35), rgba(8, 145, 178, 0.92), rgba(8, 145, 178, 0.35));
+    animation: sync-progress-indeterminate 1.2s ease-in-out infinite;
+    will-change: transform;
+  }
 }
 
 html.theme-dark .panel-glass {
@@ -163,5 +177,15 @@ html.theme-dark .bg-slate-100 {
     animation-iteration-count: 1 !important;
     transition-duration: 1ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+@keyframes sync-progress-indeterminate {
+  0% {
+    transform: translateX(-120%);
+  }
+
+  100% {
+    transform: translateX(320%);
   }
 }

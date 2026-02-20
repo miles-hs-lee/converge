@@ -8,6 +8,7 @@ import { PwaInstall } from "@/components/pwa-install";
 import { PushNotificationsPanel } from "@/components/push-notifications-panel";
 import { ThemeSelector } from "@/components/theme-selector";
 import { TenantColorSettings } from "@/components/tenant-color-settings";
+import { ManualSyncForm } from "@/components/manual-sync-form";
 import { getServerLocale } from "@/lib/i18n-server";
 import { intlLocale, t, type I18nKey } from "@/lib/i18n";
 import { requiredMicrosoftGraphScopes } from "@/lib/microsoft";
@@ -175,26 +176,16 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
           </p>
         ) : null}
         {user ? (
-          <div className="mt-4 flex flex-wrap gap-2">
-            <form action={manualSyncAction}>
-              <input name="mode" type="hidden" value="all" />
-              <button className="btn btn-primary" type="submit">
-                {tt("settings.syncAll")}
-              </button>
-            </form>
-            <form action={manualSyncAction}>
-              <input name="mode" type="hidden" value="calendar" />
-              <button className="btn btn-secondary" type="submit">
-                {tt("settings.syncCalendar")}
-              </button>
-            </form>
-            <form action={manualSyncAction}>
-              <input name="mode" type="hidden" value="people" />
-              <button className="btn btn-secondary" type="submit">
-                {tt("settings.syncPeople")}
-              </button>
-            </form>
-          </div>
+          <ManualSyncForm
+            action={manualSyncAction}
+            labels={{
+              syncAll: tt("settings.syncAll"),
+              syncCalendar: tt("settings.syncCalendar"),
+              syncPeople: tt("settings.syncPeople"),
+              syncing: tt("settings.syncing"),
+              progressHint: tt("settings.syncProgressHint")
+            }}
+          />
         ) : (
           <p className="mt-3 text-sm text-muted">{tt("settings.connectionsLoginRequired")}</p>
         )}

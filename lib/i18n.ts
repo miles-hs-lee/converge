@@ -193,6 +193,8 @@ export type I18nKey =
   | "settings.syncAll"
   | "settings.syncCalendar"
   | "settings.syncPeople"
+  | "settings.syncing"
+  | "settings.syncProgressHint"
   | "settings.removeConnection"
   | "pwa.title"
   | "pwa.subtitle"
@@ -504,6 +506,8 @@ const enUS: Dict = {
   "settings.syncAll": "Sync all",
   "settings.syncCalendar": "Sync calendar",
   "settings.syncPeople": "Sync people",
+  "settings.syncing": "Sync in progress...",
+  "settings.syncProgressHint": "Depending on connected accounts, this can take up to about 20-40 seconds.",
   "settings.removeConnection": "Remove",
   "pwa.title": "Install app",
   "pwa.subtitle": "Install Converge for faster launch and an app-like experience.",
@@ -815,6 +819,8 @@ const koKR: Dict = {
   "settings.syncAll": "전체 동기화",
   "settings.syncCalendar": "캘린더 동기화",
   "settings.syncPeople": "조직도 동기화",
+  "settings.syncing": "동기화 진행 중...",
+  "settings.syncProgressHint": "연결 계정 수에 따라 최대 20~40초 정도 걸릴 수 있습니다.",
   "settings.removeConnection": "연결 삭제",
   "pwa.title": "앱 설치",
   "pwa.subtitle": "Converge를 홈 화면에 설치해서 더 빠르게 실행하고 앱처럼 사용하세요.",
@@ -1126,6 +1132,8 @@ const jaJP: Dict = {
   "settings.syncAll": "すべて同期",
   "settings.syncCalendar": "カレンダー同期",
   "settings.syncPeople": "組織同期",
+  "settings.syncing": "同期を実行中...",
+  "settings.syncProgressHint": "接続アカウント数によっては最大20〜40秒ほどかかる場合があります。",
   "settings.removeConnection": "接続を削除",
   "pwa.title": "アプリをインストール",
   "pwa.subtitle": "Converge をインストールして、より速く起動しアプリのように使えます。",

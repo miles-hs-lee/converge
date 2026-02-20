@@ -57,7 +57,7 @@ function parseAttendeeData(raw: unknown): { attendeeEmails: string[]; attendeeDe
   return { attendeeEmails, attendeeDetails };
 }
 
-export default async function CalendarPage() {
+export default async function AlertsPage() {
   const locale = await getServerLocale();
   const tt = (key: Parameters<typeof t>[1], vars?: Parameters<typeof t>[2]) => t(locale, key, vars);
 
@@ -128,37 +128,40 @@ export default async function CalendarPage() {
       events = ((dbEvents ?? []) as Array<Record<string, any>>).map((event) => {
         const { attendeeEmails, attendeeDetails } = parseAttendeeData(event.attendees);
         return {
-        id: event.id,
-        tenantName: tenantByConnection.get(event.connection_id) ?? "Connected Tenant",
-        subject: event.subject ?? tt("common.untitled"),
-        startAt: event.start_at,
-        endAt: event.end_at,
-        location: event.location ?? tt("common.locationUnknown"),
-        sourceAccount: accountByConnection.get(event.connection_id) ?? event.organizer ?? tt("common.unknownAccount"),
-        attendees: attendeeEmails,
-        attendeeDetails,
-        organizer: event.organizer ?? accountByConnection.get(event.connection_id) ?? tt("common.unknownAccount"),
-        organizerName: "organizer_name" in event && typeof event.organizer_name === "string" ? event.organizer_name : null,
-        isAllDay: Boolean(event.is_all_day),
-        webLink: event.web_link ?? null,
-        lastModifiedAt: event.last_modified_external ?? null,
-        createdAt: "created_external" in event && typeof event.created_external === "string" ? event.created_external : null,
-        calendarName: sourceNameById.get(event.calendar_source_id) ?? "Calendar",
-        provider: providerByConnection.get(event.connection_id) ?? "microsoft",
-        bodyPreview: "body_preview" in event && typeof event.body_preview === "string" ? event.body_preview : null,
-        importance: "importance" in event && typeof event.importance === "string" ? event.importance : null,
-        sensitivity: "sensitivity" in event && typeof event.sensitivity === "string" ? event.sensitivity : null,
-        showAs: "show_as" in event && typeof event.show_as === "string" ? event.show_as : null,
-        responseStatus: "response_status" in event && typeof event.response_status === "string" ? event.response_status : null,
-        responseTime: "response_time" in event && typeof event.response_time === "string" ? event.response_time : null,
-        isCancelled: "is_cancelled" in event ? Boolean(event.is_cancelled) : false,
-        isOnlineMeeting: "is_online_meeting" in event ? Boolean(event.is_online_meeting) : false,
-        onlineMeetingUrl: "online_meeting_url" in event && typeof event.online_meeting_url === "string" ? event.online_meeting_url : null,
-        eventType: "event_type" in event && typeof event.event_type === "string" ? event.event_type : null,
-        categories: "categories" in event && Array.isArray(event.categories) ? event.categories.filter((v: unknown): v is string => typeof v === "string") : [],
-        timezoneStart: "timezone_start" in event && typeof event.timezone_start === "string" ? event.timezone_start : null,
-        timezoneEnd: "timezone_end" in event && typeof event.timezone_end === "string" ? event.timezone_end : null
-      };
+          id: event.id,
+          tenantName: tenantByConnection.get(event.connection_id) ?? "Connected Tenant",
+          subject: event.subject ?? tt("common.untitled"),
+          startAt: event.start_at,
+          endAt: event.end_at,
+          location: event.location ?? tt("common.locationUnknown"),
+          sourceAccount: accountByConnection.get(event.connection_id) ?? event.organizer ?? tt("common.unknownAccount"),
+          attendees: attendeeEmails,
+          attendeeDetails,
+          organizer: event.organizer ?? accountByConnection.get(event.connection_id) ?? tt("common.unknownAccount"),
+          organizerName: "organizer_name" in event && typeof event.organizer_name === "string" ? event.organizer_name : null,
+          isAllDay: Boolean(event.is_all_day),
+          webLink: event.web_link ?? null,
+          lastModifiedAt: event.last_modified_external ?? null,
+          createdAt: "created_external" in event && typeof event.created_external === "string" ? event.created_external : null,
+          calendarName: sourceNameById.get(event.calendar_source_id) ?? "Calendar",
+          provider: providerByConnection.get(event.connection_id) ?? "microsoft",
+          bodyPreview: "body_preview" in event && typeof event.body_preview === "string" ? event.body_preview : null,
+          importance: "importance" in event && typeof event.importance === "string" ? event.importance : null,
+          sensitivity: "sensitivity" in event && typeof event.sensitivity === "string" ? event.sensitivity : null,
+          showAs: "show_as" in event && typeof event.show_as === "string" ? event.show_as : null,
+          responseStatus: "response_status" in event && typeof event.response_status === "string" ? event.response_status : null,
+          responseTime: "response_time" in event && typeof event.response_time === "string" ? event.response_time : null,
+          isCancelled: "is_cancelled" in event ? Boolean(event.is_cancelled) : false,
+          isOnlineMeeting: "is_online_meeting" in event ? Boolean(event.is_online_meeting) : false,
+          onlineMeetingUrl: "online_meeting_url" in event && typeof event.online_meeting_url === "string" ? event.online_meeting_url : null,
+          eventType: "event_type" in event && typeof event.event_type === "string" ? event.event_type : null,
+          categories:
+            "categories" in event && Array.isArray(event.categories)
+              ? event.categories.filter((v: unknown): v is string => typeof v === "string")
+              : [],
+          timezoneStart: "timezone_start" in event && typeof event.timezone_start === "string" ? event.timezone_start : null,
+          timezoneEnd: "timezone_end" in event && typeof event.timezone_end === "string" ? event.timezone_end : null
+        };
       });
 
       tenants = [...new Set((connections ?? []).map((connection) => connection.tenant_name ?? "Connected Tenant"))];
@@ -171,8 +174,8 @@ export default async function CalendarPage() {
       <section className="panel-glass card p-5 md:p-6">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h1 className="title-xl">{tt("calendar.title")}</h1>
-            <p className="muted mt-1">{tt("calendar.subtitle")}</p>
+            <h1 className="title-xl">{tt("alerts.title")}</h1>
+            <p className="muted mt-1">{tt("alerts.subtitle")}</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <span className="surface-chip">{tt("calendar.connectedTenants", { count: tenants.length })}</span>
@@ -182,7 +185,7 @@ export default async function CalendarPage() {
       </section>
 
       <section className="panel-glass card p-5 md:p-6">
-        <CalendarEventsOverview events={events} showConflicts={false} showRangeOverview={false} tenants={tenants} />
+        <CalendarEventsOverview events={events} showCalendar={false} showRangeOverview={false} tenants={tenants} />
       </section>
     </div>
   );

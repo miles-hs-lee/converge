@@ -55,6 +55,9 @@ export type CalendarAttendee = {
 type CalendarEventsOverviewProps = {
   events: CalendarEventRow[];
   tenants: string[];
+  showCalendar?: boolean;
+  showRangeOverview?: boolean;
+  showConflicts?: boolean;
 };
 
 type EventVisibilityFilters = {
@@ -207,7 +210,13 @@ function formatDateTimeRange(startIso: string, endIso: string, intl: string): st
   })} - ${end.toLocaleString(intl, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}`;
 }
 
-export function CalendarEventsOverview({ events, tenants }: CalendarEventsOverviewProps) {
+export function CalendarEventsOverview({
+  events,
+  tenants,
+  showCalendar = true,
+  showRangeOverview = true,
+  showConflicts = true
+}: CalendarEventsOverviewProps) {
   const t = useT();
   const intl = useIntlLocale();
   const { getTenantColor } = useAppPreferences();
@@ -263,10 +272,10 @@ export function CalendarEventsOverview({ events, tenants }: CalendarEventsOvervi
     return new Map(localEvents.map((event) => [event.id, event]));
   }, [localEvents]);
 
-  const nowTs = Date.now();
-  const rangeMs = rangeDays * 24 * 60 * 60 * 1000;
-
   const pastEvents = useMemo(() => {
+    if (!showRangeOverview) return [];
+    const nowTs = Date.now();
+    const rangeMs = rangeDays * 24 * 60 * 60 * 1000;
     return [...filteredEvents]
       .filter((event) => {
         const end = new Date(event.endAt).getTime();
@@ -274,9 +283,12 @@ export function CalendarEventsOverview({ events, tenants }: CalendarEventsOvervi
       })
       .sort((a, b) => new Date(b.startAt).getTime() - new Date(a.startAt).getTime())
       .slice(0, 8);
-  }, [filteredEvents, nowTs, rangeMs]);
+  }, [filteredEvents, rangeDays, showRangeOverview]);
 
   const upcomingEvents = useMemo(() => {
+    if (!showRangeOverview) return [];
+    const nowTs = Date.now();
+    const rangeMs = rangeDays * 24 * 60 * 60 * 1000;
     return [...filteredEvents]
       .filter((event) => {
         const start = new Date(event.startAt).getTime();
@@ -284,15 +296,17 @@ export function CalendarEventsOverview({ events, tenants }: CalendarEventsOvervi
       })
       .sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime())
       .slice(0, 8);
-  }, [filteredEvents, nowTs, rangeMs]);
+  }, [filteredEvents, rangeDays, showRangeOverview]);
 
   const conflictEvents = useMemo(() => {
+    if (!showConflicts) return [];
     // Conflicts should not be affected by search query; only the tenant toggles.
     return visibilityFilteredEvents.filter((event) => !disabledTenants.has(event.tenantName));
-  }, [disabledTenants, visibilityFilteredEvents]);
+  }, [disabledTenants, showConflicts, visibilityFilteredEvents]);
   const deferredConflictEvents = useDeferredValue(conflictEvents);
 
   const conflicts = useMemo(() => {
+    if (!showConflicts) return [];
     return detectTenantConflicts(
       deferredConflictEvents.map((event) => ({
         id: event.id,
@@ -304,7 +318,7 @@ export function CalendarEventsOverview({ events, tenants }: CalendarEventsOvervi
         sourceAccount: event.sourceAccount
       }))
     );
-  }, [deferredConflictEvents]);
+  }, [deferredConflictEvents, showConflicts]);
 
   useEffect(() => {
     setLocalEvents(events);
@@ -315,7 +329,10 @@ export function CalendarEventsOverview({ events, tenants }: CalendarEventsOvervi
     return safeParseSet(localStorage.getItem("converge_conflicts_dismissed"));
   });
 
-  const visibleConflicts = useMemo(() => conflicts.filter((c) => !dismissedKeys.has(c.key)), [conflicts, dismissedKeys]);
+  const visibleConflicts = useMemo(() => {
+    if (!showConflicts) return [];
+    return conflicts.filter((c) => !dismissedKeys.has(c.key));
+  }, [conflicts, dismissedKeys, showConflicts]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -331,6 +348,7 @@ export function CalendarEventsOverview({ events, tenants }: CalendarEventsOvervi
   }, []);
 
   useEffect(() => {
+    if (!showConflicts) return;
     if (typeof window === "undefined") return;
     const stored = localStorage.getItem("converge_notifications_enabled");
     setNotificationsEnabled(stored === "true");
@@ -341,9 +359,10 @@ export function CalendarEventsOverview({ events, tenants }: CalendarEventsOvervi
     }
     setPermissionLabel(String(getNotificationPermissionSafe()));
     setLastSentIso(localStorage.getItem("converge_notifications_last_sent"));
-  }, []);
+  }, [showConflicts]);
 
   useEffect(() => {
+    if (!showConflicts) return;
     if (typeof window === "undefined") return;
 
     const seen = safeParseSet(localStorage.getItem("converge_conflicts_seen"));
@@ -382,7 +401,7 @@ export function CalendarEventsOverview({ events, tenants }: CalendarEventsOvervi
           end: overlapEnd
         });
 
-        void sendPwaNotification({ title, body, url: "/calendar", tag: "converge-conflict" }).then((res) => {
+        void sendPwaNotification({ title, body, url: "/alerts", tag: "converge-conflict" }).then((res) => {
           if (res.ok && typeof window !== "undefined") {
             const nowIso = new Date().toISOString();
             localStorage.setItem("converge_notifications_last_sent", nowIso);
@@ -395,7 +414,7 @@ export function CalendarEventsOverview({ events, tenants }: CalendarEventsOvervi
     }
 
     return () => window.clearTimeout(timer);
-  }, [intl, notificationsEnabled, t, visibleConflicts]);
+  }, [intl, notificationsEnabled, showConflicts, t, visibleConflicts]);
 
   async function enableNotifications() {
     if (typeof window === "undefined" || typeof window.Notification === "undefined") {
@@ -621,9 +640,10 @@ export function CalendarEventsOverview({ events, tenants }: CalendarEventsOvervi
         })}
       </div>
 
-      <UnifiedWeekCalendar events={filteredEvents} tenants={enabledTenants} />
+      {showCalendar ? <UnifiedWeekCalendar events={filteredEvents} tenants={enabledTenants} /> : null}
 
-      <section className="panel-glass card mt-5 p-5">
+      {showRangeOverview ? (
+        <section className="panel-glass card mt-5 p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="title-lg">{t("calendar.rangeTitle")}</h2>
@@ -668,9 +688,11 @@ export function CalendarEventsOverview({ events, tenants }: CalendarEventsOvervi
             title={t("calendar.upcoming")}
           />
         </div>
-      </section>
+        </section>
+      ) : null}
 
-      <section className="mt-5 rounded-2xl border border-line bg-white/85 p-4">
+      {showConflicts ? (
+        <section className="mt-5 rounded-2xl border border-line bg-white/85 p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h3 className="text-sm font-semibold tracking-tight">{t("alerts.title")}</h3>
@@ -691,7 +713,7 @@ export function CalendarEventsOverview({ events, tenants }: CalendarEventsOvervi
               onClick={async () => {
                 const title = "Converge";
                 const body = t("alerts.test");
-                const res = await sendPwaNotification({ title, body, url: "/calendar", tag: "converge-test" });
+                const res = await sendPwaNotification({ title, body, url: "/alerts", tag: "converge-test" });
                 if (res.ok && typeof window !== "undefined") {
                   const nowIso = new Date().toISOString();
                   localStorage.setItem("converge_notifications_last_sent", nowIso);
@@ -784,7 +806,8 @@ export function CalendarEventsOverview({ events, tenants }: CalendarEventsOvervi
             {visibleConflicts.length > 8 ? <p className="muted text-xs">{t("common.more", { count: visibleConflicts.length - 8 })}</p> : null}
           </div>
         )}
-      </section>
+        </section>
+      ) : null}
 
       {hovered ? (
         <ModalPortal>

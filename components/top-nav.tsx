@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Route } from "next";
-import { CalendarDays, Search, Settings, LogOut } from "lucide-react";
+import { CalendarDays, Bell, Search, Settings, LogOut } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { signOutAction } from "@/app/(app)/actions";
 import { isMockMode } from "@/lib/mock-mode";
@@ -12,8 +12,9 @@ export async function TopNav() {
   const locale = await getServerLocale();
   const tt = (key: Parameters<typeof t>[1]) => t(locale, key);
 
-  const tabs: Array<{ href: Route; label: string; icon: typeof CalendarDays }> = [
+  const tabs: Array<{ href: string; label: string; icon: typeof CalendarDays }> = [
     { href: "/calendar", label: tt("nav.calendar"), icon: CalendarDays },
+    { href: "/alerts", label: tt("nav.alerts"), icon: Bell },
     { href: "/people", label: tt("nav.people"), icon: Search },
     { href: "/settings", label: tt("nav.settings"), icon: Settings }
   ];
@@ -35,7 +36,7 @@ export async function TopNav() {
           </div>
 
           <nav className="order-3 w-full md:order-2 md:w-auto">
-            <div className="grid grid-cols-3 gap-2 rounded-xl border border-line bg-white/85 p-1">
+            <div className="grid grid-cols-4 gap-2 rounded-xl border border-line bg-white/85 p-1">
               {tabs.map((tab) => {
                 const Icon = tab.icon;
                 const testId = `nav-tab-${String(tab.href).replace(/^\//, "")}`;
@@ -43,7 +44,7 @@ export async function TopNav() {
                   <Link
                     className="inline-flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-[13px] font-medium text-slate-700 transition hover:bg-accent/10 hover:text-accent sm:gap-2 sm:px-3 sm:text-sm"
                     data-testid={testId}
-                    href={tab.href}
+                    href={tab.href as Route}
                     key={tab.href}
                   >
                     <Icon size={14} />

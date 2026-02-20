@@ -157,7 +157,8 @@ export default async function CalendarPage() {
         eventType: "event_type" in event && typeof event.event_type === "string" ? event.event_type : null,
         categories: "categories" in event && Array.isArray(event.categories) ? event.categories.filter((v: unknown): v is string => typeof v === "string") : [],
         timezoneStart: "timezone_start" in event && typeof event.timezone_start === "string" ? event.timezone_start : null,
-        timezoneEnd: "timezone_end" in event && typeof event.timezone_end === "string" ? event.timezone_end : null
+        timezoneEnd: "timezone_end" in event && typeof event.timezone_end === "string" ? event.timezone_end : null,
+        detailLoaded: true
       };
       });
 

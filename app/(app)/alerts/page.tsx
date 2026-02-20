@@ -1,61 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
 import { isMockMode } from "@/lib/mock-mode";
 import { mockCalendarEvents, mockConnections } from "@/lib/mock-data";
-import { CalendarEventsOverview, type CalendarAttendee, type CalendarEventRow } from "@/components/calendar-events-overview";
+import { CalendarEventsOverview, type CalendarEventRow } from "@/components/calendar-events-overview";
 import { CalendarEntrySync } from "@/components/calendar-entry-sync";
 import { getServerLocale } from "@/lib/i18n-server";
 import { t } from "@/lib/i18n";
-
-function parseAttendeeData(raw: unknown): { attendeeEmails: string[]; attendeeDetails: CalendarAttendee[] } {
-  if (!Array.isArray(raw)) {
-    return { attendeeEmails: [], attendeeDetails: [] };
-  }
-
-  const attendeeDetails = raw
-    .map((item): CalendarAttendee | null => {
-      if (typeof item === "string") {
-        return { email: item };
-      }
-      if (typeof item === "object" && item && "emailAddress" in item) {
-        const attendee = item as {
-          type?: string;
-          status?: { response?: string; time?: string };
-          emailAddress?: { address?: string; name?: string };
-        };
-        const address = attendee.emailAddress?.address;
-        if (!address) return null;
-        return {
-          email: address,
-          name: attendee.emailAddress?.name ?? null,
-          type: attendee.type ?? null,
-          response: attendee.status?.response ?? null,
-          respondedAt: attendee.status?.time ?? null
-        };
-      }
-      if (typeof item === "object" && item) {
-        const attendee = item as {
-          email?: string;
-          name?: string;
-          type?: string;
-          response?: string;
-          respondedAt?: string;
-        };
-        if (!attendee.email) return null;
-        return {
-          email: attendee.email,
-          name: attendee.name ?? null,
-          type: attendee.type ?? null,
-          response: attendee.response ?? null,
-          respondedAt: attendee.respondedAt ?? null
-        };
-      }
-      return null;
-    })
-    .filter((item): item is CalendarAttendee => Boolean(item?.email));
-
-  const attendeeEmails = attendeeDetails.map((attendee) => attendee.email);
-  return { attendeeEmails, attendeeDetails };
-}
 
 export default async function AlertsPage() {
   const locale = await getServerLocale();
@@ -92,9 +41,8 @@ export default async function AlertsPage() {
           ? { data: [] as Array<{ id: string; name: string }> }
           : await supabase.from("calendar_sources").select("id,name").in("connection_id", connectionIds);
 
-      const eventSelectExpanded =
-        "id,subject,start_at,end_at,is_all_day,location,connection_id,organizer,organizer_name,attendees,web_link,last_modified_external,created_external,calendar_source_id,body_preview,importance,sensitivity,show_as,response_status,response_time,is_cancelled,is_online_meeting,online_meeting_url,event_type,categories,timezone_start,timezone_end";
-      const eventSelectFallback = "id,subject,start_at,end_at,is_all_day,location,connection_id,organizer,attendees,web_link,last_modified_external,calendar_source_id";
+      const eventSelectSummary = "id,subject,start_at,end_at,is_all_day,location,connection_id,organizer,calendar_source_id";
+      const eventSelectFallback = "id,subject,start_at,end_at,location,connection_id,organizer,calendar_source_id";
       const queryEvents = (selectText: string) => {
         let query = supabase
           .from("calendar_events_cache")
@@ -109,8 +57,8 @@ export default async function AlertsPage() {
         }
         return query;
       };
-      const expandedResult = connectionIds.length === 0 ? { data: [] as Array<Record<string, any>>, error: null } : await queryEvents(eventSelectExpanded);
-      const { data: dbEvents } = expandedResult.error ? await queryEvents(eventSelectFallback) : expandedResult;
+      const summaryResult = connectionIds.length === 0 ? { data: [] as Array<Record<string, any>>, error: null } : await queryEvents(eventSelectSummary);
+      const { data: dbEvents } = summaryResult.error ? await queryEvents(eventSelectFallback) : summaryResult;
 
       const tenantByConnection = new Map<string, string>();
       const accountByConnection = new Map<string, string>();
@@ -126,7 +74,6 @@ export default async function AlertsPage() {
       });
 
       events = ((dbEvents ?? []) as Array<Record<string, any>>).map((event) => {
-        const { attendeeEmails, attendeeDetails } = parseAttendeeData(event.attendees);
         return {
           id: event.id,
           tenantName: tenantByConnection.get(event.connection_id) ?? "Connected Tenant",
@@ -135,32 +82,30 @@ export default async function AlertsPage() {
           endAt: event.end_at,
           location: event.location ?? tt("common.locationUnknown"),
           sourceAccount: accountByConnection.get(event.connection_id) ?? event.organizer ?? tt("common.unknownAccount"),
-          attendees: attendeeEmails,
-          attendeeDetails,
+          attendees: [],
+          attendeeDetails: [],
           organizer: event.organizer ?? accountByConnection.get(event.connection_id) ?? tt("common.unknownAccount"),
-          organizerName: "organizer_name" in event && typeof event.organizer_name === "string" ? event.organizer_name : null,
-          isAllDay: Boolean(event.is_all_day),
-          webLink: event.web_link ?? null,
-          lastModifiedAt: event.last_modified_external ?? null,
-          createdAt: "created_external" in event && typeof event.created_external === "string" ? event.created_external : null,
+          organizerName: null,
+          isAllDay: "is_all_day" in event ? Boolean(event.is_all_day) : false,
+          webLink: null,
+          lastModifiedAt: null,
+          createdAt: null,
           calendarName: sourceNameById.get(event.calendar_source_id) ?? "Calendar",
           provider: providerByConnection.get(event.connection_id) ?? "microsoft",
-          bodyPreview: "body_preview" in event && typeof event.body_preview === "string" ? event.body_preview : null,
-          importance: "importance" in event && typeof event.importance === "string" ? event.importance : null,
-          sensitivity: "sensitivity" in event && typeof event.sensitivity === "string" ? event.sensitivity : null,
-          showAs: "show_as" in event && typeof event.show_as === "string" ? event.show_as : null,
-          responseStatus: "response_status" in event && typeof event.response_status === "string" ? event.response_status : null,
-          responseTime: "response_time" in event && typeof event.response_time === "string" ? event.response_time : null,
-          isCancelled: "is_cancelled" in event ? Boolean(event.is_cancelled) : false,
-          isOnlineMeeting: "is_online_meeting" in event ? Boolean(event.is_online_meeting) : false,
-          onlineMeetingUrl: "online_meeting_url" in event && typeof event.online_meeting_url === "string" ? event.online_meeting_url : null,
-          eventType: "event_type" in event && typeof event.event_type === "string" ? event.event_type : null,
-          categories:
-            "categories" in event && Array.isArray(event.categories)
-              ? event.categories.filter((v: unknown): v is string => typeof v === "string")
-              : [],
-          timezoneStart: "timezone_start" in event && typeof event.timezone_start === "string" ? event.timezone_start : null,
-          timezoneEnd: "timezone_end" in event && typeof event.timezone_end === "string" ? event.timezone_end : null
+          bodyPreview: null,
+          importance: null,
+          sensitivity: null,
+          showAs: null,
+          responseStatus: null,
+          responseTime: null,
+          isCancelled: false,
+          isOnlineMeeting: false,
+          onlineMeetingUrl: null,
+          eventType: null,
+          categories: [],
+          timezoneStart: null,
+          timezoneEnd: null,
+          detailLoaded: false
         };
       });
 
@@ -185,7 +130,7 @@ export default async function AlertsPage() {
       </section>
 
       <section className="panel-glass card p-5 md:p-6">
-        <CalendarEventsOverview events={events} showCalendar={false} showRangeOverview={false} tenants={tenants} />
+        <CalendarEventsOverview events={events} lazyEventDetail showCalendar={false} showRangeOverview={false} tenants={tenants} />
       </section>
     </div>
   );

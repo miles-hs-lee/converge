@@ -42,6 +42,7 @@ export type CalendarEventRow = {
   categories?: string[];
   timezoneStart?: string | null;
   timezoneEnd?: string | null;
+  detailLoaded?: boolean;
 };
 
 export type CalendarAttendee = {
@@ -58,6 +59,7 @@ type CalendarEventsOverviewProps = {
   showCalendar?: boolean;
   showRangeOverview?: boolean;
   showConflicts?: boolean;
+  lazyEventDetail?: boolean;
 };
 
 type EventVisibilityFilters = {
@@ -215,7 +217,8 @@ export function CalendarEventsOverview({
   tenants,
   showCalendar = true,
   showRangeOverview = true,
-  showConflicts = true
+  showConflicts = true,
+  lazyEventDetail = false
 }: CalendarEventsOverviewProps) {
   const t = useT();
   const intl = useIntlLocale();
@@ -232,6 +235,7 @@ export function CalendarEventsOverview({
   const [permissionLabel, setPermissionLabel] = useState<string>("unknown");
   const [lastSentIso, setLastSentIso] = useState<string | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEventRow | null>(null);
+  const [detailLoadingEventId, setDetailLoadingEventId] = useState<string | null>(null);
   const [canHover, setCanHover] = useState(false);
   const [hovered, setHovered] = useState<{ event: CalendarEventRow; rect: DOMRect } | null>(null);
   const [visibilityFilters, setVisibilityFilters] = useState<EventVisibilityFilters>(() => {
@@ -515,6 +519,41 @@ export function CalendarEventsOverview({
   function openEvent(event: CalendarEventRow) {
     closeHover();
     setSelectedEvent(event);
+    if (!lazyEventDetail || event.detailLoaded) {
+      return;
+    }
+    if (detailLoadingEventId === event.id) {
+      return;
+    }
+
+    const run = async () => {
+      setDetailLoadingEventId(event.id);
+      try {
+        const response = await fetch(`/api/calendar/event?id=${encodeURIComponent(event.id)}`, { cache: "no-store" });
+        if (!response.ok) {
+          return;
+        }
+        const json = (await response.json()) as { ok: boolean; item?: CalendarEventRow };
+        if (!json.ok || !json.item) {
+          return;
+        }
+
+        const detail = { ...json.item, detailLoaded: true };
+        setLocalEvents((prev) => {
+          if (prev.some((row) => row.id === detail.id)) {
+            return prev.map((row) => (row.id === detail.id ? { ...row, ...detail } : row));
+          }
+          return [...prev, detail];
+        });
+        setSelectedEvent((prev) => (prev?.id === detail.id ? { ...prev, ...detail } : prev));
+      } catch {
+        // ignore detail load failures; keep summary modal
+      } finally {
+        setDetailLoadingEventId((current) => (current === event.id ? null : current));
+      }
+    };
+
+    void run();
   }
 
   function closeEventModal() {
@@ -540,7 +579,8 @@ export function CalendarEventsOverview({
         endAt: event.endAt,
         location: event.location ?? t("common.locationUnknown"),
         sourceAccount: event.sourceAccount ?? t("common.unknownAccount"),
-        attendees: []
+        attendees: [],
+        detailLoaded: false
       }
     );
   }
@@ -859,7 +899,7 @@ export function CalendarEventsOverview({
         </ModalPortal>
       ) : null}
 
-      <EventDetailModal event={selectedEvent} onClose={closeEventModal} />
+      <EventDetailModal event={selectedEvent} isLoading={detailLoadingEventId === selectedEvent?.id} onClose={closeEventModal} />
     </>
   );
 }

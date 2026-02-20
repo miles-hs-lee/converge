@@ -45,6 +45,7 @@ export type EventDetailItem = {
 
 type EventDetailModalProps = {
   event: EventDetailItem | null;
+  isLoading?: boolean;
   onClose: () => void;
 };
 
@@ -106,7 +107,7 @@ function DetailField({ label, value, extra }: { label: string; value: ReactNode;
   );
 }
 
-export function EventDetailModal({ event, onClose }: EventDetailModalProps) {
+export function EventDetailModal({ event, isLoading = false, onClose }: EventDetailModalProps) {
   const t = useT();
   const intl = useIntlLocale();
 
@@ -195,6 +196,11 @@ export function EventDetailModal({ event, onClose }: EventDetailModalProps) {
               {event.isCancelled ? (
                 <span className="mt-2 inline-flex rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-xs font-semibold text-rose-700">
                   {t("event.cancelled")}
+                </span>
+              ) : null}
+              {isLoading ? (
+                <span className="mt-2 ml-2 inline-flex rounded-full border border-accent/30 bg-accent/10 px-2 py-0.5 text-xs font-semibold text-accent">
+                  {t("people.loading")}
                 </span>
               ) : null}
             </div>

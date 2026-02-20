@@ -62,3 +62,33 @@ export async function manualSyncAction(formData: FormData): Promise<void> {
   }
   redirect("/settings?status=manual_sync_done");
 }
+
+export async function deleteConnectionAction(formData: FormData): Promise<void> {
+  const rawConnectionId = formData.get("connectionId");
+  if (typeof rawConnectionId !== "string" || rawConnectionId.trim().length === 0) {
+    redirect("/settings?status=connection_delete_failed");
+  }
+
+  const connectionId = rawConnectionId.trim();
+  const supabase = await createClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login?status=auth_required");
+  }
+
+  const { data, error } = await supabase
+    .from("m365_connections")
+    .delete()
+    .eq("id", connectionId)
+    .eq("user_id", user.id)
+    .select("id");
+
+  if (error || !data || data.length === 0) {
+    redirect("/settings?status=connection_delete_failed");
+  }
+
+  redirect("/settings?status=connection_deleted");
+}

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { manualSyncAction, signOutAction } from "@/app/(app)/actions";
+import { deleteConnectionAction, manualSyncAction, signOutAction } from "@/app/(app)/actions";
 import { isMockMode } from "@/lib/mock-mode";
 import { mockConnections } from "@/lib/mock-data";
 import { LanguageSelector } from "@/components/language-selector";
@@ -38,6 +38,8 @@ const statusMessageKey: Record<string, I18nKey> = {
   db_connection_read_failed: "status.db_connection_read_failed",
   db_app_user_failed: "status.db_app_user_failed",
   db_connection_upsert_failed: "status.db_connection_upsert_failed",
+  connection_deleted: "status.connection_deleted",
+  connection_delete_failed: "status.connection_delete_failed",
   manual_sync_done: "status.manual_sync_done",
   manual_sync_partial: "status.manual_sync_partial",
   manual_sync_failed: "status.manual_sync_failed"
@@ -211,11 +213,23 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
               const hasMissingRequired = requiredMicrosoftGraphScopes.some((scope) => !grantedScopes.has(normalizeScopeKey(scope)));
               return (
                 <article className="rounded-xl border border-line bg-white/85 p-3" key={connection.id}>
-                  <p className="font-medium">{connection.m365_user_principal_name ?? tt("common.unknownAccount")}</p>
-                  <p className="mt-1 text-xs text-muted">
-                    {connection.provider === "google" ? tt("settings.providerGoogle") : tt("settings.providerMicrosoft")} · {connection.status} ·{" "}
-                    {tt("settings.expires")} {new Date(connection.token_expires_at).toLocaleString(intl)}
-                  </p>
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-medium">{connection.m365_user_principal_name ?? tt("common.unknownAccount")}</p>
+                      <p className="mt-1 text-xs text-muted">
+                        {connection.provider === "google" ? tt("settings.providerGoogle") : tt("settings.providerMicrosoft")} · {connection.status} ·{" "}
+                        {tt("settings.expires")} {new Date(connection.token_expires_at).toLocaleString(intl)}
+                      </p>
+                    </div>
+                    {!isMockMode && user ? (
+                      <form action={deleteConnectionAction}>
+                        <input name="connectionId" type="hidden" value={connection.id} />
+                        <button className="btn btn-danger px-3 py-1.5 text-xs" type="submit">
+                          {tt("settings.removeConnection")}
+                        </button>
+                      </form>
+                    ) : null}
+                  </div>
                   {connection.provider === "microsoft" ? (
                     <div className="mt-2 space-y-1">
                       <p className="text-[11px] font-medium text-slate-600">Graph scope check</p>

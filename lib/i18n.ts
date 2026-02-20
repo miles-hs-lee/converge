@@ -61,6 +61,11 @@ export type I18nKey =
   | "calendar.upcoming"
   | "calendar.none"
   | "calendar.attendeesCount"
+  | "calendar.filter.includeTentative"
+  | "calendar.filter.includeWorkingElsewhere"
+  | "calendar.filter.includeAwaitingResponse"
+  | "calendar.filter.includeDeclined"
+  | "calendar.filter.includeCancelled"
   | "alerts.title"
   | "alerts.subtitle"
   | "alerts.count"
@@ -374,6 +379,11 @@ const enUS: Dict = {
   "calendar.upcoming": "Upcoming",
   "calendar.none": "No events.",
   "calendar.attendeesCount": "{count} attendees",
+  "calendar.filter.includeTentative": "Include tentative",
+  "calendar.filter.includeWorkingElsewhere": "Include working elsewhere",
+  "calendar.filter.includeAwaitingResponse": "Include awaiting response",
+  "calendar.filter.includeDeclined": "Include declined",
+  "calendar.filter.includeCancelled": "Include cancelled",
   "alerts.title": "Conflict alerts",
   "alerts.subtitle": "Detect overlapping events across different tenants.",
   "alerts.count": "{count} conflicts",
@@ -687,6 +697,11 @@ const koKR: Dict = {
   "calendar.upcoming": "예정 일정",
   "calendar.none": "해당 일정이 없습니다.",
   "calendar.attendeesCount": "참석자 {count}명",
+  "calendar.filter.includeTentative": "미정 포함",
+  "calendar.filter.includeWorkingElsewhere": "다른 용무중 포함",
+  "calendar.filter.includeAwaitingResponse": "응답 대기 포함",
+  "calendar.filter.includeDeclined": "거절 일정 포함",
+  "calendar.filter.includeCancelled": "취소 일정 포함",
   "alerts.title": "일정 충돌 알림",
   "alerts.subtitle": "서로 다른 테넌트에서 시간이 겹치는 일정을 감지합니다.",
   "alerts.count": "충돌 {count}건",
@@ -1000,6 +1015,11 @@ const jaJP: Dict = {
   "calendar.upcoming": "今後の予定",
   "calendar.none": "予定はありません。",
   "calendar.attendeesCount": "参加者 {count}名",
+  "calendar.filter.includeTentative": "仮予定を含む",
+  "calendar.filter.includeWorkingElsewhere": "他の場所で勤務を含む",
+  "calendar.filter.includeAwaitingResponse": "未回答を含む",
+  "calendar.filter.includeDeclined": "辞退予定を含む",
+  "calendar.filter.includeCancelled": "キャンセル予定を含む",
   "alerts.title": "予定の競合アラート",
   "alerts.subtitle": "異なるテナント間で時間が重なる予定を検出します。",
   "alerts.count": "競合 {count}件",

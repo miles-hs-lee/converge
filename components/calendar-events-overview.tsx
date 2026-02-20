@@ -57,6 +57,24 @@ type CalendarEventsOverviewProps = {
   tenants: string[];
 };
 
+type EventVisibilityFilters = {
+  includeTentative: boolean;
+  includeWorkingElsewhere: boolean;
+  includeAwaitingResponse: boolean;
+  includeDeclined: boolean;
+  includeCancelled: boolean;
+};
+
+const EVENT_VISIBILITY_FILTERS_STORAGE_KEY = "converge_calendar_visibility_filters";
+
+const DEFAULT_EVENT_VISIBILITY_FILTERS: EventVisibilityFilters = {
+  includeTentative: false,
+  includeWorkingElsewhere: false,
+  includeAwaitingResponse: false,
+  includeDeclined: false,
+  includeCancelled: false
+};
+
 function safeParseSet(raw: string | null): Set<string> {
   if (!raw) {
     return new Set();
@@ -68,6 +86,49 @@ function safeParseSet(raw: string | null): Set<string> {
   } catch {
     return new Set();
   }
+}
+
+function parseEventVisibilityFilters(raw: string | null): EventVisibilityFilters {
+  if (!raw) {
+    return DEFAULT_EVENT_VISIBILITY_FILTERS;
+  }
+  try {
+    const parsed = JSON.parse(raw) as Partial<EventVisibilityFilters> | null;
+    if (!parsed || typeof parsed !== "object") {
+      return DEFAULT_EVENT_VISIBILITY_FILTERS;
+    }
+    return {
+      includeTentative: parsed.includeTentative === true,
+      includeWorkingElsewhere: parsed.includeWorkingElsewhere === true,
+      includeAwaitingResponse: parsed.includeAwaitingResponse === true,
+      includeDeclined: parsed.includeDeclined === true,
+      includeCancelled: parsed.includeCancelled === true
+    };
+  } catch {
+    return DEFAULT_EVENT_VISIBILITY_FILTERS;
+  }
+}
+
+function passesVisibilityFilters(event: CalendarEventRow, filters: EventVisibilityFilters): boolean {
+  const showAs = (event.showAs ?? "").toLowerCase();
+  const response = (event.responseStatus ?? "").toLowerCase();
+
+  if (!filters.includeCancelled && event.isCancelled) {
+    return false;
+  }
+  if (!filters.includeTentative && (showAs === "tentative" || response === "tentative")) {
+    return false;
+  }
+  if (!filters.includeWorkingElsewhere && showAs === "workingelsewhere") {
+    return false;
+  }
+  if (!filters.includeAwaitingResponse && response === "notresponded") {
+    return false;
+  }
+  if (!filters.includeDeclined && response === "declined") {
+    return false;
+  }
+  return true;
 }
 
 function EventList({
@@ -164,12 +225,22 @@ export function CalendarEventsOverview({ events, tenants }: CalendarEventsOvervi
   const [selectedEvent, setSelectedEvent] = useState<CalendarEventRow | null>(null);
   const [canHover, setCanHover] = useState(false);
   const [hovered, setHovered] = useState<{ event: CalendarEventRow; rect: DOMRect } | null>(null);
+  const [visibilityFilters, setVisibilityFilters] = useState<EventVisibilityFilters>(() => {
+    if (typeof window === "undefined") {
+      return DEFAULT_EVENT_VISIBILITY_FILTERS;
+    }
+    return parseEventVisibilityFilters(window.localStorage.getItem(EVENT_VISIBILITY_FILTERS_STORAGE_KEY));
+  });
   const deferredQuery = useDeferredValue(query.trim().toLowerCase());
 
   const enabledTenants = useMemo(() => tenants.filter((tenant) => !disabledTenants.has(tenant)), [disabledTenants, tenants]);
 
+  const visibilityFilteredEvents = useMemo(() => {
+    return localEvents.filter((event) => passesVisibilityFilters(event, visibilityFilters));
+  }, [localEvents, visibilityFilters]);
+
   const filteredEvents = useMemo(() => {
-    return localEvents.filter((event) => {
+    return visibilityFilteredEvents.filter((event) => {
       if (disabledTenants.has(event.tenantName)) {
         return false;
       }
@@ -186,7 +257,7 @@ export function CalendarEventsOverview({ events, tenants }: CalendarEventsOvervi
         event.attendees.some((attendee) => attendee.toLowerCase().includes(deferredQuery))
       );
     });
-  }, [deferredQuery, disabledTenants, localEvents]);
+  }, [deferredQuery, disabledTenants, visibilityFilteredEvents]);
 
   const eventsById = useMemo(() => {
     return new Map(localEvents.map((event) => [event.id, event]));
@@ -217,8 +288,8 @@ export function CalendarEventsOverview({ events, tenants }: CalendarEventsOvervi
 
   const conflictEvents = useMemo(() => {
     // Conflicts should not be affected by search query; only the tenant toggles.
-    return localEvents.filter((event) => !disabledTenants.has(event.tenantName));
-  }, [disabledTenants, localEvents]);
+    return visibilityFilteredEvents.filter((event) => !disabledTenants.has(event.tenantName));
+  }, [disabledTenants, visibilityFilteredEvents]);
   const deferredConflictEvents = useDeferredValue(conflictEvents);
 
   const conflicts = useMemo(() => {
@@ -412,6 +483,16 @@ export function CalendarEventsOverview({ events, tenants }: CalendarEventsOvervi
     ]);
   }
 
+  function toggleVisibilityFilter(key: keyof EventVisibilityFilters) {
+    setVisibilityFilters((prev) => {
+      const next = { ...prev, [key]: !prev[key] };
+      if (typeof window !== "undefined") {
+        localStorage.setItem(EVENT_VISIBILITY_FILTERS_STORAGE_KEY, JSON.stringify(next));
+      }
+      return next;
+    });
+  }
+
   function openEvent(event: CalendarEventRow) {
     closeHover();
     setSelectedEvent(event);
@@ -469,6 +550,49 @@ export function CalendarEventsOverview({ events, tenants }: CalendarEventsOvervi
       </div>
 
       <div className="mt-3 flex flex-wrap gap-2">
+        <button
+          aria-pressed={visibilityFilters.includeTentative}
+          className={`badge transition ${visibilityFilters.includeTentative ? "border-accent/50 bg-accent/10 text-accent" : "bg-white/90 text-muted"}`}
+          onClick={() => toggleVisibilityFilter("includeTentative")}
+          type="button"
+        >
+          {t("calendar.filter.includeTentative")}
+        </button>
+        <button
+          aria-pressed={visibilityFilters.includeWorkingElsewhere}
+          className={`badge transition ${visibilityFilters.includeWorkingElsewhere ? "border-accent/50 bg-accent/10 text-accent" : "bg-white/90 text-muted"}`}
+          onClick={() => toggleVisibilityFilter("includeWorkingElsewhere")}
+          type="button"
+        >
+          {t("calendar.filter.includeWorkingElsewhere")}
+        </button>
+        <button
+          aria-pressed={visibilityFilters.includeAwaitingResponse}
+          className={`badge transition ${visibilityFilters.includeAwaitingResponse ? "border-accent/50 bg-accent/10 text-accent" : "bg-white/90 text-muted"}`}
+          onClick={() => toggleVisibilityFilter("includeAwaitingResponse")}
+          type="button"
+        >
+          {t("calendar.filter.includeAwaitingResponse")}
+        </button>
+        <button
+          aria-pressed={visibilityFilters.includeDeclined}
+          className={`badge transition ${visibilityFilters.includeDeclined ? "border-accent/50 bg-accent/10 text-accent" : "bg-white/90 text-muted"}`}
+          onClick={() => toggleVisibilityFilter("includeDeclined")}
+          type="button"
+        >
+          {t("calendar.filter.includeDeclined")}
+        </button>
+        <button
+          aria-pressed={visibilityFilters.includeCancelled}
+          className={`badge transition ${visibilityFilters.includeCancelled ? "border-accent/50 bg-accent/10 text-accent" : "bg-white/90 text-muted"}`}
+          onClick={() => toggleVisibilityFilter("includeCancelled")}
+          type="button"
+        >
+          {t("calendar.filter.includeCancelled")}
+        </button>
+      </div>
+
+      <div className="mt-2 flex flex-wrap gap-2">
         {tenants.map((tenant) => {
           const enabled = !disabledTenants.has(tenant);
           const color = getTenantColor(tenant);

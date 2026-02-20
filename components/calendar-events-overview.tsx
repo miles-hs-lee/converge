@@ -234,6 +234,8 @@ export function CalendarEventsOverview({
   const [permissionBlocked, setPermissionBlocked] = useState(false);
   const [permissionLabel, setPermissionLabel] = useState<string>("unknown");
   const [lastSentIso, setLastSentIso] = useState<string | null>(null);
+  const [nowMarker, setNowMarker] = useState<number>(() => Date.now());
+  const [showAllConflicts, setShowAllConflicts] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEventRow | null>(null);
   const [detailLoadingEventId, setDetailLoadingEventId] = useState<string | null>(null);
   const [canHover, setCanHover] = useState(false);
@@ -335,8 +337,27 @@ export function CalendarEventsOverview({
 
   const visibleConflicts = useMemo(() => {
     if (!showConflicts) return [];
-    return conflicts.filter((c) => !dismissedKeys.has(c.key));
-  }, [conflicts, dismissedKeys, showConflicts]);
+    return conflicts.filter((c) => {
+      if (dismissedKeys.has(c.key)) return false;
+      const overlapEnd = new Date(c.overlapEnd).getTime();
+      return Number.isFinite(overlapEnd) && overlapEnd >= nowMarker;
+    });
+  }, [conflicts, dismissedKeys, nowMarker, showConflicts]);
+
+  useEffect(() => {
+    if (!showConflicts) return;
+    const timer = window.setInterval(() => {
+      setNowMarker(Date.now());
+    }, 60_000);
+    return () => window.clearInterval(timer);
+  }, [showConflicts]);
+
+  useEffect(() => {
+    if (!showConflicts) return;
+    if (visibleConflicts.length <= 8) {
+      setShowAllConflicts(false);
+    }
+  }, [showConflicts, visibleConflicts.length]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -790,7 +811,7 @@ export function CalendarEventsOverview({
           <p className="muted mt-3">{t("alerts.none")}</p>
         ) : (
           <div className="mt-3 space-y-2">
-            {visibleConflicts.slice(0, 8).map((conflict) => {
+            {(showAllConflicts ? visibleConflicts : visibleConflicts.slice(0, 8)).map((conflict) => {
               const aColor = getTenantColor(conflict.a.tenantName);
               const bColor = getTenantColor(conflict.b.tenantName);
               const overlap = formatDateTimeRange(conflict.overlapStart, conflict.overlapEnd, intl);
@@ -843,10 +864,18 @@ export function CalendarEventsOverview({
                 </article>
               );
             })}
-            {visibleConflicts.length > 8 ? <p className="muted text-xs">{t("common.more", { count: visibleConflicts.length - 8 })}</p> : null}
+            {visibleConflicts.length > 8 ? (
+              <button
+                className="mt-1 inline-flex rounded-lg border border-line bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 transition hover:border-accent/45 hover:text-accent"
+                onClick={() => setShowAllConflicts((prev) => !prev)}
+                type="button"
+              >
+                {showAllConflicts ? t("common.close") : t("common.more", { count: visibleConflicts.length - 8 })}
+              </button>
+            ) : null}
           </div>
         )}
-        </section>
+      </section>
       ) : null}
 
       {hovered ? (

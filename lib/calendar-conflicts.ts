@@ -53,6 +53,14 @@ function toTs(iso: string): number | null {
   return Number.isNaN(ts) ? null : ts;
 }
 
+function isSameTitleAndTime(a: { subject: string; start: number; end: number }, b: { subject: string; start: number; end: number }): boolean {
+  return (
+    a.start === b.start &&
+    a.end === b.end &&
+    normalizeKeyPart(a.subject) === normalizeKeyPart(b.subject)
+  );
+}
+
 export function detectTenantConflicts(events: CalendarEventLike[], opts?: { minOverlapMs?: number }): CalendarConflict[] {
   const minOverlapMs = Math.max(1, opts?.minOverlapMs ?? 60 * 1000); // default: >= 1 minute overlap
 
@@ -74,6 +82,16 @@ export function detectTenantConflicts(events: CalendarEventLike[], opts?: { minO
 
       // Different tenant only.
       if (cur.e.tenantName === next.e.tenantName) continue;
+
+      // If title + time are identical across tenants, treat it as the same shared meeting.
+      if (
+        isSameTitleAndTime(
+          { subject: cur.e.subject, start: cur.start, end: cur.end },
+          { subject: next.e.subject, start: next.start, end: next.end }
+        )
+      ) {
+        continue;
+      }
 
       const overlapStartTs = Math.max(cur.start, next.start);
       const overlapEndTs = Math.min(cur.end, next.end);

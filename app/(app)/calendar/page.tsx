@@ -1,7 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
 import { isMockMode } from "@/lib/mock-mode";
 import { mockCalendarEvents, mockConnections } from "@/lib/mock-data";
-import { CalendarEventsOverview, type CalendarAttendee, type CalendarEventRow } from "@/components/calendar-events-overview";
+import {
+  CalendarEventsOverview,
+  type CalendarAttendee,
+  type CalendarEventRow,
+  type CalendarSourceRow
+} from "@/components/calendar-events-overview";
 import { CalendarEntrySync } from "@/components/calendar-entry-sync";
 import { getServerLocale } from "@/lib/i18n-server";
 import { t } from "@/lib/i18n";
@@ -63,6 +68,7 @@ export default async function CalendarPage() {
 
   let events: CalendarEventRow[] = [];
   let tenants: string[] = [];
+  let calendarSources: CalendarSourceRow[] = [];
   let shouldTriggerEntrySync = false;
 
   if (isMockMode) {
@@ -87,10 +93,12 @@ export default async function CalendarPage() {
         .order("created_at", { ascending: true });
 
       const connectionIds = (connections ?? []).map((connection) => connection.id);
-      const { data: sources } =
+      const { data: sourceRows } =
         connectionIds.length === 0
-          ? { data: [] as Array<{ id: string; name: string }> }
-          : await supabase.from("calendar_sources").select("id,name").in("connection_id", connectionIds);
+          ? { data: [] as Array<{ id: string; name: string; connection_id: string; is_selected: boolean }> }
+          : await supabase.from("calendar_sources").select("id,name,connection_id,is_selected").in("connection_id", connectionIds);
+
+      const selectedSourceIds = (sourceRows ?? []).filter((source) => source.is_selected).map((source) => source.id);
 
       const eventSelectSummary =
         "id,subject,start_at,end_at,is_all_day,location,connection_id,organizer,attendees,calendar_source_id,show_as,response_status,is_cancelled";
@@ -107,16 +115,22 @@ export default async function CalendarPage() {
         if (connectionIds.length > 0) {
           query = query.in("connection_id", connectionIds);
         }
+        if (selectedSourceIds.length > 0) {
+          query = query.in("calendar_source_id", selectedSourceIds);
+        }
         return query;
       };
-      const summaryResult = connectionIds.length === 0 ? { data: [] as Array<Record<string, any>>, error: null } : await queryEvents(eventSelectSummary);
+      const summaryResult =
+        connectionIds.length === 0 || selectedSourceIds.length === 0
+          ? { data: [] as Array<Record<string, any>>, error: null }
+          : await queryEvents(eventSelectSummary);
       const { data: dbEvents } = summaryResult.error ? await queryEvents(eventSelectFallback) : summaryResult;
 
       const tenantByConnection = new Map<string, string>();
       const accountByConnection = new Map<string, string>();
       const providerByConnection = new Map<string, string>();
       const sourceNameById = new Map<string, string>();
-      (sources ?? []).forEach((source) => {
+      (sourceRows ?? []).forEach((source) => {
         sourceNameById.set(source.id, source.name);
       });
       (connections ?? []).forEach((connection) => {
@@ -124,11 +138,19 @@ export default async function CalendarPage() {
         accountByConnection.set(connection.id, connection.m365_user_principal_name ?? "unknown@account");
         providerByConnection.set(connection.id, connection.provider ?? "microsoft");
       });
+      calendarSources = (sourceRows ?? []).map((source) => ({
+        id: source.id,
+        name: source.name,
+        tenantName: tenantByConnection.get(source.connection_id) ?? "Connected Tenant",
+        provider: providerByConnection.get(source.connection_id) ?? "microsoft",
+        isSelected: Boolean(source.is_selected)
+      }));
 
       events = ((dbEvents ?? []) as Array<Record<string, any>>).map((event) => {
         const { attendeeEmails, attendeeDetails } = parseAttendeeData(event.attendees);
         return {
           id: event.id,
+          calendarSourceId: "calendar_source_id" in event && typeof event.calendar_source_id === "string" ? event.calendar_source_id : undefined,
           tenantName: tenantByConnection.get(event.connection_id) ?? "Connected Tenant",
           subject: event.subject ?? tt("common.untitled"),
           startAt: event.start_at,
@@ -183,7 +205,14 @@ export default async function CalendarPage() {
       </section>
 
       <section className="panel-glass card p-5 md:p-6">
-        <CalendarEventsOverview events={events} lazyEventDetail showConflicts={false} showRangeOverview={false} tenants={tenants} />
+        <CalendarEventsOverview
+          calendarSources={calendarSources}
+          events={events}
+          lazyEventDetail
+          showConflicts={false}
+          showRangeOverview={false}
+          tenants={tenants}
+        />
       </section>
     </div>
   );

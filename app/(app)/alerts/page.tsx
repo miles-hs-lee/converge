@@ -36,10 +36,11 @@ export default async function AlertsPage() {
         .order("created_at", { ascending: true });
 
       const connectionIds = (connections ?? []).map((connection) => connection.id);
-      const { data: sources } =
+      const { data: sourceRows } =
         connectionIds.length === 0
-          ? { data: [] as Array<{ id: string; name: string }> }
-          : await supabase.from("calendar_sources").select("id,name").in("connection_id", connectionIds);
+          ? { data: [] as Array<{ id: string; name: string; is_selected: boolean }> }
+          : await supabase.from("calendar_sources").select("id,name,is_selected").in("connection_id", connectionIds);
+      const selectedSourceIds = (sourceRows ?? []).filter((source) => source.is_selected).map((source) => source.id);
 
       const eventSelectSummary = "id,subject,start_at,end_at,is_all_day,location,connection_id,organizer,calendar_source_id";
       const eventSelectFallback = "id,subject,start_at,end_at,location,connection_id,organizer,calendar_source_id";
@@ -55,16 +56,22 @@ export default async function AlertsPage() {
         if (connectionIds.length > 0) {
           query = query.in("connection_id", connectionIds);
         }
+        if (selectedSourceIds.length > 0) {
+          query = query.in("calendar_source_id", selectedSourceIds);
+        }
         return query;
       };
-      const summaryResult = connectionIds.length === 0 ? { data: [] as Array<Record<string, any>>, error: null } : await queryEvents(eventSelectSummary);
+      const summaryResult =
+        connectionIds.length === 0 || selectedSourceIds.length === 0
+          ? { data: [] as Array<Record<string, any>>, error: null }
+          : await queryEvents(eventSelectSummary);
       const { data: dbEvents } = summaryResult.error ? await queryEvents(eventSelectFallback) : summaryResult;
 
       const tenantByConnection = new Map<string, string>();
       const accountByConnection = new Map<string, string>();
       const providerByConnection = new Map<string, string>();
       const sourceNameById = new Map<string, string>();
-      (sources ?? []).forEach((source) => {
+      (sourceRows ?? []).forEach((source) => {
         sourceNameById.set(source.id, source.name);
       });
       (connections ?? []).forEach((connection) => {
@@ -76,6 +83,7 @@ export default async function AlertsPage() {
       events = ((dbEvents ?? []) as Array<Record<string, any>>).map((event) => {
         return {
           id: event.id,
+          calendarSourceId: "calendar_source_id" in event && typeof event.calendar_source_id === "string" ? event.calendar_source_id : undefined,
           tenantName: tenantByConnection.get(event.connection_id) ?? "Connected Tenant",
           subject: event.subject ?? tt("common.untitled"),
           startAt: event.start_at,

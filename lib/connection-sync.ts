@@ -362,6 +362,7 @@ async function runConnectionSync(params: RunConnectionParams): Promise<SyncSumma
         accessToken: token.accessToken,
         accountEmail: connection.m365_user_principal_name ?? "unknown@account",
         connectionId: connection.id,
+        calendarState: currentCalendarState,
         adminClient: admin
       });
     } else {

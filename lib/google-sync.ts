@@ -4,6 +4,7 @@ type GoogleCalendarListItem = {
   id?: string;
   summary?: string;
   backgroundColor?: string;
+  primary?: boolean;
 };
 
 type GoogleCalendarListResponse = {
@@ -51,6 +52,7 @@ export type CalendarSyncResult = {
   ok: boolean;
   partial: boolean;
   syncedCount: number;
+  statePatch?: Record<string, unknown>;
 };
 
 function upsertCalendarEventsFallbackRows(row: Record<string, unknown>): Record<string, unknown> {
@@ -103,9 +105,10 @@ export async function syncGoogleCalendarSnapshot(params: {
   accessToken: string;
   accountEmail: string;
   connectionId: string;
+  calendarState?: Record<string, unknown>;
   adminClient: ReturnType<typeof createAdminClient>;
 }): Promise<CalendarSyncResult> {
-  const { accessToken, accountEmail, connectionId, adminClient } = params;
+  const { accessToken, accountEmail, connectionId, calendarState, adminClient } = params;
 
   const calendarListResponse = await fetch("https://www.googleapis.com/calendar/v3/users/me/calendarList?maxResults=16", {
     headers: { Authorization: `Bearer ${accessToken}` }
@@ -122,14 +125,37 @@ export async function syncGoogleCalendarSnapshot(params: {
   }
 
   const nowIso = new Date().toISOString();
+  const sourceSelectionInitialized = Boolean(calendarState && calendarState.sourceSelectionInitialized);
+  const { data: existingSourceData, error: existingSourceError } = await adminClient
+    .from("calendar_sources")
+    .select("external_calendar_id,is_selected")
+    .eq("connection_id", connectionId)
+    .in(
+      "external_calendar_id",
+      calendars.map((calendar) => calendar.id!)
+    );
+  if (existingSourceError) {
+    return { ok: false, partial: false, syncedCount: 0 };
+  }
+  const existingSelectedByExternalId = new Map<string, boolean>();
+  (existingSourceData ?? []).forEach((row) => {
+    existingSelectedByExternalId.set(row.external_calendar_id, Boolean(row.is_selected));
+  });
+
   const sourceRows = calendars.map((calendar) => ({
     connection_id: connectionId,
     external_calendar_id: calendar.id!,
     name: calendar.summary ?? "Google Calendar",
     color: calendar.backgroundColor ?? "#0284c7",
-    is_selected: true,
+    is_selected:
+      sourceSelectionInitialized
+        ? (existingSelectedByExternalId.get(calendar.id!) ?? Boolean(calendar.primary))
+        : Boolean(calendar.primary),
     last_synced_at: nowIso
   }));
+  if (sourceRows.length > 0 && !sourceRows.some((row) => row.is_selected)) {
+    sourceRows[0]!.is_selected = true;
+  }
 
   const { error: sourceUpsertError } = await adminClient
     .from("calendar_sources")
@@ -261,5 +287,12 @@ export async function syncGoogleCalendarSnapshot(params: {
     }
   }
 
-  return { ok: true, partial: partialFailure, syncedCount: eventRows.length };
+  return {
+    ok: true,
+    partial: partialFailure,
+    syncedCount: eventRows.length,
+    statePatch: {
+      sourceSelectionInitialized: true
+    }
+  };
 }

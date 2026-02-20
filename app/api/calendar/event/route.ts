@@ -125,6 +125,7 @@ export async function GET(request: NextRequest) {
   const { attendeeEmails, attendeeDetails } = parseAttendeeData(eventRow.attendees);
   const item = {
     id: eventRow.id,
+    calendarSourceId: typeof eventRow.calendar_source_id === "string" ? eventRow.calendar_source_id : undefined,
     tenantName: tenantByConnection.get(eventRow.connection_id) ?? "Connected Tenant",
     subject: eventRow.subject ?? "(Untitled)",
     startAt: eventRow.start_at,

@@ -9,6 +9,7 @@ type GraphCalendar = {
   id?: string;
   name?: string;
   color?: string;
+  isDefaultCalendar?: boolean;
 };
 
 type GraphCalendarListResponse = {
@@ -276,7 +277,7 @@ export async function syncMicrosoftCalendarSnapshot(params: {
   const previousDeltaByCalendar = windowOutdated ? {} : parseDeltaByCalendar(currentCalendarState.deltaByCalendar);
 
   const calendarsResponse = await fetchGraphJson<GraphCalendarListResponse>(
-    "https://graph.microsoft.com/v1.0/me/calendars?$top=8&$select=id,name,color",
+    "https://graph.microsoft.com/v1.0/me/calendars?$top=8&$select=id,name,color,isDefaultCalendar",
     accessToken
   );
   if (!calendarsResponse.ok) {
@@ -292,14 +293,39 @@ export async function syncMicrosoftCalendarSnapshot(params: {
   }
 
   const nowIso = new Date().toISOString();
-  const sourceRows = calendars.map((calendar) => ({
-    connection_id: connectionId,
-    external_calendar_id: calendar.id!,
-    name: calendar.name ?? "Calendar",
-    color: calendar.color ?? "#0284c7",
-    is_selected: true,
-    last_synced_at: nowIso
-  }));
+  const sourceSelectionInitialized = Boolean(currentCalendarState.sourceSelectionInitialized);
+  const { data: existingSourceData, error: existingSourceError } = await adminClient
+    .from("calendar_sources")
+    .select("external_calendar_id,is_selected")
+    .eq("connection_id", connectionId)
+    .in(
+      "external_calendar_id",
+      calendars.map((calendar) => calendar.id!)
+    );
+  if (existingSourceError) {
+    return { ok: false, partial: false, syncedCount: 0 };
+  }
+  const existingSelectedByExternalId = new Map<string, boolean>();
+  (existingSourceData ?? []).forEach((row) => {
+    existingSelectedByExternalId.set(row.external_calendar_id, Boolean(row.is_selected));
+  });
+
+  const sourceRows = calendars.map((calendar) => {
+    const defaultSelected = Boolean(calendar.isDefaultCalendar);
+    const existingSelected = existingSelectedByExternalId.get(calendar.id!);
+    const isSelected = sourceSelectionInitialized ? (existingSelected ?? defaultSelected) : defaultSelected;
+    return {
+      connection_id: connectionId,
+      external_calendar_id: calendar.id!,
+      name: calendar.name ?? "Calendar",
+      color: calendar.color ?? "#0284c7",
+      is_selected: isSelected,
+      last_synced_at: nowIso
+    };
+  });
+  if (sourceRows.length > 0 && !sourceRows.some((row) => row.is_selected)) {
+    sourceRows[0]!.is_selected = true;
+  }
 
   const { error: sourceUpsertError } = await adminClient
     .from("calendar_sources")
@@ -501,7 +527,8 @@ export async function syncMicrosoftCalendarSnapshot(params: {
     statePatch: {
       deltaByCalendar: nextDeltaByCalendar,
       windowStart: fromIso,
-      windowEnd: toIsoDate
+      windowEnd: toIsoDate,
+      sourceSelectionInitialized: true
     }
   };
 }

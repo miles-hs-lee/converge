@@ -1,6 +1,7 @@
 "use client";
 
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
 import { UnifiedWeekCalendar } from "@/components/unified-week-calendar";
 import { ModalPortal } from "@/components/modal-portal";
@@ -13,6 +14,7 @@ import { getNotificationPermissionSafe, sendPwaNotification } from "@/lib/pwa-no
 
 export type CalendarEventRow = {
   id: string;
+  calendarSourceId?: string;
   tenantName: string;
   subject: string;
   startAt: string;
@@ -53,9 +55,18 @@ export type CalendarAttendee = {
   respondedAt?: string | null;
 };
 
+export type CalendarSourceRow = {
+  id: string;
+  tenantName: string;
+  name: string;
+  isSelected: boolean;
+  provider?: string;
+};
+
 type CalendarEventsOverviewProps = {
   events: CalendarEventRow[];
   tenants: string[];
+  calendarSources?: CalendarSourceRow[];
   showCalendar?: boolean;
   showRangeOverview?: boolean;
   showConflicts?: boolean;
@@ -215,11 +226,13 @@ function formatDateTimeRange(startIso: string, endIso: string, intl: string): st
 export function CalendarEventsOverview({
   events,
   tenants,
+  calendarSources = [],
   showCalendar = true,
   showRangeOverview = true,
   showConflicts = true,
   lazyEventDetail = false
 }: CalendarEventsOverviewProps) {
+  const router = useRouter();
   const t = useT();
   const intl = useIntlLocale();
   const { getTenantColor } = useAppPreferences();
@@ -240,6 +253,10 @@ export function CalendarEventsOverview({
   const [detailLoadingEventId, setDetailLoadingEventId] = useState<string | null>(null);
   const [canHover, setCanHover] = useState(false);
   const [hovered, setHovered] = useState<{ event: CalendarEventRow; rect: DOMRect } | null>(null);
+  const [sourceSelection, setSourceSelection] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(calendarSources.map((source) => [source.id, source.isSelected]))
+  );
+  const [savingSourceId, setSavingSourceId] = useState<string | null>(null);
   const [visibilityFilters, setVisibilityFilters] = useState<EventVisibilityFilters>(() => {
     if (typeof window === "undefined") {
       return DEFAULT_EVENT_VISIBILITY_FILTERS;
@@ -247,6 +264,10 @@ export function CalendarEventsOverview({
     return parseEventVisibilityFilters(window.localStorage.getItem(EVENT_VISIBILITY_FILTERS_STORAGE_KEY));
   });
   const deferredQuery = useDeferredValue(query.trim().toLowerCase());
+  const selectedSourceIds = useMemo(
+    () => new Set(Object.entries(sourceSelection).filter(([, selected]) => selected).map(([sourceId]) => sourceId)),
+    [sourceSelection]
+  );
 
   const enabledTenants = useMemo(() => tenants.filter((tenant) => !disabledTenants.has(tenant)), [disabledTenants, tenants]);
 
@@ -256,6 +277,10 @@ export function CalendarEventsOverview({
 
   const filteredEvents = useMemo(() => {
     return visibilityFilteredEvents.filter((event) => {
+      if (calendarSources.length > 0 && event.calendarSourceId && !selectedSourceIds.has(event.calendarSourceId)) {
+        return false;
+      }
+
       if (disabledTenants.has(event.tenantName)) {
         return false;
       }
@@ -272,7 +297,7 @@ export function CalendarEventsOverview({
         event.attendees.some((attendee) => attendee.toLowerCase().includes(deferredQuery))
       );
     });
-  }, [deferredQuery, disabledTenants, visibilityFilteredEvents]);
+  }, [calendarSources.length, deferredQuery, disabledTenants, selectedSourceIds, visibilityFilteredEvents]);
 
   const eventsById = useMemo(() => {
     return new Map(localEvents.map((event) => [event.id, event]));
@@ -307,8 +332,13 @@ export function CalendarEventsOverview({
   const conflictEvents = useMemo(() => {
     if (!showConflicts) return [];
     // Conflicts should not be affected by search query; only the tenant toggles.
-    return visibilityFilteredEvents.filter((event) => !disabledTenants.has(event.tenantName));
-  }, [disabledTenants, showConflicts, visibilityFilteredEvents]);
+    return visibilityFilteredEvents.filter((event) => {
+      if (calendarSources.length > 0 && event.calendarSourceId && !selectedSourceIds.has(event.calendarSourceId)) {
+        return false;
+      }
+      return !disabledTenants.has(event.tenantName);
+    });
+  }, [calendarSources.length, disabledTenants, selectedSourceIds, showConflicts, visibilityFilteredEvents]);
   const deferredConflictEvents = useDeferredValue(conflictEvents);
 
   const conflicts = useMemo(() => {
@@ -329,6 +359,10 @@ export function CalendarEventsOverview({
   useEffect(() => {
     setLocalEvents(events);
   }, [events]);
+
+  useEffect(() => {
+    setSourceSelection(Object.fromEntries(calendarSources.map((source) => [source.id, source.isSelected])));
+  }, [calendarSources]);
 
   const [dismissedKeys, setDismissedKeys] = useState<Set<string>>(() => {
     if (typeof window === "undefined") return new Set();
@@ -590,6 +624,30 @@ export function CalendarEventsOverview({
     setHovered(null);
   }
 
+  async function toggleSourceSelection(sourceId: string) {
+    const current = Boolean(sourceSelection[sourceId]);
+    const next = !current;
+    setSourceSelection((prev) => ({ ...prev, [sourceId]: next }));
+    setSavingSourceId(sourceId);
+
+    try {
+      const response = await fetch("/api/calendar/sources", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sourceId, isSelected: next })
+      });
+      if (!response.ok) {
+        throw new Error("save_failed");
+      }
+      router.refresh();
+    } catch {
+      setSourceSelection((prev) => ({ ...prev, [sourceId]: current }));
+      setToast("캘린더 선택 저장에 실패했습니다.");
+    } finally {
+      setSavingSourceId((currentSaving) => (currentSaving === sourceId ? null : currentSaving));
+    }
+  }
+
   function conflictEventToRow(event: { id: string; tenantName: string; subject: string; startAt: string; endAt: string; location?: string; sourceAccount?: string }): CalendarEventRow {
     return (
       eventsById.get(event.id) ?? {
@@ -700,6 +758,30 @@ export function CalendarEventsOverview({
           );
         })}
       </div>
+
+      {calendarSources.length > 0 ? (
+        <div className="mt-2 rounded-xl border border-line bg-white/70 p-2.5">
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">Calendars</p>
+          <div className="flex flex-wrap gap-2">
+            {calendarSources.map((source) => {
+              const enabled = Boolean(sourceSelection[source.id]);
+              const busy = savingSourceId === source.id;
+              return (
+                <button
+                  aria-pressed={enabled}
+                  className={`badge max-w-[280px] gap-2 bg-white/90 text-left transition ${enabled ? "" : "opacity-45 line-through"} ${busy ? "cursor-progress" : ""}`}
+                  disabled={busy}
+                  key={source.id}
+                  onClick={() => void toggleSourceSelection(source.id)}
+                  type="button"
+                >
+                  <span className="max-w-[240px] truncate">{source.tenantName} · {source.name}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
 
       {showCalendar ? <UnifiedWeekCalendar events={filteredEvents} tenants={enabledTenants} /> : null}
 

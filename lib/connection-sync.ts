@@ -57,6 +57,50 @@ function mergeSummary(target: SyncSummary, source: SyncSummary) {
   target.skipped += source.skipped;
 }
 
+function parsePositiveIntInRange(raw: string | undefined, fallback: number, min: number, max: number): number {
+  const n = raw ? Number(raw) : fallback;
+  if (!Number.isFinite(n)) {
+    return fallback;
+  }
+  const rounded = Math.floor(n);
+  if (rounded < min || rounded > max) {
+    return fallback;
+  }
+  return rounded;
+}
+
+function resolveConnectionSyncConcurrency(): number {
+  return parsePositiveIntInRange(process.env.SYNC_CONNECTION_CONCURRENCY, 2, 1, 6);
+}
+
+function resolveUserSyncConcurrency(): number {
+  return parsePositiveIntInRange(process.env.SYNC_USER_CONCURRENCY, 2, 1, 4);
+}
+
+async function runWithConcurrency<T, R>(items: T[], concurrency: number, worker: (item: T) => Promise<R>): Promise<R[]> {
+  if (items.length === 0) {
+    return [];
+  }
+
+  const limit = Math.max(1, Math.floor(concurrency));
+  const results: R[] = new Array(items.length);
+  let cursor = 0;
+
+  async function next(): Promise<void> {
+    const index = cursor;
+    if (index >= items.length) {
+      return;
+    }
+    cursor += 1;
+    results[index] = await worker(items[index]!);
+    await next();
+  }
+
+  const workers = Array.from({ length: Math.min(limit, items.length) }, () => next());
+  await Promise.all(workers);
+  return results;
+}
+
 function parseSyncState(raw: unknown): Record<string, unknown> {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
     return {};
@@ -440,16 +484,28 @@ export async function syncUserConnections(params: {
     return summary;
   }
 
-  for (const row of connections as ConnectionRow[]) {
-    const one = await runConnectionSync({
-      connection: row,
-      mode,
-      calendarStaleMs,
-      calendarMaxDeltaPagesPerCalendar,
-      peopleStaleMs
-    });
-    mergeSummary(summary, one);
-  }
+  const perConnection = await runWithConcurrency(connections as ConnectionRow[], resolveConnectionSyncConcurrency(), async (row) => {
+    try {
+      return await runConnectionSync({
+        connection: row,
+        mode,
+        calendarStaleMs,
+        calendarMaxDeltaPagesPerCalendar,
+        peopleStaleMs
+      });
+    } catch {
+      return {
+        usersScanned: 0,
+        connectionsScanned: 1,
+        calendarSynced: 0,
+        peopleSynced: 0,
+        failures: 1,
+        partials: 0,
+        skipped: 0
+      } satisfies SyncSummary;
+    }
+  });
+  perConnection.forEach((one) => mergeSummary(summary, one));
 
   return summary;
 }
@@ -471,16 +527,28 @@ export async function syncAllUsers(params: {
   }
 
   const uniqueUserIds = Array.from(new Set(userRows.map((row) => row.user_id))).slice(0, maxUsers);
-  for (const userId of uniqueUserIds) {
-    const one = await syncUserConnections({
-      userId,
-      mode,
-      calendarStaleMs,
-      calendarMaxDeltaPagesPerCalendar,
-      peopleStaleMs
-    });
-    mergeSummary(summary, one);
-  }
+  const perUser = await runWithConcurrency(uniqueUserIds, resolveUserSyncConcurrency(), async (userId) => {
+    try {
+      return await syncUserConnections({
+        userId,
+        mode,
+        calendarStaleMs,
+        calendarMaxDeltaPagesPerCalendar,
+        peopleStaleMs
+      });
+    } catch {
+      return {
+        usersScanned: 1,
+        connectionsScanned: 0,
+        calendarSynced: 0,
+        peopleSynced: 0,
+        failures: 1,
+        partials: 0,
+        skipped: 0
+      } satisfies SyncSummary;
+    }
+  });
+  perUser.forEach((one) => mergeSummary(summary, one));
 
   return summary;
 }

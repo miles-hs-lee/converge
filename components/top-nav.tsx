@@ -1,14 +1,17 @@
 import Link from "next/link";
 import type { Route } from "next";
 import { CalendarDays, AlertTriangle, Users, Settings, LogOut } from "lucide-react";
-import { createClient } from "@/lib/supabase/server";
 import { signOutAction } from "@/app/(app)/actions";
 import { isMockMode } from "@/lib/mock-mode";
 import { BrandLogo } from "@/components/brand-logo";
 import { getServerLocale } from "@/lib/i18n-server";
 import { t } from "@/lib/i18n";
 
-export async function TopNav() {
+type TopNavProps = {
+  userEmail?: string | null;
+};
+
+export async function TopNav({ userEmail }: TopNavProps) {
   const locale = await getServerLocale();
   const tt = (key: Parameters<typeof t>[1]) => t(locale, key);
 
@@ -18,11 +21,6 @@ export async function TopNav() {
     { href: "/people", label: tt("nav.people"), icon: Users },
     { href: "/settings", label: tt("nav.settings"), icon: Settings }
   ];
-
-  const supabase = await createClient();
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
 
   return (
     <header className="sticky top-0 z-30 pt-3" data-testid="top-nav">
@@ -56,10 +54,10 @@ export async function TopNav() {
           </nav>
 
           <div className="order-2 flex items-center gap-2 md:order-3">
-            {user ? (
+            {userEmail ? (
               <>
                 <span className="hidden max-w-44 truncate rounded-full border border-line bg-white/90 px-3 py-1.5 text-xs text-muted lg:inline-flex">
-                  {user.email}
+                  {userEmail}
                 </span>
                 <form action={signOutAction}>
                   <button className="btn btn-secondary px-3 py-1.5" data-testid="nav-logout" type="submit">

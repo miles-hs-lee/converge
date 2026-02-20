@@ -15,7 +15,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen">
-      <TopNav />
+      <TopNav userEmail={user.email} />
       <main className="page-wrap pb-10 pt-6 md:pt-8">{children}</main>
     </div>
   );

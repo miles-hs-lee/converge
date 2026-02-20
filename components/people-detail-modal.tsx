@@ -50,6 +50,8 @@ type PeopleDetailModalProps = {
   manager: ManagerSummary | null;
   actionLinks: ActionLinks | null;
   selectedPhone: string;
+  profilePhotoUrl?: string | null;
+  photoLoading?: boolean;
   copiedField: "mail" | "phone" | null;
   isLoading?: boolean;
   isFavorite: boolean;
@@ -100,6 +102,8 @@ export function PeopleDetailModal({
   manager,
   actionLinks,
   selectedPhone,
+  profilePhotoUrl = null,
+  photoLoading = false,
   copiedField,
   isLoading = false,
   isFavorite,
@@ -132,8 +136,14 @@ export function PeopleDetailModal({
               <div className="min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-[0.14em] text-accent">{t("people.detailTitle")}</p>
                 <div className="mt-2 flex items-center gap-3">
-                  <div className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-accent/25 bg-accent/10 text-sm font-bold text-accent">
-                    {initials(person.displayName)}
+                  <div className="relative inline-flex h-11 w-11 items-center justify-center overflow-hidden rounded-xl border border-accent/25 bg-accent/10 text-sm font-bold text-accent">
+                    {profilePhotoUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img alt={person.displayName} className="h-full w-full object-cover" src={profilePhotoUrl} />
+                    ) : (
+                      initials(person.displayName)
+                    )}
+                    {photoLoading ? <span className="absolute bottom-1 right-1 h-2 w-2 animate-pulse rounded-full bg-accent" /> : null}
                   </div>
                   <div className="min-w-0">
                     <h3 className="truncate text-xl font-semibold tracking-tight text-text">{person.displayName}</h3>

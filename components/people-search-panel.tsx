@@ -144,8 +144,13 @@ export function PeopleSearchPanel({ people, serverSearchEnabled = false, initial
   const [managerLookupTried, setManagerLookupTried] = useState<Set<string>>(() => new Set());
   const [detailLookupTried, setDetailLookupTried] = useState<Set<string>>(() => new Set());
   const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
+  const [showDetailLoading, setShowDetailLoading] = useState(false);
+  const [profilePhotoByPersonId, setProfilePhotoByPersonId] = useState<Record<string, string>>({});
+  const [photoLoadingId, setPhotoLoadingId] = useState<string | null>(null);
+  const [photoUnavailableIds, setPhotoUnavailableIds] = useState<Set<string>>(() => new Set());
   const [includeGuests, setIncludeGuests] = useState(false);
   const listViewportRef = useRef<HTMLDivElement | null>(null);
+  const profilePhotoByPersonIdRef = useRef<Record<string, string>>({});
   const [virtualScrollTop, setVirtualScrollTop] = useState(0);
   const [virtualViewportHeight, setVirtualViewportHeight] = useState(640);
 
@@ -176,6 +181,16 @@ export function PeopleSearchPanel({ people, serverSearchEnabled = false, initial
     setLoadedPeople(people);
     setServerHasMore(initialHasMore);
   }, [initialHasMore, people, serverSearchEnabled]);
+
+  useEffect(() => {
+    profilePhotoByPersonIdRef.current = profilePhotoByPersonId;
+  }, [profilePhotoByPersonId]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(profilePhotoByPersonIdRef.current).forEach((objectUrl) => URL.revokeObjectURL(objectUrl));
+    };
+  }, []);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -406,6 +421,74 @@ export function PeopleSearchPanel({ people, serverSearchEnabled = false, initial
       cancelled = true;
     };
   }, [managerLookupTried, selectedManager, selectedPerson, serverSearchEnabled]);
+
+  useEffect(() => {
+    const active = Boolean(selectedPerson?.id) && detailLoadingId === selectedPerson?.id;
+    if (!active) {
+      setShowDetailLoading(false);
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setShowDetailLoading(true);
+    }, 350);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [detailLoadingId, selectedPerson?.id]);
+
+  useEffect(() => {
+    if (!selectedPerson || selectedPerson.provider !== "microsoft") {
+      setPhotoLoadingId(null);
+      return;
+    }
+    if (profilePhotoByPersonId[selectedPerson.id] || photoUnavailableIds.has(selectedPerson.id)) {
+      return;
+    }
+
+    const targetId = selectedPerson.id;
+    const controller = new AbortController();
+    setPhotoLoadingId(targetId);
+
+    const run = async () => {
+      const response = await fetch(`/api/people/photo?id=${encodeURIComponent(targetId)}`, {
+        cache: "no-store",
+        signal: controller.signal
+      });
+      if (!response.ok) {
+        throw new Error("photo_unavailable");
+      }
+      const blob = await response.blob();
+      if (!blob || blob.size === 0) {
+        throw new Error("photo_empty");
+      }
+      const objectUrl = URL.createObjectURL(blob);
+      setProfilePhotoByPersonId((prev) => {
+        const previousUrl = prev[targetId];
+        if (previousUrl && previousUrl !== objectUrl) {
+          URL.revokeObjectURL(previousUrl);
+        }
+        return { ...prev, [targetId]: objectUrl };
+      });
+    };
+
+    void run()
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setPhotoUnavailableIds((prev) => new Set(prev).add(targetId));
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setPhotoLoadingId((current) => (current === targetId ? null : current));
+        }
+      });
+
+    return () => {
+      controller.abort();
+    };
+  }, [photoUnavailableIds, profilePhotoByPersonId, selectedPerson]);
 
   const actionLinks = selectedPerson ? buildActionLinks(selectedPerson) : null;
   const selectedPhone = selectedPerson ? getPrimaryPhone(selectedPerson) : "";
@@ -771,7 +854,7 @@ export function PeopleSearchPanel({ people, serverSearchEnabled = false, initial
       <PeopleDetailModal
         actionLinks={actionLinks}
         copiedField={copiedField}
-        isLoading={detailLoadingId === selectedPerson?.id}
+        isLoading={showDetailLoading}
         isFavorite={selectedPerson ? favoriteIds.includes(selectedPerson.id) : false}
         manager={selectedManager}
         onClose={() => setSelectedPersonId(null)}
@@ -796,6 +879,8 @@ export function PeopleSearchPanel({ people, serverSearchEnabled = false, initial
           }
         }}
         person={selectedPerson}
+        photoLoading={photoLoadingId === selectedPerson?.id}
+        profilePhotoUrl={selectedPerson ? (profilePhotoByPersonId[selectedPerson.id] ?? null) : null}
         selectedPhone={selectedPhone}
       />
     </>

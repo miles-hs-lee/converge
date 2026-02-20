@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Route } from "next";
-import { CalendarDays, Bell, Search, Settings, LogOut } from "lucide-react";
+import { CalendarDays, AlertTriangle, Users, Settings, LogOut } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { signOutAction } from "@/app/(app)/actions";
 import { isMockMode } from "@/lib/mock-mode";
@@ -14,8 +14,8 @@ export async function TopNav() {
 
   const tabs: Array<{ href: string; label: string; icon: typeof CalendarDays }> = [
     { href: "/calendar", label: tt("nav.calendar"), icon: CalendarDays },
-    { href: "/alerts", label: tt("nav.alerts"), icon: Bell },
-    { href: "/people", label: tt("nav.people"), icon: Search },
+    { href: "/alerts", label: tt("nav.alerts"), icon: AlertTriangle },
+    { href: "/people", label: tt("nav.people"), icon: Users },
     { href: "/settings", label: tt("nav.settings"), icon: Settings }
   ];
 

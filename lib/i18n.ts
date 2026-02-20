@@ -346,7 +346,7 @@ type Dict = Record<I18nKey, string>;
 const enUS: Dict = {
   "brand.subtitle": "Unified M365 Workspace",
   "nav.calendar": "Calendar",
-  "nav.alerts": "Alerts",
+  "nav.alerts": "Conflicts",
   "nav.people": "People",
   "nav.settings": "Settings",
   "nav.login": "Sign in",
@@ -666,7 +666,7 @@ const enUS: Dict = {
 const koKR: Dict = {
   "brand.subtitle": "통합 M365 워크스페이스",
   "nav.calendar": "캘린더",
-  "nav.alerts": "알림",
+  "nav.alerts": "일정충돌",
   "nav.people": "조직도",
   "nav.settings": "설정",
   "nav.login": "로그인",
@@ -986,7 +986,7 @@ const koKR: Dict = {
 const jaJP: Dict = {
   "brand.subtitle": "統合 M365 ワークスペース",
   "nav.calendar": "カレンダー",
-  "nav.alerts": "アラート",
+  "nav.alerts": "競合",
   "nav.people": "組織",
   "nav.settings": "設定",
   "nav.login": "ログイン",

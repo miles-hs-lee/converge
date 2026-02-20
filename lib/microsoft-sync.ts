@@ -246,9 +246,10 @@ export async function syncMicrosoftCalendarSnapshot(params: {
   accountEmail: string;
   connectionId: string;
   calendarState?: Record<string, unknown>;
+  maxDeltaPagesPerCalendar?: number;
   adminClient: ReturnType<typeof createAdminClient>;
 }): Promise<SyncResult> {
-  const { accessToken, accountEmail, connectionId, calendarState, adminClient } = params;
+  const { accessToken, accountEmail, connectionId, calendarState, maxDeltaPagesPerCalendar, adminClient } = params;
 
   const currentCalendarState = isRecord(calendarState) ? calendarState : {};
   const previousDeltaByCalendar = parseDeltaByCalendar(currentCalendarState.deltaByCalendar);
@@ -311,6 +312,8 @@ export async function syncMicrosoftCalendarSnapshot(params: {
   const eventRows: Array<Record<string, unknown>> = [];
   const deletedExternalEventIds = new Set<string>();
   const nextDeltaByCalendar: Record<string, string> = { ...previousDeltaByCalendar };
+  const deltaPageGuardLimitRaw = typeof maxDeltaPagesPerCalendar === "number" ? maxDeltaPagesPerCalendar : NaN;
+  const deltaPageGuardLimit = Number.isFinite(deltaPageGuardLimitRaw) && deltaPageGuardLimitRaw > 0 ? Math.floor(deltaPageGuardLimitRaw) : 60;
   let partialFailure = false;
 
   for (const calendar of calendars) {
@@ -325,12 +328,12 @@ export async function syncMicrosoftCalendarSnapshot(params: {
       previousDeltaLink && previousDeltaLink.length > 0
         ? previousDeltaLink
         : buildCalendarDeltaUrl({ calendarId: calendar.id!, fromIso, toIso: toIsoDate });
-    let latestDeltaLink: string | null = null;
+    let latestCursor: string | null = null;
     let calendarFailed = false;
     let retriedWithFreshDelta = false;
     let guard = 0;
 
-    while (requestUrl && guard < 60) {
+    while (requestUrl && guard < deltaPageGuardLimit) {
       guard += 1;
       const deltaResponse = await fetchGraphJson<GraphCalendarDeltaResponse>(requestUrl, accessToken);
 
@@ -343,7 +346,7 @@ export async function syncMicrosoftCalendarSnapshot(params: {
         if (shouldResetDelta) {
           retriedWithFreshDelta = true;
           requestUrl = buildCalendarDeltaUrl({ calendarId: calendar.id!, fromIso, toIso: toIsoDate });
-          latestDeltaLink = null;
+          latestCursor = null;
           continue;
         }
 
@@ -427,16 +430,17 @@ export async function syncMicrosoftCalendarSnapshot(params: {
 
       if (typeof payload["@odata.nextLink"] === "string" && payload["@odata.nextLink"].length > 0) {
         requestUrl = payload["@odata.nextLink"];
+        latestCursor = requestUrl;
       } else {
         requestUrl = "";
         if (typeof payload["@odata.deltaLink"] === "string" && payload["@odata.deltaLink"].length > 0) {
-          latestDeltaLink = payload["@odata.deltaLink"];
+          latestCursor = payload["@odata.deltaLink"];
         }
       }
     }
 
-    if (guard >= 60) {
-      calendarFailed = true;
+    if (requestUrl && guard >= deltaPageGuardLimit) {
+      partialFailure = true;
     }
 
     if (calendarFailed) {
@@ -444,8 +448,8 @@ export async function syncMicrosoftCalendarSnapshot(params: {
       continue;
     }
 
-    if (latestDeltaLink) {
-      nextDeltaByCalendar[calendar.id!] = latestDeltaLink;
+    if (latestCursor) {
+      nextDeltaByCalendar[calendar.id!] = latestCursor;
     } else if (!previousDeltaLink) {
       partialFailure = true;
     }

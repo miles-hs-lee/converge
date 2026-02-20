@@ -247,11 +247,12 @@ type RunConnectionParams = {
   connection: ConnectionRow;
   mode: SyncMode;
   calendarStaleMs?: number;
+  calendarMaxDeltaPagesPerCalendar?: number;
   peopleStaleMs?: number;
 };
 
 async function runConnectionSync(params: RunConnectionParams): Promise<SyncSummary> {
-  const { connection, mode, calendarStaleMs, peopleStaleMs } = params;
+  const { connection, mode, calendarStaleMs, calendarMaxDeltaPagesPerCalendar, peopleStaleMs } = params;
   const admin = createAdminClient();
   const summary = emptySummary();
   summary.connectionsScanned = 1;
@@ -309,6 +310,7 @@ async function runConnectionSync(params: RunConnectionParams): Promise<SyncSumma
         accountEmail: connection.m365_user_principal_name ?? "unknown@account",
         connectionId: connection.id,
         calendarState: currentCalendarState,
+        maxDeltaPagesPerCalendar: calendarMaxDeltaPagesPerCalendar,
         adminClient: admin
       });
     } else if (connection.provider === "google") {
@@ -414,9 +416,10 @@ export async function syncUserConnections(params: {
   mode: SyncMode;
   connectionId?: string;
   calendarStaleMs?: number;
+  calendarMaxDeltaPagesPerCalendar?: number;
   peopleStaleMs?: number;
 }): Promise<SyncSummary> {
-  const { userId, mode, connectionId, calendarStaleMs, peopleStaleMs } = params;
+  const { userId, mode, connectionId, calendarStaleMs, calendarMaxDeltaPagesPerCalendar, peopleStaleMs } = params;
   const admin = createAdminClient();
   const summary = emptySummary();
   summary.usersScanned = 1;
@@ -442,6 +445,7 @@ export async function syncUserConnections(params: {
       connection: row,
       mode,
       calendarStaleMs,
+      calendarMaxDeltaPagesPerCalendar,
       peopleStaleMs
     });
     mergeSummary(summary, one);
@@ -453,10 +457,11 @@ export async function syncUserConnections(params: {
 export async function syncAllUsers(params: {
   mode: SyncMode;
   calendarStaleMs?: number;
+  calendarMaxDeltaPagesPerCalendar?: number;
   peopleStaleMs?: number;
   maxUsers?: number;
 }): Promise<SyncSummary> {
-  const { mode, calendarStaleMs, peopleStaleMs, maxUsers = 200 } = params;
+  const { mode, calendarStaleMs, calendarMaxDeltaPagesPerCalendar, peopleStaleMs, maxUsers = 200 } = params;
   const admin = createAdminClient();
   const summary = emptySummary();
 
@@ -471,6 +476,7 @@ export async function syncAllUsers(params: {
       userId,
       mode,
       calendarStaleMs,
+      calendarMaxDeltaPagesPerCalendar,
       peopleStaleMs
     });
     mergeSummary(summary, one);

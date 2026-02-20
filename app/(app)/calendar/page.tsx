@@ -2,18 +2,9 @@ import { createClient } from "@/lib/supabase/server";
 import { isMockMode } from "@/lib/mock-mode";
 import { mockCalendarEvents, mockConnections } from "@/lib/mock-data";
 import { CalendarEventsOverview, type CalendarAttendee, type CalendarEventRow } from "@/components/calendar-events-overview";
+import { CalendarEntrySync } from "@/components/calendar-entry-sync";
 import { getServerLocale } from "@/lib/i18n-server";
 import { t } from "@/lib/i18n";
-import { syncUserConnections } from "@/lib/connection-sync";
-
-function resolveAutoSyncStaleMs(): number {
-  const rawMinutes = process.env.CALENDAR_AUTO_SYNC_STALE_MINUTES;
-  const minutes = rawMinutes ? Number(rawMinutes) : 5;
-  if (!Number.isFinite(minutes) || minutes <= 0) {
-    return 1000 * 60 * 5;
-  }
-  return Math.floor(minutes * 60 * 1000);
-}
 
 function parseAttendeeData(raw: unknown): { attendeeEmails: string[]; attendeeDetails: CalendarAttendee[] } {
   if (!Array.isArray(raw)) {
@@ -72,6 +63,7 @@ export default async function CalendarPage() {
 
   let events: CalendarEventRow[] = [];
   let tenants: string[] = [];
+  let shouldTriggerEntrySync = false;
 
   if (isMockMode) {
     events = mockCalendarEvents;
@@ -83,16 +75,7 @@ export default async function CalendarPage() {
     } = await supabase.auth.getUser();
 
     if (user) {
-      // On calendar page entry, run delta sync only when stale to keep UI fresh.
-      try {
-        await syncUserConnections({
-          userId: user.id,
-          mode: "calendar",
-          calendarStaleMs: resolveAutoSyncStaleMs()
-        });
-      } catch {
-        // Rendering should continue even if sync fails.
-      }
+      shouldTriggerEntrySync = true;
 
       const now = Date.now();
       const from = new Date(now - 1000 * 60 * 60 * 24 * 14).toISOString();
@@ -184,6 +167,7 @@ export default async function CalendarPage() {
 
   return (
     <div className="space-y-4">
+      <CalendarEntrySync enabled={shouldTriggerEntrySync} />
       <section className="panel-glass card p-5 md:p-6">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>

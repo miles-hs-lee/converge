@@ -3,6 +3,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { syncUserConnections } from "@/lib/connection-sync";
 
+function resolveLoginSyncMaxDeltaPages(): number {
+  const raw = process.env.CALENDAR_ENTRY_SYNC_MAX_DELTA_PAGES;
+  const n = raw ? Number(raw) : 4;
+  if (!Number.isFinite(n) || n <= 0) {
+    return 4;
+  }
+  return Math.floor(n);
+}
+
 async function runPostLoginCalendarSync(supabase: Awaited<ReturnType<typeof createClient>>) {
   const {
     data: { user }
@@ -16,7 +25,8 @@ async function runPostLoginCalendarSync(supabase: Awaited<ReturnType<typeof crea
     await syncUserConnections({
       userId: user.id,
       mode: "calendar",
-      calendarStaleMs: 0
+      calendarStaleMs: 0,
+      calendarMaxDeltaPagesPerCalendar: resolveLoginSyncMaxDeltaPages()
     });
   } catch {
     // Post-login sync should not block login success.

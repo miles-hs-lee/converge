@@ -1,6 +1,6 @@
 "use client";
 
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronDown,
   ChevronRight,
@@ -34,6 +34,7 @@ type PersonRow = {
   country: string;
   userType: string;
   accountEnabled: boolean | null;
+  detailLoaded?: boolean;
 };
 
 type PeopleSearchPanelProps = {
@@ -45,6 +46,14 @@ type PeopleSearchPanelProps = {
 const FAVORITES_STORAGE_KEY = "converge:favorites:people";
 const RECENTS_STORAGE_KEY = "converge:recent:people";
 const SEARCH_PAGE_SIZE = 60;
+const VIRTUALIZATION_THRESHOLD = 120;
+const VIRTUAL_HEADER_HEIGHT = 44;
+const VIRTUAL_ROW_HEIGHT = 96;
+const VIRTUAL_OVERSCAN_PX = 360;
+
+type VirtualListItem =
+  | { key: string; kind: "tenantHeader"; tenantName: string; count: number; collapsed: boolean }
+  | { key: string; kind: "person"; person: PersonRow; hideTenant: boolean };
 
 function buildActionLinks(person: PersonRow) {
   const email = person.mail;
@@ -124,7 +133,7 @@ export function PeopleSearchPanel({ people, serverSearchEnabled = false, initial
   const [query, setQuery] = useState("");
   const [loadedPeople, setLoadedPeople] = useState<PersonRow[]>(people);
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
-  const [sortMode, setSortMode] = useState<"default" | "tenant">("default");
+  const [sortMode, setSortMode] = useState<"default" | "tenant">("tenant");
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
   const [recentIds, setRecentIds] = useState<string[]>([]);
   const [collapsedTenants, setCollapsedTenants] = useState<Record<string, boolean>>({});
@@ -133,7 +142,12 @@ export function PeopleSearchPanel({ people, serverSearchEnabled = false, initial
   const [loadingMore, setLoadingMore] = useState(false);
   const [serverHasMore, setServerHasMore] = useState(initialHasMore);
   const [managerLookupTried, setManagerLookupTried] = useState<Set<string>>(() => new Set());
+  const [detailLookupTried, setDetailLookupTried] = useState<Set<string>>(() => new Set());
+  const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
   const [includeGuests, setIncludeGuests] = useState(false);
+  const listViewportRef = useRef<HTMLDivElement | null>(null);
+  const [virtualScrollTop, setVirtualScrollTop] = useState(0);
+  const [virtualViewportHeight, setVirtualViewportHeight] = useState(640);
 
   const deferredQuery = useDeferredValue(query.trim());
   const [debouncedQuery, setDebouncedQuery] = useState(deferredQuery);
@@ -170,11 +184,13 @@ export function PeopleSearchPanel({ people, serverSearchEnabled = false, initial
     return () => window.clearTimeout(timer);
   }, [deferredQuery]);
 
-  async function fetchPeoplePage(params: { offset: number; append: boolean; queryValue: string; signal?: AbortSignal }) {
+  async function fetchPeoplePage(params: { offset: number; append: boolean; queryValue: string; includeGuests: boolean; signal?: AbortSignal }) {
     const search = new URLSearchParams({
+      mode: "summary",
       q: params.queryValue,
       offset: String(params.offset),
-      limit: String(SEARCH_PAGE_SIZE)
+      limit: String(SEARCH_PAGE_SIZE),
+      includeGuests: params.includeGuests ? "true" : "false"
     });
     const response = await fetch(`/api/people/search?${search.toString()}`, { cache: "no-store", signal: params.signal });
     if (!response.ok) {
@@ -200,7 +216,7 @@ export function PeopleSearchPanel({ people, serverSearchEnabled = false, initial
     if (!serverSearchEnabled) {
       return;
     }
-    if (!debouncedQuery && people.length > 0) {
+    if (!includeGuests && !debouncedQuery && people.length > 0) {
       setLoadedPeople(people);
       setServerHasMore(initialHasMore);
       setLoading(false);
@@ -208,7 +224,7 @@ export function PeopleSearchPanel({ people, serverSearchEnabled = false, initial
     }
     const controller = new AbortController();
     setLoading(true);
-    fetchPeoplePage({ offset: 0, append: false, queryValue: debouncedQuery, signal: controller.signal })
+    fetchPeoplePage({ offset: 0, append: false, queryValue: debouncedQuery, includeGuests, signal: controller.signal })
       .catch(() => {
         if (!controller.signal.aborted) {
           setLoadedPeople([]);
@@ -224,14 +240,14 @@ export function PeopleSearchPanel({ people, serverSearchEnabled = false, initial
     return () => {
       controller.abort();
     };
-  }, [debouncedQuery, initialHasMore, people, serverSearchEnabled]);
+  }, [debouncedQuery, includeGuests, initialHasMore, people, serverSearchEnabled]);
 
   const peopleById = useMemo(() => {
     return new Map(visiblePeople.map((person) => [person.id, person]));
   }, [visiblePeople]);
   const peopleByExternalId = useMemo(() => {
-    return new Map(visiblePeople.map((person) => [person.externalPersonId, person]));
-  }, [visiblePeople]);
+    return new Map(activePeople.map((person) => [person.externalPersonId, person]));
+  }, [activePeople]);
 
   const favoritePeople = useMemo(() => {
     return favoriteIds.map((id) => peopleById.get(id)).filter((item): item is PersonRow => Boolean(item));
@@ -309,6 +325,50 @@ export function PeopleSearchPanel({ people, serverSearchEnabled = false, initial
   }, [peopleByExternalId, selectedPerson]);
 
   useEffect(() => {
+    if (!serverSearchEnabled || !selectedPersonId) {
+      setDetailLoadingId(null);
+      return;
+    }
+    const target = activePeople.find((person) => person.id === selectedPersonId);
+    if (!target || target.detailLoaded) {
+      setDetailLoadingId(null);
+      return;
+    }
+    if (detailLookupTried.has(target.id)) {
+      return;
+    }
+
+    const controller = new AbortController();
+    setDetailLookupTried((prev) => new Set(prev).add(target.id));
+    setDetailLoadingId(target.id);
+
+    const run = async () => {
+      const search = new URLSearchParams({
+        id: target.id,
+        mode: "detail",
+        includeGuests: "true",
+        limit: "1"
+      });
+      const response = await fetch(`/api/people/search?${search.toString()}`, { cache: "no-store", signal: controller.signal });
+      if (!response.ok) return;
+      const json = (await response.json()) as { ok: boolean; items: PersonRow[] };
+      if (!json.ok || !json.items?.[0]) return;
+      const full = json.items[0];
+      setLoadedPeople((prev) => prev.map((row) => (row.id === full.id ? { ...row, ...full, detailLoaded: true } : row)));
+    };
+
+    void run().finally(() => {
+      if (!controller.signal.aborted) {
+        setDetailLoadingId((current) => (current === target.id ? null : current));
+      }
+    });
+
+    return () => {
+      controller.abort();
+    };
+  }, [activePeople, detailLookupTried, selectedPersonId, serverSearchEnabled]);
+
+  useEffect(() => {
     if (!serverSearchEnabled || !selectedPerson?.managerExternalId || selectedManager) {
       return;
     }
@@ -322,7 +382,9 @@ export function PeopleSearchPanel({ people, serverSearchEnabled = false, initial
 
     const run = async () => {
       const search = new URLSearchParams({
+        mode: "summary",
         externalPersonId: managerExternalId,
+        includeGuests: "true",
         limit: "1"
       });
       const response = await fetch(`/api/people/search?${search.toString()}`, { cache: "no-store" });
@@ -376,7 +438,8 @@ export function PeopleSearchPanel({ people, serverSearchEnabled = false, initial
       await fetchPeoplePage({
         offset: loadedPeople.length,
         append: true,
-        queryValue: debouncedQuery
+        queryValue: debouncedQuery,
+        includeGuests
       });
     } finally {
       setLoadingMore(false);
@@ -402,7 +465,7 @@ export function PeopleSearchPanel({ people, serverSearchEnabled = false, initial
   function renderPersonCard(person: PersonRow, options?: { hideTenant?: boolean }) {
     const isFavorite = favoriteIds.includes(person.id);
     return (
-      <article className="flex items-start gap-2 rounded-xl border border-line bg-white/90 p-2.5" key={person.id}>
+      <article className="flex items-start gap-2 rounded-xl border border-line bg-white/90 p-2.5">
         <button
           className="flex-1 rounded-lg px-1 py-1 text-left transition hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
           onClick={() => openPerson(person.id)}
@@ -426,6 +489,106 @@ export function PeopleSearchPanel({ people, serverSearchEnabled = false, initial
       </article>
     );
   }
+
+  const shouldVirtualize = filtered.length >= VIRTUALIZATION_THRESHOLD;
+
+  const virtualItems = useMemo(() => {
+    if (!shouldVirtualize) {
+      return [] as VirtualListItem[];
+    }
+
+    if (sortMode === "default") {
+      return filtered.map((person) => ({
+        key: `person-${person.id}`,
+        kind: "person" as const,
+        person,
+        hideTenant: false
+      }));
+    }
+
+    const items: VirtualListItem[] = [];
+    for (const group of tenantGroups) {
+      const collapsed = Boolean(collapsedTenants[group.tenantName]);
+      items.push({
+        key: `tenant-${group.tenantName}`,
+        kind: "tenantHeader",
+        tenantName: group.tenantName,
+        count: group.items.length,
+        collapsed
+      });
+
+      if (!collapsed) {
+        for (const person of group.items) {
+          items.push({
+            key: `person-${person.id}`,
+            kind: "person",
+            person,
+            hideTenant: true
+          });
+        }
+      }
+    }
+    return items;
+  }, [collapsedTenants, filtered, shouldVirtualize, sortMode, tenantGroups]);
+
+  const virtualLayout = useMemo(() => {
+    if (!shouldVirtualize) {
+      return { totalHeight: 0, rows: [] as Array<{ item: VirtualListItem; top: number; height: number; bottom: number }> };
+    }
+    let top = 0;
+    const rows = virtualItems.map((item) => {
+      const height = item.kind === "tenantHeader" ? VIRTUAL_HEADER_HEIGHT : VIRTUAL_ROW_HEIGHT;
+      const row = { item, top, height, bottom: top + height };
+      top += height;
+      return row;
+    });
+    return { totalHeight: top, rows };
+  }, [shouldVirtualize, virtualItems]);
+
+  const visibleVirtualRows = useMemo(() => {
+    if (!shouldVirtualize || virtualLayout.rows.length === 0) {
+      return [] as Array<{ item: VirtualListItem; top: number; height: number; bottom: number }>;
+    }
+
+    const minY = Math.max(0, virtualScrollTop - VIRTUAL_OVERSCAN_PX);
+    const maxY = virtualScrollTop + virtualViewportHeight + VIRTUAL_OVERSCAN_PX;
+    let start = 0;
+    while (start < virtualLayout.rows.length && virtualLayout.rows[start]!.bottom < minY) {
+      start += 1;
+    }
+    let end = start;
+    while (end < virtualLayout.rows.length && virtualLayout.rows[end]!.top <= maxY) {
+      end += 1;
+    }
+    return virtualLayout.rows.slice(start, Math.max(start, end));
+  }, [shouldVirtualize, virtualLayout.rows, virtualScrollTop, virtualViewportHeight]);
+
+  useEffect(() => {
+    if (!shouldVirtualize || !listViewportRef.current) {
+      return;
+    }
+
+    const container = listViewportRef.current;
+    setVirtualViewportHeight(container.clientHeight || 640);
+    setVirtualScrollTop(container.scrollTop || 0);
+
+    const observer = new ResizeObserver(() => {
+      setVirtualViewportHeight(container.clientHeight || 640);
+    });
+    observer.observe(container);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [shouldVirtualize]);
+
+  useEffect(() => {
+    if (!shouldVirtualize || !listViewportRef.current) {
+      return;
+    }
+    listViewportRef.current.scrollTop = 0;
+    setVirtualScrollTop(0);
+  }, [debouncedQuery, includeGuests, shouldVirtualize, sortMode]);
 
   return (
     <>
@@ -526,27 +689,69 @@ export function PeopleSearchPanel({ people, serverSearchEnabled = false, initial
       <div className="mt-3 space-y-2 text-sm">
         {loading ? <p className="text-xs text-muted">{t("people.loading")}</p> : null}
 
-        {sortMode === "default"
-          ? filtered.map((person) => renderPersonCard(person))
-          : tenantGroups.map((group) => {
-              const collapsed = Boolean(collapsedTenants[group.tenantName]);
-              return (
-                <section className="rounded-xl border border-line bg-white/75 p-2" key={group.tenantName}>
-                  <button
-                    className="flex w-full items-center justify-between rounded-lg px-1 py-1 text-left"
-                    onClick={() => toggleTenant(group.tenantName)}
-                    type="button"
-                  >
-                    <p className="text-xs font-semibold uppercase tracking-[0.1em] text-muted">{group.tenantName}</p>
-                    <span className="inline-flex items-center gap-1 text-xs text-muted">
-                      {t("people.searchCount", { count: group.items.length })}
-                      {collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
-                    </span>
-                  </button>
-                  {!collapsed ? <div className="mt-2 space-y-2">{group.items.map((person) => renderPersonCard(person, { hideTenant: true }))}</div> : null}
-                </section>
-              );
-            })}
+        {shouldVirtualize ? (
+          <div
+            className="max-h-[68vh] overflow-y-auto rounded-xl border border-line/70 bg-white/35 p-2"
+            onScroll={(event) => setVirtualScrollTop(event.currentTarget.scrollTop)}
+            ref={listViewportRef}
+          >
+            <div className="relative" style={{ height: `${virtualLayout.totalHeight}px` }}>
+              {visibleVirtualRows.map((row) => {
+                const item = row.item;
+                if (item.kind === "tenantHeader") {
+                  return (
+                    <div className="absolute left-0 right-0 px-1" key={item.key} style={{ top: `${row.top}px`, height: `${row.height}px` }}>
+                      <button
+                        className="flex h-[38px] w-full items-center justify-between rounded-lg border border-line bg-white/85 px-2 text-left"
+                        onClick={() => toggleTenant(item.tenantName)}
+                        type="button"
+                      >
+                        <p className="text-xs font-semibold uppercase tracking-[0.1em] text-muted">{item.tenantName}</p>
+                        <span className="inline-flex items-center gap-1 text-xs text-muted">
+                          {t("people.searchCount", { count: item.count })}
+                          {item.collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+                        </span>
+                      </button>
+                    </div>
+                  );
+                }
+                return (
+                  <div className="absolute left-0 right-0 px-1 py-1" key={item.key} style={{ top: `${row.top}px`, height: `${row.height}px` }}>
+                    {renderPersonCard(item.person, { hideTenant: item.hideTenant })}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : sortMode === "default" ? (
+          filtered.map((person) => <div key={person.id}>{renderPersonCard(person)}</div>)
+        ) : (
+          tenantGroups.map((group) => {
+            const collapsed = Boolean(collapsedTenants[group.tenantName]);
+            return (
+              <section className="rounded-xl border border-line bg-white/75 p-2" key={group.tenantName}>
+                <button
+                  className="flex w-full items-center justify-between rounded-lg px-1 py-1 text-left"
+                  onClick={() => toggleTenant(group.tenantName)}
+                  type="button"
+                >
+                  <p className="text-xs font-semibold uppercase tracking-[0.1em] text-muted">{group.tenantName}</p>
+                  <span className="inline-flex items-center gap-1 text-xs text-muted">
+                    {t("people.searchCount", { count: group.items.length })}
+                    {collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+                  </span>
+                </button>
+                {!collapsed ? (
+                  <div className="mt-2 space-y-2">
+                    {group.items.map((person) => (
+                      <div key={person.id}>{renderPersonCard(person, { hideTenant: true })}</div>
+                    ))}
+                  </div>
+                ) : null}
+              </section>
+            );
+          })
+        )}
 
         {!loading && filtered.length === 0 ? (
           <div className="rounded-xl border border-dashed border-line bg-white/70 px-3 py-6 text-center text-muted">
@@ -566,6 +771,7 @@ export function PeopleSearchPanel({ people, serverSearchEnabled = false, initial
       <PeopleDetailModal
         actionLinks={actionLinks}
         copiedField={copiedField}
+        isLoading={detailLoadingId === selectedPerson?.id}
         isFavorite={selectedPerson ? favoriteIds.includes(selectedPerson.id) : false}
         manager={selectedManager}
         onClose={() => setSelectedPersonId(null)}

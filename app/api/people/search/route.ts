@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
+const NON_GUEST_FILTER =
+  "and(user_type.is.null,user_principal_name.is.null),and(user_type.is.null,user_principal_name.not.ilike.%23EXT%23),and(user_type.not.ilike.guest,user_principal_name.is.null),and(user_type.not.ilike.guest,user_principal_name.not.ilike.%23EXT%23)";
+
 type PersonRow = {
   id: string;
   displayName: string;
@@ -24,6 +27,7 @@ type PersonRow = {
   country: string;
   userType: string;
   accountEnabled: boolean | null;
+  detailLoaded?: boolean;
 };
 
 function rawString(raw: unknown, key: string): string {
@@ -46,13 +50,27 @@ function normalizeQuery(value: string): string {
   return value.trim().toLowerCase();
 }
 
+function parseBoolean(raw: string | null, fallback: boolean): boolean {
+  if (raw === null) return fallback;
+  const v = raw.trim().toLowerCase();
+  if (v === "1" || v === "true" || v === "yes" || v === "on") return true;
+  if (v === "0" || v === "false" || v === "no" || v === "off") return false;
+  return fallback;
+}
+
 function toPersonRow(params: {
   person: Record<string, any>;
   tenantByConnection: Map<string, string>;
   sourceByConnection: Map<string, string>;
   providerByConnection: Map<string, string>;
+  includeDetail: boolean;
 }): PersonRow {
-  const { person, tenantByConnection, sourceByConnection, providerByConnection } = params;
+  const { person, tenantByConnection, sourceByConnection, providerByConnection, includeDetail } = params;
+
+  const upn =
+    ("user_principal_name" in person && typeof person.user_principal_name === "string" ? person.user_principal_name : "") ||
+    rawString(person.raw, "userPrincipalName");
+  const userType = ("user_type" in person && typeof person.user_type === "string" ? person.user_type : "") || rawString(person.raw, "userType");
 
   return {
     id: person.id,
@@ -61,24 +79,29 @@ function toPersonRow(params: {
     jobTitle: person.job_title ?? "",
     department: person.department ?? "",
     tenantName: tenantByConnection.get(person.connection_id) ?? "Connected Tenant",
-    officeLocation: person.office_location ?? "",
+    officeLocation: includeDetail ? person.office_location ?? "" : "",
     mobilePhone: person.mobile_phone ?? "",
     businessPhones: person.business_phones ?? [],
     sourceAccount: sourceByConnection.get(person.connection_id) ?? "",
     provider: providerByConnection.get(person.connection_id) ?? "microsoft",
-    upn: ("user_principal_name" in person && typeof person.user_principal_name === "string" ? person.user_principal_name : "") || rawString(person.raw, "userPrincipalName"),
+    upn,
     externalPersonId: person.external_person_id ?? "",
     managerExternalId: person.manager_external_id ?? "",
-    companyName: ("company_name" in person && typeof person.company_name === "string" ? person.company_name : "") || rawString(person.raw, "companyName"),
-    employeeId: ("employee_id" in person && typeof person.employee_id === "string" ? person.employee_id : "") || rawString(person.raw, "employeeId"),
+    companyName: includeDetail ? ("company_name" in person && typeof person.company_name === "string" ? person.company_name : "") || rawString(person.raw, "companyName") : "",
+    employeeId: includeDetail ? ("employee_id" in person && typeof person.employee_id === "string" ? person.employee_id : "") || rawString(person.raw, "employeeId") : "",
     preferredLanguage:
-      ("preferred_language" in person && typeof person.preferred_language === "string" ? person.preferred_language : "") || rawString(person.raw, "preferredLanguage"),
-    city: ("city" in person && typeof person.city === "string" ? person.city : "") || rawString(person.raw, "city"),
-    state: ("state" in person && typeof person.state === "string" ? person.state : "") || rawString(person.raw, "state"),
-    country: ("country" in person && typeof person.country === "string" ? person.country : "") || rawString(person.raw, "country"),
-    userType: ("user_type" in person && typeof person.user_type === "string" ? person.user_type : "") || rawString(person.raw, "userType"),
+      includeDetail
+        ? ("preferred_language" in person && typeof person.preferred_language === "string" ? person.preferred_language : "") || rawString(person.raw, "preferredLanguage")
+        : "",
+    city: includeDetail ? ("city" in person && typeof person.city === "string" ? person.city : "") || rawString(person.raw, "city") : "",
+    state: includeDetail ? ("state" in person && typeof person.state === "string" ? person.state : "") || rawString(person.raw, "state") : "",
+    country: includeDetail ? ("country" in person && typeof person.country === "string" ? person.country : "") || rawString(person.raw, "country") : "",
+    userType,
     accountEnabled:
-      ("account_enabled" in person && typeof person.account_enabled === "boolean" ? person.account_enabled : null) ?? rawBoolean(person.raw, "accountEnabled")
+      includeDetail
+        ? ("account_enabled" in person && typeof person.account_enabled === "boolean" ? person.account_enabled : null) ?? rawBoolean(person.raw, "accountEnabled")
+        : null,
+    detailLoaded: includeDetail
   };
 }
 
@@ -118,9 +141,13 @@ export async function GET(request: NextRequest) {
 
   const url = new URL(request.url);
   const q = normalizeQuery(url.searchParams.get("q") ?? "");
+  const id = (url.searchParams.get("id") ?? "").trim();
+  const externalPersonId = (url.searchParams.get("externalPersonId") ?? "").trim();
+  const modeRaw = (url.searchParams.get("mode") ?? "summary").trim().toLowerCase();
+  const includeDetail = modeRaw === "detail";
+  const includeGuests = parseBoolean(url.searchParams.get("includeGuests"), false);
   const offsetRaw = Number(url.searchParams.get("offset") ?? "0");
   const limitRaw = Number(url.searchParams.get("limit") ?? "60");
-  const externalPersonId = (url.searchParams.get("externalPersonId") ?? "").trim();
 
   const offset = Number.isFinite(offsetRaw) ? Math.max(0, Math.floor(offsetRaw)) : 0;
   const limit = Number.isFinite(limitRaw) ? Math.min(200, Math.max(1, Math.floor(limitRaw))) : 60;
@@ -144,20 +171,29 @@ export async function GET(request: NextRequest) {
     providerByConnection.set(connection.id, connection.provider ?? "microsoft");
   });
 
-  const peopleSelectExpanded =
-    "id,external_person_id,display_name,mail,job_title,department,office_location,mobile_phone,business_phones,manager_external_id,given_name,surname,user_principal_name,company_name,employee_id,preferred_language,city,state,country,user_type,account_enabled,raw,connection_id";
-  const peopleSelectFallback =
+  const summarySelect = "id,external_person_id,display_name,mail,job_title,department,mobile_phone,business_phones,manager_external_id,user_principal_name,user_type,connection_id";
+  const summaryFallback = "id,external_person_id,display_name,mail,job_title,department,mobile_phone,business_phones,manager_external_id,raw,connection_id";
+  const detailSelect =
+    "id,external_person_id,display_name,mail,job_title,department,office_location,mobile_phone,business_phones,manager_external_id,user_principal_name,company_name,employee_id,preferred_language,city,state,country,user_type,account_enabled,raw,connection_id";
+  const detailFallback =
     "id,external_person_id,display_name,mail,job_title,department,office_location,mobile_phone,business_phones,manager_external_id,raw,connection_id";
 
   const queryPeople = (selectText: string) => {
+    const rangeEnd = id || externalPersonId ? offset + limit - 1 : offset + limit;
     let query = supabase
       .from("people_cache")
       .select(selectText)
       .in("connection_id", connectionIds)
       .order("display_name", { ascending: true })
-      .range(offset, offset + limit - 1);
+      .range(offset, rangeEnd);
 
-    if (externalPersonId) {
+    if (!includeGuests) {
+      query = query.or(NON_GUEST_FILTER);
+    }
+
+    if (id) {
+      query = query.eq("id", id).limit(1);
+    } else if (externalPersonId) {
       query = query.eq("external_person_id", externalPersonId).limit(1);
     } else if (q) {
       const safe = q.replace(/[%_,]/g, " ").trim();
@@ -179,24 +215,23 @@ export async function GET(request: NextRequest) {
     return query;
   };
 
-  const expandedPeople = await queryPeople(peopleSelectExpanded);
-  const { data: dbPeople, error } = expandedPeople.error ? await queryPeople(peopleSelectFallback) : expandedPeople;
+  const selectPrimary = includeDetail ? detailSelect : summarySelect;
+  const selectFallback = includeDetail ? detailFallback : summaryFallback;
+  const primaryResult = await queryPeople(selectPrimary);
+  const { data: dbPeople, error } = primaryResult.error ? await queryPeople(selectFallback) : primaryResult;
 
   if (error) {
     return NextResponse.json({ ok: false, error: "people_query_failed" }, { status: 500 });
   }
 
   const rows = (dbPeople ?? []) as Array<Record<string, any>>;
-  const rowCount = rows.length;
-  let items = rows.map((person) =>
-    toPersonRow({ person, tenantByConnection, sourceByConnection, providerByConnection })
-  );
+  const hasMore = !id && !externalPersonId && rows.length > limit;
+  const effectiveRows = hasMore ? rows.slice(0, limit) : rows;
+  let items = effectiveRows.map((person) => toPersonRow({ person, tenantByConnection, sourceByConnection, providerByConnection, includeDetail }));
 
-  if (!externalPersonId && q) {
+  if (!id && !externalPersonId && q) {
     items = items.filter((person) => passesQuery(person, q));
   }
-
-  const hasMore = !externalPersonId && rowCount >= limit;
 
   return NextResponse.json({
     ok: true,

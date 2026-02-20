@@ -5,6 +5,9 @@ import { PeopleSearchPanel } from "@/components/people-search-panel";
 import { getServerLocale } from "@/lib/i18n-server";
 import { t } from "@/lib/i18n";
 
+const NON_GUEST_FILTER =
+  "and(user_type.is.null,user_principal_name.is.null),and(user_type.is.null,user_principal_name.not.ilike.%23EXT%23),and(user_type.not.ilike.guest,user_principal_name.is.null),and(user_type.not.ilike.guest,user_principal_name.not.ilike.%23EXT%23)";
+
 type PersonRow = {
   id: string;
   displayName: string;
@@ -28,19 +31,8 @@ type PersonRow = {
   country: string;
   userType: string;
   accountEnabled: boolean | null;
+  detailLoaded?: boolean;
 };
-
-function rawString(raw: unknown, key: string): string {
-  if (!raw || typeof raw !== "object") return "";
-  const value = (raw as Record<string, unknown>)[key];
-  return typeof value === "string" ? value : "";
-}
-
-function rawBoolean(raw: unknown, key: string): boolean | null {
-  if (!raw || typeof raw !== "object") return null;
-  const value = (raw as Record<string, unknown>)[key];
-  return typeof value === "boolean" ? value : null;
-}
 
 export default async function PeoplePage() {
   const locale = await getServerLocale();
@@ -66,16 +58,27 @@ export default async function PeoplePage() {
       const connectionIds = (connections ?? []).map((connection) => connection.id);
 
       if (connectionIds.length > 0) {
-        const { count } = await supabase.from("people_cache").select("id", { count: "planned", head: true }).in("connection_id", connectionIds);
+        const countQuery = supabase
+          .from("people_cache")
+          .select("id", { count: "planned", head: true })
+          .in("connection_id", connectionIds)
+          .or(NON_GUEST_FILTER);
+        const { count } = await countQuery;
         totalPeopleCount = count ?? 0;
       }
 
-      const peopleSelectExpanded =
-        "id,external_person_id,display_name,mail,job_title,department,office_location,mobile_phone,business_phones,manager_external_id,given_name,surname,user_principal_name,company_name,employee_id,preferred_language,city,state,country,user_type,account_enabled,raw,connection_id";
+      const peopleSelectSummary =
+        "id,external_person_id,display_name,mail,job_title,department,mobile_phone,business_phones,manager_external_id,user_principal_name,user_type,connection_id";
       const peopleSelectFallback =
-        "id,external_person_id,display_name,mail,job_title,department,office_location,mobile_phone,business_phones,manager_external_id,raw,connection_id";
+        "id,external_person_id,display_name,mail,job_title,department,mobile_phone,business_phones,manager_external_id,raw,connection_id";
       const queryPeople = (selectText: string) =>
-        supabase.from("people_cache").select(selectText).in("connection_id", connectionIds).order("display_name", { ascending: true }).range(0, 80);
+        supabase
+          .from("people_cache")
+          .select(selectText)
+          .in("connection_id", connectionIds)
+          .or(NON_GUEST_FILTER)
+          .order("display_name", { ascending: true })
+          .range(0, 80);
 
       const tenantByConnection = new Map<string, string>();
       const sourceByConnection = new Map<string, string>();
@@ -88,12 +91,12 @@ export default async function PeoplePage() {
 
       let resolvedRows: Array<Record<string, any>> = [];
       if (connectionIds.length > 0) {
-        const expandedPeople = await queryPeople(peopleSelectExpanded);
-        if (expandedPeople.error) {
+        const summaryPeople = await queryPeople(peopleSelectSummary);
+        if (summaryPeople.error) {
           const fallbackPeople = await queryPeople(peopleSelectFallback);
           resolvedRows = (fallbackPeople.data ?? []) as Array<Record<string, any>>;
         } else {
-          resolvedRows = (expandedPeople.data ?? []) as Array<Record<string, any>>;
+          resolvedRows = (summaryPeople.data ?? []) as Array<Record<string, any>>;
         }
       }
 
@@ -107,24 +110,23 @@ export default async function PeoplePage() {
         jobTitle: person.job_title ?? tt("people.unknown.jobTitle"),
         department: person.department ?? tt("people.unknown.department"),
         tenantName: tenantByConnection.get(person.connection_id) ?? "Connected Tenant",
-        officeLocation: person.office_location ?? tt("people.unknown.office"),
-        mobilePhone: person.mobile_phone ?? tt("people.unknown.phone"),
+        officeLocation: "",
+        mobilePhone: person.mobile_phone ?? "",
         businessPhones: person.business_phones ?? [],
         sourceAccount: sourceByConnection.get(person.connection_id) ?? "",
         provider: providerByConnection.get(person.connection_id) ?? "microsoft",
-        upn: ("user_principal_name" in person && typeof person.user_principal_name === "string" ? person.user_principal_name : "") || rawString(person.raw, "userPrincipalName"),
+        upn: "user_principal_name" in person && typeof person.user_principal_name === "string" ? person.user_principal_name : "",
         externalPersonId: person.external_person_id,
         managerExternalId: person.manager_external_id ?? "",
-        companyName: ("company_name" in person && typeof person.company_name === "string" ? person.company_name : "") || rawString(person.raw, "companyName"),
-        employeeId: ("employee_id" in person && typeof person.employee_id === "string" ? person.employee_id : "") || rawString(person.raw, "employeeId"),
-        preferredLanguage:
-          ("preferred_language" in person && typeof person.preferred_language === "string" ? person.preferred_language : "") || rawString(person.raw, "preferredLanguage"),
-        city: ("city" in person && typeof person.city === "string" ? person.city : "") || rawString(person.raw, "city"),
-        state: ("state" in person && typeof person.state === "string" ? person.state : "") || rawString(person.raw, "state"),
-        country: ("country" in person && typeof person.country === "string" ? person.country : "") || rawString(person.raw, "country"),
-        userType: ("user_type" in person && typeof person.user_type === "string" ? person.user_type : "") || rawString(person.raw, "userType"),
-        accountEnabled:
-          ("account_enabled" in person && typeof person.account_enabled === "boolean" ? person.account_enabled : null) ?? rawBoolean(person.raw, "accountEnabled")
+        companyName: "",
+        employeeId: "",
+        preferredLanguage: "",
+        city: "",
+        state: "",
+        country: "",
+        userType: "user_type" in person && typeof person.user_type === "string" ? person.user_type : "",
+        accountEnabled: null,
+        detailLoaded: false
       }));
     }
   }

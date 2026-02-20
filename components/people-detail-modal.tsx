@@ -51,6 +51,7 @@ type PeopleDetailModalProps = {
   actionLinks: ActionLinks | null;
   selectedPhone: string;
   copiedField: "mail" | "phone" | null;
+  isLoading?: boolean;
   isFavorite: boolean;
   onToggleFavorite: () => void;
   onClose: () => void;
@@ -100,6 +101,7 @@ export function PeopleDetailModal({
   actionLinks,
   selectedPhone,
   copiedField,
+  isLoading = false,
   isFavorite,
   onToggleFavorite,
   onClose,
@@ -143,6 +145,7 @@ export function PeopleDetailModal({
                 <div className="mt-2 flex flex-wrap gap-1.5 text-xs">
                   <span className="rounded-full border border-line bg-white px-2 py-0.5 text-muted">{person.tenantName}</span>
                   <span className="rounded-full border border-line bg-white px-2 py-0.5 text-muted">{provider}</span>
+                  {isLoading ? <span className="rounded-full border border-accent/30 bg-accent/10 px-2 py-0.5 text-accent">{t("people.loading")}</span> : null}
                 </div>
               </div>
 

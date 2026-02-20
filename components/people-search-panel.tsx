@@ -345,11 +345,16 @@ export function PeopleSearchPanel({ people, serverSearchEnabled = false, initial
       return;
     }
     const target = activePeople.find((person) => person.id === selectedPersonId);
-    if (!target || target.detailLoaded) {
+    if (!target) {
       setDetailLoadingId(null);
       return;
     }
+    if (target.detailLoaded) {
+      setDetailLoadingId((current) => (current === target.id ? null : current));
+      return;
+    }
     if (detailLookupTried.has(target.id)) {
+      setDetailLoadingId((current) => (current === target.id ? null : current));
       return;
     }
 
@@ -373,13 +378,12 @@ export function PeopleSearchPanel({ people, serverSearchEnabled = false, initial
     };
 
     void run().finally(() => {
-      if (!controller.signal.aborted) {
-        setDetailLoadingId((current) => (current === target.id ? null : current));
-      }
+      setDetailLoadingId((current) => (current === target.id ? null : current));
     });
 
     return () => {
       controller.abort();
+      setDetailLoadingId((current) => (current === target.id ? null : current));
     };
   }, [activePeople, detailLookupTried, selectedPersonId, serverSearchEnabled]);
 

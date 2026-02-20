@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { CalendarPlus, Check, Copy, Mail, MessageSquareText, Star, X } from "lucide-react";
 import { ModalPortal } from "@/components/modal-portal";
 import { useT } from "@/components/locale-provider";
@@ -114,6 +115,11 @@ export function PeopleDetailModal({
   onOpenManager
 }: PeopleDetailModalProps) {
   const t = useT();
+  const [photoZoomOpen, setPhotoZoomOpen] = useState(false);
+
+  useEffect(() => {
+    setPhotoZoomOpen(false);
+  }, [person?.id, profilePhotoUrl]);
 
   if (!person || !actionLinks) {
     return null;
@@ -136,15 +142,22 @@ export function PeopleDetailModal({
               <div className="min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-[0.14em] text-accent">{t("people.detailTitle")}</p>
                 <div className="mt-2 flex items-center gap-3">
-                  <div className="relative inline-flex h-11 w-11 items-center justify-center overflow-hidden rounded-xl border border-accent/25 bg-accent/10 text-sm font-bold text-accent">
-                    {profilePhotoUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
+                  {profilePhotoUrl ? (
+                    <button
+                      className="relative inline-flex h-11 w-11 items-center justify-center overflow-hidden rounded-xl border border-accent/25 bg-accent/10 text-sm font-bold text-accent transition hover:brightness-105"
+                      onClick={() => setPhotoZoomOpen(true)}
+                      type="button"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img alt={person.displayName} className="h-full w-full object-cover" src={profilePhotoUrl} />
-                    ) : (
-                      initials(person.displayName)
-                    )}
-                    {photoLoading ? <span className="absolute bottom-1 right-1 h-2 w-2 animate-pulse rounded-full bg-accent" /> : null}
-                  </div>
+                      {photoLoading ? <span className="absolute bottom-1 right-1 h-2 w-2 animate-pulse rounded-full bg-accent" /> : null}
+                    </button>
+                  ) : (
+                    <div className="relative inline-flex h-11 w-11 items-center justify-center overflow-hidden rounded-xl border border-accent/25 bg-accent/10 text-sm font-bold text-accent">
+                      {initials(person.displayName)}
+                      {photoLoading ? <span className="absolute bottom-1 right-1 h-2 w-2 animate-pulse rounded-full bg-accent" /> : null}
+                    </div>
+                  )}
                   <div className="min-w-0">
                     <h3 className="truncate text-xl font-semibold tracking-tight text-text">{person.displayName}</h3>
                     <p className="mt-0.5 truncate text-sm text-muted">
@@ -284,6 +297,24 @@ export function PeopleDetailModal({
             </section>
           </div>
         </section>
+
+        {photoZoomOpen && profilePhotoUrl ? (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/80 p-4" role="dialog" aria-modal="true">
+            <button aria-label={t("common.close")} className="absolute inset-0 cursor-default" onClick={() => setPhotoZoomOpen(false)} type="button" />
+            <div className="relative z-10">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img alt={person.displayName} className="max-h-[88vh] max-w-[92vw] rounded-2xl border border-line/70 bg-white object-contain shadow-2xl" src={profilePhotoUrl} />
+              <button
+                aria-label={t("common.close")}
+                className="absolute right-2 top-2 inline-flex h-9 w-9 items-center justify-center rounded-full border border-line bg-white/95 text-slate-700 transition hover:border-accent/45"
+                onClick={() => setPhotoZoomOpen(false)}
+                type="button"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          </div>
+        ) : null}
       </div>
     </ModalPortal>
   );

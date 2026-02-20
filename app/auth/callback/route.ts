@@ -5,9 +5,9 @@ import { syncUserConnections } from "@/lib/connection-sync";
 
 function resolveLoginSyncMaxDeltaPages(): number {
   const raw = process.env.CALENDAR_ENTRY_SYNC_MAX_DELTA_PAGES;
-  const n = raw ? Number(raw) : 4;
+  const n = raw ? Number(raw) : 40;
   if (!Number.isFinite(n) || n <= 0) {
-    return 4;
+    return 40;
   }
   return Math.floor(n);
 }

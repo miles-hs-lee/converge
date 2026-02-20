@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 
 const ENTRY_SYNC_THROTTLE_KEY = "converge_calendar_entry_sync_last_at";
 const ENTRY_SYNC_THROTTLE_MS = 60 * 1000;
@@ -24,6 +25,8 @@ function shouldTriggerByThrottle(now: number): boolean {
 }
 
 export function CalendarEntrySync({ enabled }: CalendarEntrySyncProps) {
+  const router = useRouter();
+
   useEffect(() => {
     if (!enabled || typeof window === "undefined") {
       return;
@@ -37,10 +40,20 @@ export function CalendarEntrySync({ enabled }: CalendarEntrySyncProps) {
     void fetch("/api/calendar/entry-sync", {
       method: "POST",
       keepalive: true
-    }).catch(() => {
-      // Best-effort refresh only.
-    });
-  }, [enabled]);
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          return;
+        }
+        const payload = (await response.json()) as { ok?: boolean; calendarSynced?: number; failures?: number };
+        if (payload.ok && (payload.calendarSynced ?? 0) > 0 && (payload.failures ?? 0) === 0) {
+          router.refresh();
+        }
+      })
+      .catch(() => {
+        // Best-effort refresh only.
+      });
+  }, [enabled, router]);
 
   return null;
 }

@@ -12,12 +12,12 @@ function parsePositiveInt(raw: string | undefined, fallback: number): number {
 }
 
 function resolveEntrySyncStaleMs(): number {
-  const minutes = parsePositiveInt(process.env.CALENDAR_AUTO_SYNC_STALE_MINUTES, 10);
+  const minutes = parsePositiveInt(process.env.CALENDAR_AUTO_SYNC_STALE_MINUTES, 3);
   return minutes * 60 * 1000;
 }
 
 function resolveEntrySyncMaxDeltaPages(): number {
-  return parsePositiveInt(process.env.CALENDAR_ENTRY_SYNC_MAX_DELTA_PAGES, 4);
+  return parsePositiveInt(process.env.CALENDAR_ENTRY_SYNC_MAX_DELTA_PAGES, 40);
 }
 
 export async function POST() {

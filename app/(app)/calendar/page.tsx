@@ -102,7 +102,7 @@ export default async function CalendarPage() {
           .gte("start_at", from)
           .lte("start_at", to)
           .order("start_at", { ascending: true })
-          .limit(120);
+          .limit(500);
 
         if (connectionIds.length > 0) {
           query = query.in("connection_id", connectionIds);

@@ -252,12 +252,24 @@ export async function syncMicrosoftCalendarSnapshot(params: {
   const { accessToken, accountEmail, connectionId, calendarState, maxDeltaPagesPerCalendar, adminClient } = params;
 
   const currentCalendarState = isRecord(calendarState) ? calendarState : {};
-  const previousDeltaByCalendar = parseDeltaByCalendar(currentCalendarState.deltaByCalendar);
   const nowTs = Date.now();
   const defaultFromIso = new Date(nowTs - 1000 * 60 * 60 * 24 * 14).toISOString();
   const defaultToIso = new Date(nowTs + 1000 * 60 * 60 * 24 * 21).toISOString();
-  const fromIso = parseIsoDate(currentCalendarState.windowStart) ?? defaultFromIso;
-  const toIsoDate = parseIsoDate(currentCalendarState.windowEnd) ?? defaultToIso;
+  const previousWindowStart = parseIsoDate(currentCalendarState.windowStart);
+  const previousWindowEnd = parseIsoDate(currentCalendarState.windowEnd);
+  const desiredFromTs = Date.parse(defaultFromIso);
+  const desiredToTs = Date.parse(defaultToIso);
+  const previousFromTs = previousWindowStart ? Date.parse(previousWindowStart) : NaN;
+  const previousToTs = previousWindowEnd ? Date.parse(previousWindowEnd) : NaN;
+  const windowOutdated =
+    !Number.isFinite(previousFromTs) ||
+    !Number.isFinite(previousToTs) ||
+    previousToTs < desiredToTs - 1000 * 60 * 60 * 6 ||
+    previousFromTs > desiredFromTs + 1000 * 60 * 60 * 6;
+
+  const fromIso = windowOutdated ? defaultFromIso : previousWindowStart!;
+  const toIsoDate = windowOutdated ? defaultToIso : previousWindowEnd!;
+  const previousDeltaByCalendar = windowOutdated ? {} : parseDeltaByCalendar(currentCalendarState.deltaByCalendar);
 
   const calendarsResponse = await fetchGraphJson<GraphCalendarListResponse>(
     "https://graph.microsoft.com/v1.0/me/calendars?$top=8&$select=id,name,color",

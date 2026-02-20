@@ -173,11 +173,16 @@ function fallbackEnd(startIso: string, isAllDay: boolean): string {
   return start.toISOString();
 }
 
-async function fetchGraphJson<T>(url: string, accessToken: string): Promise<{ ok: boolean; status: number; data?: T }> {
+async function fetchGraphJson<T>(
+  url: string,
+  accessToken: string,
+  opts?: { prefer?: string }
+): Promise<{ ok: boolean; status: number; data?: T }> {
+  const prefer = opts?.prefer ?? 'outlook.timezone="UTC"';
   const response = await fetch(url, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
-      Prefer: 'outlook.timezone="UTC"'
+      Prefer: prefer
     }
   });
 
@@ -222,7 +227,6 @@ function buildCalendarDeltaUrl(params: { calendarId: string; fromIso: string; to
   const query = new URLSearchParams({
     startDateTime: params.fromIso,
     endDateTime: params.toIso,
-    $top: "120",
     $select:
       "id,subject,bodyPreview,importance,sensitivity,categories,type,start,end,originalStartTimeZone,originalEndTimeZone,isAllDay,isCancelled,isOnlineMeeting,onlineMeeting,location,organizer,attendees,webLink,createdDateTime,lastModifiedDateTime,showAs,responseStatus,recurrence"
   });
@@ -347,7 +351,9 @@ export async function syncMicrosoftCalendarSnapshot(params: {
 
     while (requestUrl && guard < deltaPageGuardLimit) {
       guard += 1;
-      const deltaResponse = await fetchGraphJson<GraphCalendarDeltaResponse>(requestUrl, accessToken);
+      const deltaResponse = await fetchGraphJson<GraphCalendarDeltaResponse>(requestUrl, accessToken, {
+        prefer: 'outlook.timezone="UTC", odata.maxpagesize=120'
+      });
 
       if (!deltaResponse.ok) {
         const shouldResetDelta =

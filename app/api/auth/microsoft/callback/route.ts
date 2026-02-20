@@ -29,6 +29,13 @@ type MicrosoftMeResponse = {
   mail?: string;
 };
 
+function parseRecord(raw: unknown): Record<string, unknown> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return {};
+  }
+  return raw as Record<string, unknown>;
+}
+
 function deriveTenantName(me: MicrosoftMeResponse, tenantId: string): string {
   const account = me.userPrincipalName ?? me.mail ?? "";
   const domain = account.includes("@") ? account.split("@")[1]?.trim() : "";
@@ -187,7 +194,7 @@ export async function GET(request: NextRequest) {
 
   const { data: connectionRow, error: connectionReadError } = await adminClient
     .from("m365_connections")
-    .select("id")
+    .select("id,sync_state")
     .eq("user_id", user.id)
     .eq("provider", "microsoft")
     .eq("tenant_id", tenantId)
@@ -198,11 +205,14 @@ export async function GET(request: NextRequest) {
   }
 
   const accountEmail = me.userPrincipalName ?? me.mail ?? user.email;
+  const existingSyncState = parseRecord(connectionRow.sync_state);
+  const existingCalendarState = parseRecord(existingSyncState.calendar);
   const [calendarSync, peopleSync] = await Promise.all([
     syncMicrosoftCalendarSnapshot({
       accessToken: tokenData.access_token,
       accountEmail,
       connectionId: connectionRow.id,
+      calendarState: existingCalendarState,
       adminClient
     }),
     syncMicrosoftPeopleSnapshot({
@@ -216,7 +226,10 @@ export async function GET(request: NextRequest) {
     .from("m365_connections")
     .update({
       sync_state: {
+        ...existingSyncState,
         calendar: {
+          ...existingCalendarState,
+          ...(calendarSync.statePatch ?? {}),
           ok: calendarSync.ok,
           partial: calendarSync.partial,
           syncedCount: calendarSync.syncedCount,

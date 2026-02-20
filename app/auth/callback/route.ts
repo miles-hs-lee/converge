@@ -1,6 +1,27 @@
 import { type EmailOtpType } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { syncUserConnections } from "@/lib/connection-sync";
+
+async function runPostLoginCalendarSync(supabase: Awaited<ReturnType<typeof createClient>>) {
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return;
+  }
+
+  try {
+    await syncUserConnections({
+      userId: user.id,
+      mode: "calendar",
+      calendarStaleMs: 0
+    });
+  } catch {
+    // Post-login sync should not block login success.
+  }
+}
 
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
@@ -14,6 +35,7 @@ export async function GET(request: NextRequest) {
   if (code) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
+      await runPostLoginCalendarSync(supabase);
       return NextResponse.redirect(new URL(next, request.url));
     }
   }
@@ -21,6 +43,7 @@ export async function GET(request: NextRequest) {
   if (tokenHash && type) {
     const { error } = await supabase.auth.verifyOtp({ type, token_hash: tokenHash });
     if (!error) {
+      await runPostLoginCalendarSync(supabase);
       return NextResponse.redirect(new URL(next, request.url));
     }
   }

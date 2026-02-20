@@ -22,6 +22,7 @@ type SyncResult = {
   ok: boolean;
   partial: boolean;
   syncedCount: number;
+  statePatch?: Record<string, unknown>;
 };
 
 export type SyncSummary = {
@@ -300,12 +301,14 @@ async function runConnectionSync(params: RunConnectionParams): Promise<SyncSumma
   const nextSyncState: Record<string, unknown> = { ...syncState };
 
   if (runCalendar) {
+    const currentCalendarState = parseSyncState(syncState.calendar);
     let calendarResult: SyncResult = { ok: true, partial: false, syncedCount: 0 };
     if (connection.provider === "microsoft") {
       calendarResult = await syncMicrosoftCalendarSnapshot({
         accessToken: token.accessToken,
         accountEmail: connection.m365_user_principal_name ?? "unknown@account",
         connectionId: connection.id,
+        calendarState: currentCalendarState,
         adminClient: admin
       });
     } else if (connection.provider === "google") {
@@ -342,6 +345,8 @@ async function runConnectionSync(params: RunConnectionParams): Promise<SyncSumma
     }
 
     nextSyncState.calendar = {
+      ...currentCalendarState,
+      ...(calendarResult.statePatch ?? {}),
       ok: calendarResult.ok,
       partial: calendarResult.partial,
       syncedCount: calendarResult.syncedCount,

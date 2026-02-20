@@ -17,6 +17,9 @@ type GraphCalendarListResponse = {
 
 type GraphEvent = {
   id?: string;
+  "@removed"?: {
+    reason?: string;
+  };
   subject?: string;
   bodyPreview?: string;
   importance?: string;
@@ -68,6 +71,12 @@ type GraphCalendarEventsResponse = {
   value?: GraphEvent[];
 };
 
+type GraphCalendarDeltaResponse = {
+  value?: GraphEvent[];
+  "@odata.nextLink"?: string;
+  "@odata.deltaLink"?: string;
+};
+
 type GraphUser = {
   id?: string;
   displayName?: string;
@@ -99,6 +108,7 @@ type SyncResult = {
   ok: boolean;
   partial: boolean;
   syncedCount: number;
+  statePatch?: Record<string, unknown>;
 };
 
 function upsertCalendarEventsFallbackRows(row: Record<string, unknown>): Record<string, unknown> {
@@ -163,7 +173,7 @@ function fallbackEnd(startIso: string, isAllDay: boolean): string {
   return start.toISOString();
 }
 
-async function fetchGraphJson<T>(url: string, accessToken: string): Promise<{ ok: boolean; data?: T }> {
+async function fetchGraphJson<T>(url: string, accessToken: string): Promise<{ ok: boolean; status: number; data?: T }> {
   const response = await fetch(url, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -172,20 +182,81 @@ async function fetchGraphJson<T>(url: string, accessToken: string): Promise<{ ok
   });
 
   if (!response.ok) {
-    return { ok: false };
+    return { ok: false, status: response.status };
   }
 
   const data = (await response.json()) as T;
-  return { ok: true, data };
+  return { ok: true, status: response.status, data };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function parseDeltaByCalendar(raw: unknown): Record<string, string> {
+  if (!isRecord(raw)) {
+    return {};
+  }
+
+  const map: Record<string, string> = {};
+  Object.entries(raw).forEach(([calendarId, link]) => {
+    if (typeof link === "string" && link.length > 0) {
+      map[calendarId] = link;
+    }
+  });
+  return map;
+}
+
+function parseIsoDate(raw: unknown): string | null {
+  if (typeof raw !== "string" || raw.length === 0) {
+    return null;
+  }
+  const ts = Date.parse(raw);
+  if (!Number.isFinite(ts)) {
+    return null;
+  }
+  return new Date(ts).toISOString();
+}
+
+function buildCalendarDeltaUrl(params: { calendarId: string; fromIso: string; toIso: string }) {
+  const query = new URLSearchParams({
+    startDateTime: params.fromIso,
+    endDateTime: params.toIso,
+    $top: "120",
+    $select:
+      "id,subject,bodyPreview,importance,sensitivity,categories,type,start,end,originalStartTimeZone,originalEndTimeZone,isAllDay,isCancelled,isOnlineMeeting,onlineMeeting,location,organizer,attendees,webLink,createdDateTime,lastModifiedDateTime,showAs,responseStatus,recurrence"
+  });
+  return `https://graph.microsoft.com/v1.0/me/calendars/${encodeURIComponent(params.calendarId)}/calendarView/delta?${query.toString()}`;
+}
+
+function chunkValues<T>(values: T[], size: number): T[][] {
+  if (size <= 0) {
+    return [values];
+  }
+
+  const chunks: T[][] = [];
+  for (let i = 0; i < values.length; i += size) {
+    chunks.push(values.slice(i, i + size));
+  }
+  return chunks;
 }
 
 export async function syncMicrosoftCalendarSnapshot(params: {
   accessToken: string;
   accountEmail: string;
   connectionId: string;
+  calendarState?: Record<string, unknown>;
   adminClient: ReturnType<typeof createAdminClient>;
 }): Promise<SyncResult> {
-  const { accessToken, accountEmail, connectionId, adminClient } = params;
+  const { accessToken, accountEmail, connectionId, calendarState, adminClient } = params;
+
+  const currentCalendarState = isRecord(calendarState) ? calendarState : {};
+  const previousDeltaByCalendar = parseDeltaByCalendar(currentCalendarState.deltaByCalendar);
+  const nowTs = Date.now();
+  const defaultFromIso = new Date(nowTs - 1000 * 60 * 60 * 24 * 14).toISOString();
+  const defaultToIso = new Date(nowTs + 1000 * 60 * 60 * 24 * 21).toISOString();
+  const fromIso = parseIsoDate(currentCalendarState.windowStart) ?? defaultFromIso;
+  const toIsoDate = parseIsoDate(currentCalendarState.windowEnd) ?? defaultToIso;
 
   const calendarsResponse = await fetchGraphJson<GraphCalendarListResponse>(
     "https://graph.microsoft.com/v1.0/me/calendars?$top=8&$select=id,name,color",
@@ -237,10 +308,9 @@ export async function syncMicrosoftCalendarSnapshot(params: {
     sourceByExternalId.set(source.external_calendar_id, source.id);
   });
 
-  const fromIso = new Date(Date.now() - 1000 * 60 * 60 * 24 * 14).toISOString();
-  const toIsoDate = new Date(Date.now() + 1000 * 60 * 60 * 24 * 21).toISOString();
-
   const eventRows: Array<Record<string, unknown>> = [];
+  const deletedExternalEventIds = new Set<string>();
+  const nextDeltaByCalendar: Record<string, string> = { ...previousDeltaByCalendar };
   let partialFailure = false;
 
   for (const calendar of calendars) {
@@ -250,90 +320,145 @@ export async function syncMicrosoftCalendarSnapshot(params: {
       continue;
     }
 
-    const params = new URLSearchParams({
-      startDateTime: fromIso,
-      endDateTime: toIsoDate,
-      $top: "120",
-      $select:
-        "id,subject,bodyPreview,importance,sensitivity,categories,type,start,end,originalStartTimeZone,originalEndTimeZone,isAllDay,isCancelled,isOnlineMeeting,onlineMeeting,location,organizer,attendees,webLink,createdDateTime,lastModifiedDateTime,showAs,responseStatus,recurrence"
-    });
+    const previousDeltaLink = previousDeltaByCalendar[calendar.id!];
+    let requestUrl =
+      previousDeltaLink && previousDeltaLink.length > 0
+        ? previousDeltaLink
+        : buildCalendarDeltaUrl({ calendarId: calendar.id!, fromIso, toIso: toIsoDate });
+    let latestDeltaLink: string | null = null;
+    let calendarFailed = false;
+    let retriedWithFreshDelta = false;
+    let guard = 0;
 
-    const eventsResponse = await fetchGraphJson<GraphCalendarEventsResponse>(
-      `https://graph.microsoft.com/v1.0/me/calendars/${encodeURIComponent(calendar.id!)}/calendarView?${params.toString()}`,
-      accessToken
-    );
+    while (requestUrl && guard < 60) {
+      guard += 1;
+      const deltaResponse = await fetchGraphJson<GraphCalendarDeltaResponse>(requestUrl, accessToken);
 
-    if (!eventsResponse.ok) {
+      if (!deltaResponse.ok) {
+        const shouldResetDelta =
+          !retriedWithFreshDelta &&
+          Boolean(previousDeltaLink) &&
+          (deltaResponse.status === 404 || deltaResponse.status === 410 || deltaResponse.status === 412);
+
+        if (shouldResetDelta) {
+          retriedWithFreshDelta = true;
+          requestUrl = buildCalendarDeltaUrl({ calendarId: calendar.id!, fromIso, toIso: toIsoDate });
+          latestDeltaLink = null;
+          continue;
+        }
+
+        calendarFailed = true;
+        break;
+      }
+
+      const payload = deltaResponse.data ?? {};
+      const events = payload.value ?? [];
+      events.forEach((event) => {
+        if (!event.id) {
+          return;
+        }
+
+        const externalEventId = `${calendar.id}:${event.id}`;
+        if (event["@removed"] || event.showAs === "free") {
+          deletedExternalEventIds.add(externalEventId);
+          return;
+        }
+
+        const startAt = toIso(event.start);
+        if (!startAt) {
+          return;
+        }
+        const isAllDay = Boolean(event.isAllDay);
+        const endAt = toIso(event.end) ?? fallbackEnd(startAt, isAllDay);
+        const attendees = (event.attendees ?? [])
+          .map((attendee) => ({
+            email: attendee.emailAddress?.address ?? null,
+            name: attendee.emailAddress?.name ?? null,
+            type: attendee.type ?? null,
+            response: attendee.status?.response ?? null,
+            respondedAt: attendee.status?.time ?? null
+          }))
+          .filter((attendee) => Boolean(attendee.email || attendee.name));
+
+        const organizerEmail = event.organizer?.emailAddress?.address ?? accountEmail;
+        const organizerName = event.organizer?.emailAddress?.name ?? null;
+
+        const responseStatus = event.responseStatus?.response ?? null;
+        const responseTimeRaw = event.responseStatus?.time;
+        const responseTime = responseTimeRaw && Number.isFinite(new Date(responseTimeRaw).getTime()) ? new Date(responseTimeRaw).toISOString() : null;
+        const createdTimeRaw = event.createdDateTime;
+        const createdExternal = createdTimeRaw && Number.isFinite(new Date(createdTimeRaw).getTime()) ? new Date(createdTimeRaw).toISOString() : null;
+        const lastModifiedRaw = event.lastModifiedDateTime;
+        const lastModifiedExternal = lastModifiedRaw && Number.isFinite(new Date(lastModifiedRaw).getTime()) ? new Date(lastModifiedRaw).toISOString() : null;
+
+        eventRows.push({
+          connection_id: connectionId,
+          calendar_source_id: sourceId,
+          external_event_id: externalEventId,
+          subject: event.subject ?? "(제목 없음)",
+          body_preview: event.bodyPreview ?? null,
+          importance: event.importance ?? null,
+          sensitivity: event.sensitivity ?? null,
+          categories: event.categories ?? [],
+          event_type: event.type ?? null,
+          start_at: startAt,
+          end_at: endAt,
+          timezone_start: event.originalStartTimeZone ?? event.start?.timeZone ?? null,
+          timezone_end: event.originalEndTimeZone ?? event.end?.timeZone ?? null,
+          is_all_day: isAllDay,
+          is_cancelled: Boolean(event.isCancelled),
+          is_online_meeting: Boolean(event.isOnlineMeeting),
+          online_meeting_url: event.onlineMeeting?.joinUrl ?? null,
+          show_as: event.showAs ?? null,
+          response_status: responseStatus,
+          response_time: responseTime,
+          location: event.location?.displayName ?? null,
+          organizer: organizerEmail,
+          organizer_name: organizerName,
+          attendees,
+          web_link: event.webLink ?? null,
+          created_external: createdExternal,
+          last_modified_external: lastModifiedExternal,
+          recurrence: event.recurrence ?? {},
+          raw: event,
+          synced_at: nowIso
+        });
+      });
+
+      if (typeof payload["@odata.nextLink"] === "string" && payload["@odata.nextLink"].length > 0) {
+        requestUrl = payload["@odata.nextLink"];
+      } else {
+        requestUrl = "";
+        if (typeof payload["@odata.deltaLink"] === "string" && payload["@odata.deltaLink"].length > 0) {
+          latestDeltaLink = payload["@odata.deltaLink"];
+        }
+      }
+    }
+
+    if (guard >= 60) {
+      calendarFailed = true;
+    }
+
+    if (calendarFailed) {
       partialFailure = true;
       continue;
     }
 
-    const events = eventsResponse.data?.value ?? [];
-    events.forEach((event) => {
-      if (!event.id || event.showAs === "free") {
-        return;
+    if (latestDeltaLink) {
+      nextDeltaByCalendar[calendar.id!] = latestDeltaLink;
+    } else if (!previousDeltaLink) {
+      partialFailure = true;
+    }
+  }
+
+  const deleteIds = [...deletedExternalEventIds];
+  if (deleteIds.length > 0) {
+    for (const chunk of chunkValues(deleteIds, 400)) {
+      const deleteResult = await adminClient.from("calendar_events_cache").delete().eq("connection_id", connectionId).in("external_event_id", chunk);
+      if (deleteResult.error) {
+        partialFailure = true;
       }
-
-      const startAt = toIso(event.start);
-      if (!startAt) {
-        return;
-      }
-      const isAllDay = Boolean(event.isAllDay);
-      const endAt = toIso(event.end) ?? fallbackEnd(startAt, isAllDay);
-      const attendees = (event.attendees ?? [])
-        .map((attendee) => ({
-          email: attendee.emailAddress?.address ?? null,
-          name: attendee.emailAddress?.name ?? null,
-          type: attendee.type ?? null,
-          response: attendee.status?.response ?? null,
-          respondedAt: attendee.status?.time ?? null
-        }))
-        .filter((attendee) => Boolean(attendee.email || attendee.name));
-
-      const organizerEmail = event.organizer?.emailAddress?.address ?? accountEmail;
-      const organizerName = event.organizer?.emailAddress?.name ?? null;
-
-      const responseStatus = event.responseStatus?.response ?? null;
-      const responseTimeRaw = event.responseStatus?.time;
-      const responseTime = responseTimeRaw && Number.isFinite(new Date(responseTimeRaw).getTime()) ? new Date(responseTimeRaw).toISOString() : null;
-      const createdTimeRaw = event.createdDateTime;
-      const createdExternal = createdTimeRaw && Number.isFinite(new Date(createdTimeRaw).getTime()) ? new Date(createdTimeRaw).toISOString() : null;
-      const lastModifiedRaw = event.lastModifiedDateTime;
-      const lastModifiedExternal = lastModifiedRaw && Number.isFinite(new Date(lastModifiedRaw).getTime()) ? new Date(lastModifiedRaw).toISOString() : null;
-
-      eventRows.push({
-        connection_id: connectionId,
-        calendar_source_id: sourceId,
-        external_event_id: `${calendar.id}:${event.id}`,
-        subject: event.subject ?? "(제목 없음)",
-        body_preview: event.bodyPreview ?? null,
-        importance: event.importance ?? null,
-        sensitivity: event.sensitivity ?? null,
-        categories: event.categories ?? [],
-        event_type: event.type ?? null,
-        start_at: startAt,
-        end_at: endAt,
-        timezone_start: event.originalStartTimeZone ?? event.start?.timeZone ?? null,
-        timezone_end: event.originalEndTimeZone ?? event.end?.timeZone ?? null,
-        is_all_day: isAllDay,
-        is_cancelled: Boolean(event.isCancelled),
-        is_online_meeting: Boolean(event.isOnlineMeeting),
-        online_meeting_url: event.onlineMeeting?.joinUrl ?? null,
-        show_as: event.showAs ?? null,
-        response_status: responseStatus,
-        response_time: responseTime,
-        location: event.location?.displayName ?? null,
-        organizer: organizerEmail,
-        organizer_name: organizerName,
-        attendees,
-        web_link: event.webLink ?? null,
-        created_external: createdExternal,
-        last_modified_external: lastModifiedExternal,
-        recurrence: event.recurrence ?? {},
-        raw: event,
-        synced_at: nowIso
-      });
-    });
+    }
   }
 
   if (eventRows.length > 0) {
@@ -347,7 +472,16 @@ export async function syncMicrosoftCalendarSnapshot(params: {
     }
   }
 
-  return { ok: true, partial: partialFailure, syncedCount: eventRows.length };
+  return {
+    ok: true,
+    partial: partialFailure,
+    syncedCount: eventRows.length + deleteIds.length,
+    statePatch: {
+      deltaByCalendar: nextDeltaByCalendar,
+      windowStart: fromIso,
+      windowEnd: toIsoDate
+    }
+  };
 }
 
 export async function syncMicrosoftPeopleSnapshot(params: {

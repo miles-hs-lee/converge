@@ -599,11 +599,11 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
                             {new Date(event.startAt).toLocaleTimeString(intl, { hour: "2-digit", minute: "2-digit" })}
                           </p>
                           <div
-                            className="mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium"
+                            className="mt-1 inline-flex max-w-full items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium"
                             style={{ backgroundColor: `${color}1f`, color }}
                           >
-                            <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: color }} />
-                            {event.tenantName}
+                            <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: color }} />
+                            <span className="min-w-0 truncate">{event.tenantName}</span>
                           </div>
                         </button>
                       );
@@ -823,11 +823,11 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
                           <p className="mt-1 text-xs text-muted">{event.location}</p>
                         </div>
                         <div
-                          className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium"
+                          className="inline-flex max-w-[180px] items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium"
                           style={{ backgroundColor: `${color}1f`, color }}
                         >
-                          <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: color }} />
-                          {event.tenantName}
+                          <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: color }} />
+                          <span className="min-w-0 truncate">{event.tenantName}</span>
                         </div>
                       </div>
                     </button>

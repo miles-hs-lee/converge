@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { serverEnv } from "@/lib/env/server";
 import { getMicrosoftScopeString } from "@/lib/microsoft";
 import { createClient } from "@/lib/supabase/server";
+import { analyticsEvents } from "@/lib/analytics/events";
+import { captureServerEvent } from "@/lib/analytics/server";
 
 export async function GET() {
   const supabase = await createClient();
@@ -10,8 +12,19 @@ export async function GET() {
   } = await supabase.auth.getUser();
 
   if (!user) {
+    await captureServerEvent({
+      event: analyticsEvents.oauthFailed,
+      distinctId: "anonymous",
+      properties: { provider: "microsoft", reasonCode: "auth_required", flow: "direct_connect", surface: "settings" }
+    });
     return NextResponse.redirect(new URL("/login?status=auth_required", serverEnv.azureRedirectUri));
   }
+
+  await captureServerEvent({
+    event: analyticsEvents.oauthStart,
+    distinctId: user.id,
+    properties: { provider: "microsoft", flow: "direct_connect", surface: "settings" }
+  });
 
   const state = crypto.randomUUID();
   const params = new URLSearchParams({

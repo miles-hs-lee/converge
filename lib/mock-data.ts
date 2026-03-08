@@ -51,21 +51,21 @@ export type MockPerson = {
 export const mockConnections: MockConnection[] = [
   {
     id: "conn-1",
-    tenantName: "Primary Tenant",
+    tenantName: "Primary Account",
     principalName: "you@primary.contoso.com",
     status: "active",
     tokenExpiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7).toISOString()
   },
   {
     id: "conn-2",
-    tenantName: "Partner Tenant",
+    tenantName: "Partner Account",
     principalName: "you@partner.fabrikam.com",
     status: "active",
     tokenExpiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 10).toISOString()
   },
   {
     id: "conn-3",
-    tenantName: "Regional Tenant",
+    tenantName: "Regional Account",
     principalName: "you@regional.adatum.com",
     status: "active",
     tokenExpiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 6).toISOString()
@@ -82,14 +82,14 @@ const eventTemplates = [
 ];
 
 const tenantAccounts = [
-  { tenantName: "Primary Tenant", sourceAccount: "you@primary.contoso.com" },
-  { tenantName: "Partner Tenant", sourceAccount: "you@partner.fabrikam.com" },
-  { tenantName: "Regional Tenant", sourceAccount: "you@regional.adatum.com" }
+  { tenantName: "Primary Account", sourceAccount: "you@primary.contoso.com" },
+  { tenantName: "Partner Account", sourceAccount: "you@partner.fabrikam.com" },
+  { tenantName: "Regional Account", sourceAccount: "you@regional.adatum.com" }
 ];
 
 function calendarNameForTenant(tenantName: string): string {
-  if (tenantName === "Partner Tenant") return "Partner Shared Calendar";
-  if (tenantName === "Regional Tenant") return "Regional Operations Calendar";
+  if (tenantName === "Partner Account") return "Partner Shared Calendar";
+  if (tenantName === "Regional Account") return "Regional Operations Calendar";
   return "Primary Calendar";
 }
 
@@ -262,48 +262,48 @@ const peopleSeed: Array<{
   jobTitle: string;
   officeLocation: string;
 }> = [
-  { displayName: "김민수", tenantName: "Primary Tenant", department: "Platform", jobTitle: "Platform Engineer", officeLocation: "Seoul" },
-  { displayName: "Alex Chen", tenantName: "Partner Tenant", department: "Sales", jobTitle: "Sales Lead", officeLocation: "Busan" },
-  { displayName: "윤아린", tenantName: "Primary Tenant", department: "Product", jobTitle: "Product Ops", officeLocation: "Seoul" },
-  { displayName: "Sofia Park", tenantName: "Partner Tenant", department: "People", jobTitle: "HR Manager", officeLocation: "Incheon" },
-  { displayName: "최서연", tenantName: "Regional Tenant", department: "Marketing", jobTitle: "Marketing Manager", officeLocation: "Daegu" },
-  { displayName: "이재훈", tenantName: "Primary Tenant", department: "Platform", jobTitle: "Backend Engineer", officeLocation: "Seoul" },
-  { displayName: "박지후", tenantName: "Partner Tenant", department: "Sales", jobTitle: "Account Executive", officeLocation: "Busan" },
-  { displayName: "정하늘", tenantName: "Regional Tenant", department: "Support", jobTitle: "Support Specialist", officeLocation: "Daejeon" },
-  { displayName: "강도윤", tenantName: "Primary Tenant", department: "Data", jobTitle: "Data Analyst", officeLocation: "Seoul" },
-  { displayName: "오지민", tenantName: "Partner Tenant", department: "Finance", jobTitle: "Finance Partner", officeLocation: "Busan" },
-  { displayName: "한유진", tenantName: "Regional Tenant", department: "People", jobTitle: "Recruiter", officeLocation: "Gwangju" },
-  { displayName: "신현우", tenantName: "Primary Tenant", department: "Security", jobTitle: "Security Engineer", officeLocation: "Seoul" },
-  { displayName: "임세진", tenantName: "Partner Tenant", department: "Operations", jobTitle: "Ops Manager", officeLocation: "Incheon" },
-  { displayName: "유태민", tenantName: "Regional Tenant", department: "Engineering", jobTitle: "Frontend Engineer", officeLocation: "Daegu" },
-  { displayName: "배주원", tenantName: "Primary Tenant", department: "Product", jobTitle: "Product Manager", officeLocation: "Seoul" },
-  { displayName: "조하린", tenantName: "Partner Tenant", department: "Marketing", jobTitle: "Growth Marketer", officeLocation: "Busan" },
-  { displayName: "송지호", tenantName: "Regional Tenant", department: "Support", jobTitle: "Escalation Engineer", officeLocation: "Daejeon" },
-  { displayName: "문서윤", tenantName: "Primary Tenant", department: "Data", jobTitle: "BI Engineer", officeLocation: "Seoul" },
-  { displayName: "홍민재", tenantName: "Partner Tenant", department: "Sales", jobTitle: "Sales Ops", officeLocation: "Incheon" },
-  { displayName: "서다은", tenantName: "Regional Tenant", department: "Finance", jobTitle: "Accountant", officeLocation: "Gwangju" },
-  { displayName: "김태양", tenantName: "Primary Tenant", department: "Security", jobTitle: "Compliance Lead", officeLocation: "Seoul" },
-  { displayName: "이수빈", tenantName: "Partner Tenant", department: "Operations", jobTitle: "Program Manager", officeLocation: "Busan" },
-  { displayName: "박은호", tenantName: "Regional Tenant", department: "Engineering", jobTitle: "QA Engineer", officeLocation: "Daegu" },
-  { displayName: "정다인", tenantName: "Primary Tenant", department: "Platform", jobTitle: "SRE", officeLocation: "Seoul" },
-  { displayName: "장유나", tenantName: "Partner Tenant", department: "People", jobTitle: "People Partner", officeLocation: "Incheon" },
-  { displayName: "최준혁", tenantName: "Regional Tenant", department: "Marketing", jobTitle: "Content Strategist", officeLocation: "Daejeon" },
-  { displayName: "강나래", tenantName: "Primary Tenant", department: "Product", jobTitle: "UX Researcher", officeLocation: "Seoul" },
-  { displayName: "오현석", tenantName: "Partner Tenant", department: "Sales", jobTitle: "Customer Success", officeLocation: "Busan" },
-  { displayName: "한주아", tenantName: "Regional Tenant", department: "Support", jobTitle: "Support Lead", officeLocation: "Gwangju" },
-  { displayName: "임도윤", tenantName: "Primary Tenant", department: "Engineering", jobTitle: "Fullstack Engineer", officeLocation: "Seoul" },
-  { displayName: "유채린", tenantName: "Partner Tenant", department: "Finance", jobTitle: "Controller", officeLocation: "Incheon" },
-  { displayName: "배시온", tenantName: "Regional Tenant", department: "Operations", jobTitle: "Operations Analyst", officeLocation: "Daegu" },
-  { displayName: "조민준", tenantName: "Primary Tenant", department: "Data", jobTitle: "Data Scientist", officeLocation: "Seoul" },
-  { displayName: "송예린", tenantName: "Partner Tenant", department: "Marketing", jobTitle: "Brand Manager", officeLocation: "Busan" }
+  { displayName: "김민수", tenantName: "Primary Account", department: "Platform", jobTitle: "Platform Engineer", officeLocation: "Seoul" },
+  { displayName: "Alex Chen", tenantName: "Partner Account", department: "Sales", jobTitle: "Sales Lead", officeLocation: "Busan" },
+  { displayName: "윤아린", tenantName: "Primary Account", department: "Product", jobTitle: "Product Ops", officeLocation: "Seoul" },
+  { displayName: "Sofia Park", tenantName: "Partner Account", department: "People", jobTitle: "HR Manager", officeLocation: "Incheon" },
+  { displayName: "최서연", tenantName: "Regional Account", department: "Marketing", jobTitle: "Marketing Manager", officeLocation: "Daegu" },
+  { displayName: "이재훈", tenantName: "Primary Account", department: "Platform", jobTitle: "Backend Engineer", officeLocation: "Seoul" },
+  { displayName: "박지후", tenantName: "Partner Account", department: "Sales", jobTitle: "Account Executive", officeLocation: "Busan" },
+  { displayName: "정하늘", tenantName: "Regional Account", department: "Support", jobTitle: "Support Specialist", officeLocation: "Daejeon" },
+  { displayName: "강도윤", tenantName: "Primary Account", department: "Data", jobTitle: "Data Analyst", officeLocation: "Seoul" },
+  { displayName: "오지민", tenantName: "Partner Account", department: "Finance", jobTitle: "Finance Partner", officeLocation: "Busan" },
+  { displayName: "한유진", tenantName: "Regional Account", department: "People", jobTitle: "Recruiter", officeLocation: "Gwangju" },
+  { displayName: "신현우", tenantName: "Primary Account", department: "Security", jobTitle: "Security Engineer", officeLocation: "Seoul" },
+  { displayName: "임세진", tenantName: "Partner Account", department: "Operations", jobTitle: "Ops Manager", officeLocation: "Incheon" },
+  { displayName: "유태민", tenantName: "Regional Account", department: "Engineering", jobTitle: "Frontend Engineer", officeLocation: "Daegu" },
+  { displayName: "배주원", tenantName: "Primary Account", department: "Product", jobTitle: "Product Manager", officeLocation: "Seoul" },
+  { displayName: "조하린", tenantName: "Partner Account", department: "Marketing", jobTitle: "Growth Marketer", officeLocation: "Busan" },
+  { displayName: "송지호", tenantName: "Regional Account", department: "Support", jobTitle: "Escalation Engineer", officeLocation: "Daejeon" },
+  { displayName: "문서윤", tenantName: "Primary Account", department: "Data", jobTitle: "BI Engineer", officeLocation: "Seoul" },
+  { displayName: "홍민재", tenantName: "Partner Account", department: "Sales", jobTitle: "Sales Ops", officeLocation: "Incheon" },
+  { displayName: "서다은", tenantName: "Regional Account", department: "Finance", jobTitle: "Accountant", officeLocation: "Gwangju" },
+  { displayName: "김태양", tenantName: "Primary Account", department: "Security", jobTitle: "Compliance Lead", officeLocation: "Seoul" },
+  { displayName: "이수빈", tenantName: "Partner Account", department: "Operations", jobTitle: "Program Manager", officeLocation: "Busan" },
+  { displayName: "박은호", tenantName: "Regional Account", department: "Engineering", jobTitle: "QA Engineer", officeLocation: "Daegu" },
+  { displayName: "정다인", tenantName: "Primary Account", department: "Platform", jobTitle: "SRE", officeLocation: "Seoul" },
+  { displayName: "장유나", tenantName: "Partner Account", department: "People", jobTitle: "People Partner", officeLocation: "Incheon" },
+  { displayName: "최준혁", tenantName: "Regional Account", department: "Marketing", jobTitle: "Content Strategist", officeLocation: "Daejeon" },
+  { displayName: "강나래", tenantName: "Primary Account", department: "Product", jobTitle: "UX Researcher", officeLocation: "Seoul" },
+  { displayName: "오현석", tenantName: "Partner Account", department: "Sales", jobTitle: "Customer Success", officeLocation: "Busan" },
+  { displayName: "한주아", tenantName: "Regional Account", department: "Support", jobTitle: "Support Lead", officeLocation: "Gwangju" },
+  { displayName: "임도윤", tenantName: "Primary Account", department: "Engineering", jobTitle: "Fullstack Engineer", officeLocation: "Seoul" },
+  { displayName: "유채린", tenantName: "Partner Account", department: "Finance", jobTitle: "Controller", officeLocation: "Incheon" },
+  { displayName: "배시온", tenantName: "Regional Account", department: "Operations", jobTitle: "Operations Analyst", officeLocation: "Daegu" },
+  { displayName: "조민준", tenantName: "Primary Account", department: "Data", jobTitle: "Data Scientist", officeLocation: "Seoul" },
+  { displayName: "송예린", tenantName: "Partner Account", department: "Marketing", jobTitle: "Brand Manager", officeLocation: "Busan" }
 ];
 
 export const mockPeople: MockPerson[] = peopleSeed.map((person, index) => {
   const local = person.displayName.toLowerCase().replace(/\s+/g, "");
   const sourceAccount =
-    person.tenantName === "Partner Tenant"
+    person.tenantName === "Partner Account"
       ? "you@partner.fabrikam.com"
-      : person.tenantName === "Regional Tenant"
+      : person.tenantName === "Regional Account"
         ? "you@regional.adatum.com"
         : "you@primary.contoso.com";
 
@@ -322,7 +322,7 @@ export const mockPeople: MockPerson[] = peopleSeed.map((person, index) => {
     upn: `${local}${index + 1}@contoso.onmicrosoft.com`,
     externalPersonId: `ext-person-${index + 1}`,
     managerExternalId: index % 5 === 0 ? "" : `ext-manager-${(index % 9) + 1}`,
-    companyName: person.tenantName.replace("Tenant", "Corp"),
+    companyName: person.tenantName.replace("Account", "Corp"),
     employeeId: `E${String(10000 + index)}`,
     preferredLanguage: index % 3 === 0 ? "ko-KR" : index % 3 === 1 ? "en-US" : "ja-JP",
     city: person.officeLocation,

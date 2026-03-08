@@ -1,27 +1,16 @@
-export const SUPPORTED_LOCALES = ["ko-KR", "en-US", "ja-JP"] as const;
-export type Locale = (typeof SUPPORTED_LOCALES)[number];
+import {
+  DEFAULT_LOCALE,
+  formatI18nTemplate,
+  htmlLang,
+  intlLocale,
+  isSupportedLocale,
+  normalizeLocale,
+  SUPPORTED_LOCALES,
+  type I18nVars,
+  type Locale
+} from "@/lib/i18n-core";
 
-export const DEFAULT_LOCALE: Locale = "ko-KR";
-
-export function isSupportedLocale(value: string | null | undefined): value is Locale {
-  if (!value) return false;
-  return (SUPPORTED_LOCALES as readonly string[]).includes(value);
-}
-
-export function normalizeLocale(value: string | null | undefined): Locale {
-  return isSupportedLocale(value) ? value : DEFAULT_LOCALE;
-}
-
-export function htmlLang(locale: Locale): "ko" | "en" | "ja" {
-  if (locale.startsWith("en")) return "en";
-  if (locale.startsWith("ja")) return "ja";
-  return "ko";
-}
-
-export function intlLocale(locale: Locale): string {
-  // Keep as full BCP-47 tags where possible.
-  return locale;
-}
+export { DEFAULT_LOCALE, htmlLang, intlLocale, isSupportedLocale, normalizeLocale, SUPPORTED_LOCALES, type I18nVars, type Locale };
 
 export type I18nKey =
   | "brand.subtitle"
@@ -43,6 +32,7 @@ export type I18nKey =
   | "common.today"
   | "common.next"
   | "common.day"
+  | "common.workWeek"
   | "common.week"
   | "common.month"
   | "common.yes"
@@ -62,6 +52,15 @@ export type I18nKey =
   | "calendar.upcoming"
   | "calendar.none"
   | "calendar.attendeesCount"
+  | "calendar.controls.visibility"
+  | "calendar.controls.scope"
+  | "calendar.modal.visibilityTitle"
+  | "calendar.modal.scopeTitle"
+  | "calendar.modal.tenantsTitle"
+  | "calendar.modal.sourcesTitle"
+  | "calendar.modal.noSources"
+  | "calendar.modal.saving"
+  | "calendar.error.saveSourceFailed"
   | "calendar.filter.includeTentative"
   | "calendar.filter.includeWorkingElsewhere"
   | "calendar.filter.includeAwaitingResponse"
@@ -177,6 +176,9 @@ export type I18nKey =
   | "settings.sessionTitle"
   | "settings.sessionSubtitle"
   | "settings.signOut"
+  | "settings.sessionCurrentLogin"
+  | "settings.sessionPreviousLogin"
+  | "settings.sessionNoLoginHistory"
   | "settings.languageTitle"
   | "settings.languageSubtitle"
   | "settings.language.ko"
@@ -188,6 +190,12 @@ export type I18nKey =
   | "settings.theme.light"
   | "settings.theme.dark"
   | "settings.theme.current"
+  | "settings.calendarLayoutTitle"
+  | "settings.calendarLayoutSubtitle"
+  | "settings.calendarWeekStartLabel"
+  | "settings.weekStart.sunday"
+  | "settings.weekStart.monday"
+  | "settings.weekStart.current"
   | "settings.tenantColorsTitle"
   | "settings.tenantColorsSubtitle"
   | "settings.tenantColorsEmpty"
@@ -202,6 +210,22 @@ export type I18nKey =
   | "settings.syncing"
   | "settings.syncProgressHint"
   | "settings.removeConnection"
+  | "settings.reauthModalTitle"
+  | "settings.reauthModalBody"
+  | "settings.reauthModalCta"
+  | "settings.reauthModalDismiss"
+  | "settings.reauthInline"
+  | "settings.summaryConnected"
+  | "settings.summaryActive"
+  | "settings.summaryReauth"
+  | "settings.summaryProviders"
+  | "settings.connectionStatus.active"
+  | "settings.connectionStatus.revoked"
+  | "settings.connectionStatus.other"
+  | "settings.graphScopeCheck"
+  | "settings.graphScopeMissingHint"
+  | "settings.scopeGranted"
+  | "settings.scopeMissing"
   | "pwa.title"
   | "pwa.subtitle"
   | "pwa.cta"
@@ -233,11 +257,14 @@ export type I18nKey =
   | "status.db_connection_read_failed"
   | "status.db_app_user_failed"
   | "status.db_connection_upsert_failed"
+  | "status.db_connection_secret_upsert_failed"
   | "status.connection_deleted"
   | "status.connection_delete_failed"
+  | "status.security_reauth_required"
   | "status.manual_sync_done"
   | "status.manual_sync_partial"
   | "status.manual_sync_failed"
+  | "status.manual_sync_rate_limited"
   | "login.title"
   | "login.subtitle"
   | "login.feature.calendar"
@@ -253,7 +280,9 @@ export type I18nKey =
   | "login.status.auth_callback_error"
   | "login.status.signed_out"
   | "login.status.microsoft_sso_error"
+  | "login.status.rate_limited"
   | "onboarding.start"
+  | "onboarding.updates"
   | "onboarding.heroTitle"
   | "onboarding.heroDesc"
   | "onboarding.coreLabel"
@@ -266,6 +295,7 @@ export type I18nKey =
   | "onboarding.core4Title"
   | "onboarding.core4Desc"
   | "onboarding.howTitle"
+  | "onboarding.stepLabel"
   | "onboarding.step1Title"
   | "onboarding.step1Desc"
   | "onboarding.step2Title"
@@ -281,6 +311,11 @@ export type I18nKey =
   | "onboarding.screen.settingsTitle"
   | "onboarding.screen.settingsDesc"
   | "onboarding.viewCalendar"
+  | "updates.title"
+  | "updates.subtitle"
+  | "updates.back"
+  | "updates.latest"
+  | "updates.empty"
   | "people.title"
   | "people.subtitle"
   | "people.searchCount"
@@ -342,6 +377,7 @@ export type I18nKey =
   | "common.locationUnknown";
 
 type Dict = Record<I18nKey, string>;
+export type I18nMessages = Dict;
 
 const enUS: Dict = {
   "brand.subtitle": "Unified M365 Workspace",
@@ -363,6 +399,7 @@ const enUS: Dict = {
   "common.today": "Today",
   "common.next": "Next",
   "common.day": "Day",
+  "common.workWeek": "Work week",
   "common.week": "Week",
   "common.month": "Month",
   "common.yes": "Yes",
@@ -371,9 +408,9 @@ const enUS: Dict = {
   "common.total": "Total {count}",
   "calendar.title": "Unified Calendar",
   "calendar.subtitle": "Manage connected calendars in one week/month view.",
-  "calendar.connectedTenants": "Connected tenants {count}",
+  "calendar.connectedTenants": "Connected accounts {count}",
   "calendar.visibleEvents": "Visible events {count}",
-  "calendar.searchPlaceholder": "Search events (title/location/tenant/attendee)",
+  "calendar.searchPlaceholder": "Search events (title/location/account/attendee)",
   "calendar.rangeTitle": "Events around today",
   "calendar.rangeCurrent": "Current range: ±{days} days",
   "calendar.range3": "±3 days",
@@ -382,13 +419,22 @@ const enUS: Dict = {
   "calendar.upcoming": "Upcoming",
   "calendar.none": "No events.",
   "calendar.attendeesCount": "{count} attendees",
+  "calendar.controls.visibility": "Visibility filters",
+  "calendar.controls.scope": "Calendar selection",
+  "calendar.modal.visibilityTitle": "Visibility options",
+  "calendar.modal.scopeTitle": "Display scope",
+  "calendar.modal.tenantsTitle": "Accounts",
+  "calendar.modal.sourcesTitle": "Calendars",
+  "calendar.modal.noSources": "No calendars connected.",
+  "calendar.modal.saving": "Saving...",
+  "calendar.error.saveSourceFailed": "Failed to save calendar selection.",
   "calendar.filter.includeTentative": "Include tentative",
   "calendar.filter.includeWorkingElsewhere": "Include working elsewhere",
   "calendar.filter.includeAwaitingResponse": "Include awaiting response",
   "calendar.filter.includeDeclined": "Include declined",
   "calendar.filter.includeCancelled": "Include cancelled",
   "alerts.title": "Conflict alerts",
-  "alerts.subtitle": "Detect overlapping events across different tenants.",
+  "alerts.subtitle": "Detect overlapping events across different accounts.",
   "alerts.count": "{count} conflicts",
   "alerts.none": "No conflicts detected in the current window.",
   "alerts.enableNotifications": "Enable notifications",
@@ -403,7 +449,7 @@ const enUS: Dict = {
   "alerts.permission": "Permission: {value}",
   "alerts.lastSent": "Last sent: {value}",
   "alerts.notificationTitle": "Schedule conflict ({count})",
-  "alerts.notificationBody": "Overlapping events detected across tenants: {a} vs {b} ({start}-{end}). Tap to review.",
+  "alerts.notificationBody": "Overlapping events detected across accounts: {a} vs {b} ({start}-{end}). Tap to review.",
   "push.title": "Background push",
   "push.subtitle": "Receive alerts even when the app is closed (requires Web Push subscription).",
   "push.notSupported": "This browser does not support Web Push on this device.",
@@ -425,7 +471,7 @@ const enUS: Dict = {
   "push.testSent": "Test push requested. Check your notification tray.",
   "push.testFailed": "Failed to send test push.",
   "event.detailTitle": "Event Detail",
-  "event.sourceTenant": "Source tenant",
+  "event.sourceTenant": "Source account",
   "event.sourceAccount": "Source account",
   "event.time": "Time",
   "event.duration": "Duration",
@@ -497,6 +543,9 @@ const enUS: Dict = {
   "settings.sessionTitle": "Session",
   "settings.sessionSubtitle": "Sign out safely on this device.",
   "settings.signOut": "Sign out",
+  "settings.sessionCurrentLogin": "Current login",
+  "settings.sessionPreviousLogin": "Previous login",
+  "settings.sessionNoLoginHistory": "No previous login history yet.",
   "settings.languageTitle": "Language",
   "settings.languageSubtitle": "Choose your UI language. This preference is saved to your account.",
   "settings.language.ko": "Korean",
@@ -508,20 +557,43 @@ const enUS: Dict = {
   "settings.theme.light": "Light",
   "settings.theme.dark": "Dark",
   "settings.theme.current": "Current theme: {value}",
-  "settings.tenantColorsTitle": "Tenant colors",
-  "settings.tenantColorsSubtitle": "Customize tenant colors used in calendar chips and events.",
-  "settings.tenantColorsEmpty": "No tenant found yet. Connect an account first.",
+  "settings.calendarLayoutTitle": "Calendar layout",
+  "settings.calendarLayoutSubtitle": "Choose how week/month calendars are arranged.",
+  "settings.calendarWeekStartLabel": "Week starts on",
+  "settings.weekStart.sunday": "Sunday",
+  "settings.weekStart.monday": "Monday",
+  "settings.weekStart.current": "Current setting: {value}",
+  "settings.tenantColorsTitle": "Account colors",
+  "settings.tenantColorsSubtitle": "Customize account colors used in calendar chips and events.",
+  "settings.tenantColorsEmpty": "No account found yet. Connect an account first.",
   "settings.tenantColorLabel": "Color",
   "settings.tenantColorReset": "Reset",
   "settings.tenantColorResetAll": "Reset all",
   "settings.syncTitle": "Manual sync",
-  "settings.syncSubtitle": "Sync immediately when needed. Recommended: calendar every 15 minutes, people once daily.",
+  "settings.syncSubtitle": "Sync immediately when needed.",
   "settings.syncAll": "Sync all",
   "settings.syncCalendar": "Sync calendar",
   "settings.syncPeople": "Sync people",
   "settings.syncing": "Sync in progress...",
   "settings.syncProgressHint": "Depending on connected accounts, this can take up to about 20-40 seconds.",
   "settings.removeConnection": "Remove",
+  "settings.reauthModalTitle": "Security update requires account reconnection",
+  "settings.reauthModalBody":
+    "For token security hardening, existing connected accounts were signed out. Reconnect each account in Settings to resume calendar and directory sync.",
+  "settings.reauthModalCta": "Go to Settings",
+  "settings.reauthModalDismiss": "Close",
+  "settings.reauthInline": "Some connected accounts require re-authentication. Please reconnect them.",
+  "settings.summaryConnected": "Connected accounts",
+  "settings.summaryActive": "Active",
+  "settings.summaryReauth": "Re-auth required",
+  "settings.summaryProviders": "Providers",
+  "settings.connectionStatus.active": "active",
+  "settings.connectionStatus.revoked": "revoked",
+  "settings.connectionStatus.other": "unknown",
+  "settings.graphScopeCheck": "Graph scope check",
+  "settings.graphScopeMissingHint": "Missing scopes require reconnecting this account with admin-consented permissions.",
+  "settings.scopeGranted": "granted",
+  "settings.scopeMissing": "missing",
   "pwa.title": "Install app",
   "pwa.subtitle": "Install Converge for faster launch and an app-like experience.",
   "pwa.cta": "Install",
@@ -553,16 +625,19 @@ const enUS: Dict = {
   "status.db_connection_read_failed": "Failed to read connections.",
   "status.db_app_user_failed": "Failed to save app user.",
   "status.db_connection_upsert_failed": "Failed to save connection.",
+  "status.db_connection_secret_upsert_failed": "Failed to save secure token data.",
   "status.connection_deleted": "Connected account removed.",
   "status.connection_delete_failed": "Failed to remove the connected account.",
+  "status.security_reauth_required": "Security update applied. Please reconnect your accounts.",
   "status.manual_sync_done": "Sync completed.",
   "status.manual_sync_partial": "Sync completed with partial errors.",
   "status.manual_sync_failed": "Sync failed. Please retry.",
+  "status.manual_sync_rate_limited": "Too many sync requests. Please wait a moment and retry.",
   "login.title": "Start with your primary account",
-  "login.subtitle": "After signing in, you can use the unified calendar and multi-tenant people search right away.",
+  "login.subtitle": "After signing in, you can use the unified calendar and multi-account people search right away.",
   "login.feature.calendar": "Unified calendar",
   "login.feature.people": "People search",
-  "login.feature.multitenant": "Multi-tenant",
+  "login.feature.multitenant": "Multi-account",
   "login.emailLabel": "Email",
   "login.magicLinkCta": "Sign in with magic link",
   "login.microsoftCta": "Continue with Microsoft",
@@ -573,41 +648,49 @@ const enUS: Dict = {
   "login.status.auth_callback_error": "Failed to process login callback.",
   "login.status.signed_out": "Signed out safely.",
   "login.status.microsoft_sso_error": "Microsoft SSO failed. Check Supabase Azure provider settings.",
+  "login.status.rate_limited": "Too many login attempts. Please try again shortly.",
   "onboarding.start": "Get started",
-  "onboarding.heroTitle": "One workspace for multi-tenant Microsoft 365",
+  "onboarding.updates": "View changes",
+  "onboarding.heroTitle": "One workspace for multi-account Microsoft 365",
   "onboarding.heroDesc":
-    "Converge unifies calendars and directory data across multiple tenants in a single view. Standardize search and actions (email, Teams chat, meeting creation) to reduce context switching, and proactively detect cross-tenant schedule conflicts.",
+    "Converge brings multi-account calendars and directory data into one workspace. Navigate Day/Work Week/Week/Month views, control calendar scope and visibility filters, run people actions (email, Teams chat, meeting), and catch cross-account conflicts with optional PWA alerts.",
   "onboarding.coreLabel": "Core feature {index}",
   "onboarding.core1Title": "Unified calendar",
-  "onboarding.core1Desc": "Aggregate schedules across tenants with tenant-level controls and search in week/month views.",
+  "onboarding.core1Desc": "Aggregate schedules across accounts with Day/Work Week/Week/Month views, plus account/source toggles and visibility filters.",
   "onboarding.core2Title": "Directory search",
-  "onboarding.core2Desc": "Search by name/department/tenant and move straight to email, Teams chat, or meeting creation.",
+  "onboarding.core2Desc": "Search by name, phone, department, and account. Use favorites/recent people and open quick actions from profile details.",
   "onboarding.core3Title": "Conflict detection",
-  "onboarding.core3Desc": "Detect overlapping events across tenants and review them with in-app alerts and optional notifications.",
+  "onboarding.core3Desc": "Review overlaps in a dedicated conflict tab. Identical title/time events are deduplicated, with in-app and optional PWA push alerts.",
   "onboarding.core4Title": "Connection management",
-  "onboarding.core4Desc": "Connect additional Microsoft accounts and manage connection status centrally in Settings.",
+  "onboarding.core4Desc": "Connect Microsoft and Google accounts, run manual sync when needed, and follow built-in reauthentication guidance securely.",
   "onboarding.howTitle": "How it works",
+  "onboarding.stepLabel": "Step {index}",
   "onboarding.step1Title": "Authenticate",
   "onboarding.step1Desc": "Start with your primary account (Supabase Auth or Microsoft).",
-  "onboarding.step2Title": "Connect tenants",
-  "onboarding.step2Desc": "Add additional tenant accounts in Settings.",
+  "onboarding.step2Title": "Connect accounts",
+  "onboarding.step2Desc": "Add additional accounts in Settings.",
   "onboarding.step3Title": "Search and act",
-  "onboarding.step3Desc": "Use the unified calendar and directory search, then complete actions with one click.",
+  "onboarding.step3Desc": "Use calendar, conflicts, and people in one flow, then execute actions directly from detail panels.",
   "onboarding.screensTitle": "Real screenshots",
-  "onboarding.screensDesc": "Screens captured from the currently deployed Converge build.",
+  "onboarding.screensDesc": "Screens captured from the currently deployed Converge production build.",
   "onboarding.screen.calendarTitle": "Unified calendar",
-  "onboarding.screen.calendarDesc": "Cross-tenant aggregation with search, week/month navigation, and detailed event review.",
+  "onboarding.screen.calendarDesc": "Cross-account aggregation with search, week/month navigation, and detailed event review.",
   "onboarding.screen.peopleTitle": "Directory search",
   "onboarding.screen.peopleDesc": "Profile-based quick actions for email, Teams chat, and meeting creation.",
   "onboarding.screen.settingsTitle": "Settings",
   "onboarding.screen.settingsDesc": "Manage connections, language, install, and notification preferences.",
   "onboarding.viewCalendar": "Open calendar",
+  "updates.title": "Product updates",
+  "updates.subtitle": "Major features added to Converge, grouped by date.",
+  "updates.back": "Back to onboarding",
+  "updates.latest": "Latest update: {date}",
+  "updates.empty": "No update notes have been added yet.",
   "people.title": "People",
   "people.subtitle": "Search employees and communicate faster with profile-based quick actions.",
   "people.searchCount": "Search scope {count}",
-  "people.searchPlaceholder": "Search name, email, phone, department, tenant",
+  "people.searchPlaceholder": "Search name, email, phone, department, account",
   "people.sort.default": "Default",
-  "people.sort.tenant": "Group by tenant",
+  "people.sort.tenant": "Group by account",
   "people.filter.includeGuests": "Include guests",
   "people.favoritesTitle": "Favorite people",
   "people.favoritesHint": "Add favorites using the star button in the profile popup.",
@@ -629,7 +712,7 @@ const enUS: Dict = {
   "people.field.mail": "Email",
   "people.field.phone": "Phone",
   "people.field.office": "Office",
-  "people.field.tenant": "Tenant",
+  "people.field.tenant": "Account",
   "people.field.upn": "User principal name",
   "people.field.sourceAccount": "Connected account",
   "people.field.provider": "Provider",
@@ -683,6 +766,7 @@ const koKR: Dict = {
   "common.today": "오늘",
   "common.next": "다음",
   "common.day": "일간",
+  "common.workWeek": "작업주",
   "common.week": "주간",
   "common.month": "월간",
   "common.yes": "예",
@@ -691,9 +775,9 @@ const koKR: Dict = {
   "common.total": "총 {count}",
   "calendar.title": "통합 캘린더",
   "calendar.subtitle": "연결된 계정 일정을 한 화면에서 주간/월간으로 관리합니다.",
-  "calendar.connectedTenants": "연결 테넌트 {count}개",
+  "calendar.connectedTenants": "연결 계정 {count}개",
   "calendar.visibleEvents": "표시 일정 {count}건",
-  "calendar.searchPlaceholder": "일정 검색 (제목/장소/테넌트/참석자)",
+  "calendar.searchPlaceholder": "일정 검색 (제목/장소/계정/참석자)",
   "calendar.rangeTitle": "오늘 기준 전후 일정",
   "calendar.rangeCurrent": "현재 필터: ±{days}일",
   "calendar.range3": "±3일",
@@ -702,13 +786,22 @@ const koKR: Dict = {
   "calendar.upcoming": "예정 일정",
   "calendar.none": "해당 일정이 없습니다.",
   "calendar.attendeesCount": "참석자 {count}명",
+  "calendar.controls.visibility": "표시 필터",
+  "calendar.controls.scope": "캘린더 선택",
+  "calendar.modal.visibilityTitle": "표시 옵션",
+  "calendar.modal.scopeTitle": "표시 대상 선택",
+  "calendar.modal.tenantsTitle": "계정",
+  "calendar.modal.sourcesTitle": "캘린더",
+  "calendar.modal.noSources": "연결된 캘린더가 없습니다.",
+  "calendar.modal.saving": "저장 중...",
+  "calendar.error.saveSourceFailed": "캘린더 선택 저장에 실패했습니다.",
   "calendar.filter.includeTentative": "미정 포함",
   "calendar.filter.includeWorkingElsewhere": "다른 용무중 포함",
   "calendar.filter.includeAwaitingResponse": "응답 대기 포함",
   "calendar.filter.includeDeclined": "거절 일정 포함",
   "calendar.filter.includeCancelled": "취소 일정 포함",
   "alerts.title": "일정 충돌 알림",
-  "alerts.subtitle": "서로 다른 테넌트에서 시간이 겹치는 일정을 감지합니다.",
+  "alerts.subtitle": "서로 다른 계정에서 시간이 겹치는 일정을 감지합니다.",
   "alerts.count": "충돌 {count}건",
   "alerts.none": "현재 범위에서 감지된 충돌이 없습니다.",
   "alerts.enableNotifications": "알림 켜기",
@@ -723,7 +816,7 @@ const koKR: Dict = {
   "alerts.permission": "권한: {value}",
   "alerts.lastSent": "마지막 발송: {value}",
   "alerts.notificationTitle": "일정 충돌 ({count}건)",
-  "alerts.notificationBody": "테넌트 간 시간이 겹치는 일정이 감지되었습니다: {a} vs {b} ({start}-{end}). 눌러서 확인하세요.",
+  "alerts.notificationBody": "계정 간 시간이 겹치는 일정이 감지되었습니다: {a} vs {b} ({start}-{end}). 눌러서 확인하세요.",
   "push.title": "백그라운드 푸시",
   "push.subtitle": "앱이 닫혀 있어도 알림을 받습니다(Web Push 구독 필요).",
   "push.notSupported": "현재 디바이스/브라우저에서는 Web Push를 지원하지 않습니다.",
@@ -745,7 +838,7 @@ const koKR: Dict = {
   "push.testSent": "테스트 푸시를 요청했습니다. 알림 창을 확인하세요.",
   "push.testFailed": "테스트 푸시 전송에 실패했습니다.",
   "event.detailTitle": "일정 상세",
-  "event.sourceTenant": "원본 테넌트",
+  "event.sourceTenant": "원본 계정",
   "event.sourceAccount": "원본 계정",
   "event.time": "시간",
   "event.duration": "길이",
@@ -817,6 +910,9 @@ const koKR: Dict = {
   "settings.sessionTitle": "세션",
   "settings.sessionSubtitle": "현재 디바이스에서 안전하게 로그아웃합니다.",
   "settings.signOut": "로그아웃",
+  "settings.sessionCurrentLogin": "이번 로그인",
+  "settings.sessionPreviousLogin": "이전 로그인",
+  "settings.sessionNoLoginHistory": "이전 로그인 기록이 없습니다.",
   "settings.languageTitle": "언어",
   "settings.languageSubtitle": "전반적인 UI 언어를 선택합니다. 설정은 계정에 저장됩니다.",
   "settings.language.ko": "한국어",
@@ -828,20 +924,43 @@ const koKR: Dict = {
   "settings.theme.light": "라이트",
   "settings.theme.dark": "다크",
   "settings.theme.current": "현재 테마: {value}",
-  "settings.tenantColorsTitle": "테넌트 색상",
-  "settings.tenantColorsSubtitle": "캘린더 일정/칩에 표시되는 테넌트 색상을 직접 설정합니다.",
-  "settings.tenantColorsEmpty": "표시할 테넌트가 없습니다. 먼저 계정을 연결하세요.",
+  "settings.calendarLayoutTitle": "달력 표시 형식",
+  "settings.calendarLayoutSubtitle": "주간/월간 달력의 시작 요일과 표시 형식을 선택합니다.",
+  "settings.calendarWeekStartLabel": "주 시작 요일",
+  "settings.weekStart.sunday": "일요일",
+  "settings.weekStart.monday": "월요일",
+  "settings.weekStart.current": "현재 설정: {value}",
+  "settings.tenantColorsTitle": "계정 색상",
+  "settings.tenantColorsSubtitle": "캘린더 일정/칩에 표시되는 계정 색상을 직접 설정합니다.",
+  "settings.tenantColorsEmpty": "표시할 계정이 없습니다. 먼저 계정을 연결하세요.",
   "settings.tenantColorLabel": "색상",
   "settings.tenantColorReset": "초기화",
   "settings.tenantColorResetAll": "전체 초기화",
   "settings.syncTitle": "수동 동기화",
-  "settings.syncSubtitle": "필요할 때 즉시 동기화합니다. 권장 주기: 캘린더 15분, 조직도 1일 1회.",
+  "settings.syncSubtitle": "필요할 때 즉시 동기화합니다.",
   "settings.syncAll": "전체 동기화",
   "settings.syncCalendar": "캘린더 동기화",
   "settings.syncPeople": "조직도 동기화",
   "settings.syncing": "동기화 진행 중...",
   "settings.syncProgressHint": "연결 계정 수에 따라 최대 20~40초 정도 걸릴 수 있습니다.",
   "settings.removeConnection": "연결 삭제",
+  "settings.reauthModalTitle": "보안 업데이트로 계정 재연결이 필요합니다",
+  "settings.reauthModalBody":
+    "토큰 보안 강화를 위해 기존 연결 계정의 인증이 만료되었습니다. 설정에서 각 계정을 다시 연결하면 캘린더/조직도 동기화가 재개됩니다.",
+  "settings.reauthModalCta": "설정으로 이동",
+  "settings.reauthModalDismiss": "닫기",
+  "settings.reauthInline": "일부 연결 계정은 재인증이 필요합니다. 계정을 다시 연결해 주세요.",
+  "settings.summaryConnected": "연결 계정",
+  "settings.summaryActive": "정상 연결",
+  "settings.summaryReauth": "재인증 필요",
+  "settings.summaryProviders": "연결 제공자",
+  "settings.connectionStatus.active": "정상",
+  "settings.connectionStatus.revoked": "재인증 필요",
+  "settings.connectionStatus.other": "상태 확인 필요",
+  "settings.graphScopeCheck": "Graph 권한 점검",
+  "settings.graphScopeMissingHint": "부족한 권한은 관리자 동의가 포함된 재연결로 갱신할 수 있습니다.",
+  "settings.scopeGranted": "승인됨",
+  "settings.scopeMissing": "누락",
   "pwa.title": "앱 설치",
   "pwa.subtitle": "Converge를 홈 화면에 설치해서 더 빠르게 실행하고 앱처럼 사용하세요.",
   "pwa.cta": "설치하기",
@@ -873,16 +992,19 @@ const koKR: Dict = {
   "status.db_connection_read_failed": "연결 계정 조회 중 오류가 발생했습니다.",
   "status.db_app_user_failed": "앱 사용자 저장에 실패했습니다.",
   "status.db_connection_upsert_failed": "연결 계정 저장에 실패했습니다.",
+  "status.db_connection_secret_upsert_failed": "보안 토큰 저장에 실패했습니다.",
   "status.connection_deleted": "연결 계정을 삭제했습니다.",
   "status.connection_delete_failed": "연결 계정 삭제에 실패했습니다.",
+  "status.security_reauth_required": "보안 업데이트가 적용되었습니다. 계정을 다시 연결해 주세요.",
   "status.manual_sync_done": "동기화가 완료되었습니다.",
   "status.manual_sync_partial": "일부 오류와 함께 동기화가 완료되었습니다.",
   "status.manual_sync_failed": "동기화에 실패했습니다. 다시 시도해 주세요.",
+  "status.manual_sync_rate_limited": "동기화 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.",
   "login.title": "메인 계정으로 시작",
-  "login.subtitle": "로그인 후 통합 캘린더와 다중 테넌트 직원 검색을 바로 사용할 수 있습니다.",
+  "login.subtitle": "로그인 후 통합 캘린더와 다중 계정 직원 검색을 바로 사용할 수 있습니다.",
   "login.feature.calendar": "통합 캘린더",
   "login.feature.people": "직원 검색",
-  "login.feature.multitenant": "다중 테넌트",
+  "login.feature.multitenant": "다중 계정",
   "login.emailLabel": "이메일",
   "login.magicLinkCta": "매직링크 로그인",
   "login.microsoftCta": "Microsoft 계정으로 계속",
@@ -893,41 +1015,49 @@ const koKR: Dict = {
   "login.status.auth_callback_error": "로그인 콜백 처리에 실패했습니다.",
   "login.status.signed_out": "안전하게 로그아웃되었습니다.",
   "login.status.microsoft_sso_error": "Microsoft SSO에 실패했습니다. Supabase Azure 제공자 설정을 확인해주세요.",
+  "login.status.rate_limited": "로그인 시도가 너무 많습니다. 잠시 후 다시 시도해 주세요.",
   "onboarding.start": "시작하기",
-  "onboarding.heroTitle": "멀티 테넌트 Microsoft 365 운영을 하나의 워크스페이스로",
+  "onboarding.updates": "변경사항 보기",
+  "onboarding.heroTitle": "M365 업무를 한 화면에서",
   "onboarding.heroDesc":
-    "Converge는 여러 테넌트에 분산된 캘린더와 디렉터리(직원) 정보를 단일 화면에서 통합 제공합니다. 검색과 표준 액션(메일, Teams, 미팅 생성)으로 실행까지 연결해 전환 비용을 줄이고, 테넌트 간 일정 충돌을 선제적으로 탐지합니다.",
+    "Converge에서는 계정이 여러 개여도 일정과 직원 정보를 한곳에서 쉽게 볼 수 있어요. 필요한 사람에게 메일·Teams·미팅을 바로 시작하고, 겹치는 일정도 빠르게 확인할 수 있습니다.",
   "onboarding.coreLabel": "핵심 기능 {index}",
-  "onboarding.core1Title": "통합 캘린더",
-  "onboarding.core1Desc": "여러 테넌트 일정을 주간/월간으로 집계하고, 테넌트별 제어와 검색으로 즉시 파악합니다.",
-  "onboarding.core2Title": "디렉터리 검색",
-  "onboarding.core2Desc": "이름/부서/테넌트로 탐색하고 메일, Teams, 미팅 생성까지 즉시 실행합니다.",
-  "onboarding.core3Title": "일정 충돌 탐지",
-  "onboarding.core3Desc": "서로 다른 테넌트의 겹치는 일정을 감지하고 인앱/알림으로 안내합니다.",
-  "onboarding.core4Title": "연결 관리",
-  "onboarding.core4Desc": "Microsoft 계정을 추가 연결하고 연결 상태를 중앙에서 관리합니다.",
-  "onboarding.howTitle": "도입 흐름",
-  "onboarding.step1Title": "메인 계정 인증",
-  "onboarding.step1Desc": "Supabase 인증 또는 Microsoft 계정으로 시작합니다.",
-  "onboarding.step2Title": "추가 테넌트 연결",
-  "onboarding.step2Desc": "설정에서 다른 테넌트 계정을 추가 연결합니다.",
-  "onboarding.step3Title": "검색과 실행 표준화",
-  "onboarding.step3Desc": "통합 캘린더/디렉터리에서 탐색하고 퀵 액션으로 즉시 실행합니다.",
-  "onboarding.screensTitle": "실제 기능 화면",
-  "onboarding.screensDesc": "현재 배포된 Converge 서비스 화면을 그대로 캡처한 이미지입니다.",
+  "onboarding.core1Title": "통합 일정 보기",
+  "onboarding.core1Desc": "여러 계정의 일정을 한 달력에서 보고, 필요한 일정만 골라 볼 수 있습니다.",
+  "onboarding.core2Title": "직원 찾기",
+  "onboarding.core2Desc": "이름과 전화번호로 빠르게 찾고, 상세 화면에서 바로 연락할 수 있습니다.",
+  "onboarding.core3Title": "겹치는 일정 알림",
+  "onboarding.core3Desc": "같은 시간에 잡힌 일정이 있으면 한눈에 알려줘 중요한 일정 누락을 줄여줍니다.",
+  "onboarding.core4Title": "계정 관리",
+  "onboarding.core4Desc": "Microsoft/Google 계정을 추가하고 연결 상태와 동기화를 쉽게 관리할 수 있습니다.",
+  "onboarding.howTitle": "시작 방법",
+  "onboarding.stepLabel": "{index}단계",
+  "onboarding.step1Title": "로그인",
+  "onboarding.step1Desc": "메인 계정으로 먼저 로그인합니다.",
+  "onboarding.step2Title": "계정 연결",
+  "onboarding.step2Desc": "설정에서 사용 중인 추가 계정을 연결합니다.",
+  "onboarding.step3Title": "바로 사용",
+  "onboarding.step3Desc": "달력과 직원 검색에서 확인하고 필요한 작업을 바로 실행합니다.",
+  "onboarding.screensTitle": "이렇게 보입니다",
+  "onboarding.screensDesc": "실제 Converge 화면으로 주요 기능을 미리 확인해보세요.",
   "onboarding.screen.calendarTitle": "통합 캘린더",
-  "onboarding.screen.calendarDesc": "테넌트 간 일정 집계, 검색, 주간/월간 탐색, 상세 확인까지 한 화면에서 수행합니다.",
+  "onboarding.screen.calendarDesc": "계정 간 일정 집계, 검색, 주간/월간 탐색, 상세 확인까지 한 화면에서 수행합니다.",
   "onboarding.screen.peopleTitle": "디렉터리 검색",
   "onboarding.screen.peopleDesc": "프로필 기반 퀵 액션으로 메일, Teams 채팅, 미팅 생성을 즉시 실행합니다.",
   "onboarding.screen.settingsTitle": "설정",
   "onboarding.screen.settingsDesc": "계정 연결, 언어, 설치/알림 등 운영 설정을 관리합니다.",
   "onboarding.viewCalendar": "캘린더 보기",
+  "updates.title": "업데이트 알림",
+  "updates.subtitle": "Converge에 추가된 주요 기능을 날짜별로 확인하세요.",
+  "updates.back": "온보딩으로 돌아가기",
+  "updates.latest": "최신 업데이트: {date}",
+  "updates.empty": "등록된 업데이트가 없습니다.",
   "people.title": "조직도",
   "people.subtitle": "직원 검색과 프로필 기반 빠른 커뮤니케이션을 지원합니다.",
   "people.searchCount": "검색 대상 {count}명",
-  "people.searchPlaceholder": "이름, 이메일, 전화번호, 부서, 테넌트 검색",
+  "people.searchPlaceholder": "이름, 이메일, 전화번호, 부서, 계정 검색",
   "people.sort.default": "기본",
-  "people.sort.tenant": "테넌트 정렬",
+  "people.sort.tenant": "계정 정렬",
   "people.filter.includeGuests": "Guest 계정 포함",
   "people.favoritesTitle": "즐겨찾기 직원",
   "people.favoritesHint": "직원 상세에서 별 버튼으로 즐겨찾기를 추가하세요.",
@@ -949,7 +1079,7 @@ const koKR: Dict = {
   "people.field.mail": "이메일",
   "people.field.phone": "전화번호",
   "people.field.office": "오피스 위치",
-  "people.field.tenant": "소속 테넌트",
+  "people.field.tenant": "소속 계정",
   "people.field.upn": "사용자 주체 이름(UPN)",
   "people.field.sourceAccount": "연결 계정",
   "people.field.provider": "제공자",
@@ -1003,6 +1133,7 @@ const jaJP: Dict = {
   "common.today": "今日",
   "common.next": "次へ",
   "common.day": "日",
+  "common.workWeek": "平日週",
   "common.week": "週",
   "common.month": "月",
   "common.yes": "はい",
@@ -1011,9 +1142,9 @@ const jaJP: Dict = {
   "common.total": "合計 {count}",
   "calendar.title": "統合カレンダー",
   "calendar.subtitle": "接続済みカレンダーを週/月ビューで一括管理します。",
-  "calendar.connectedTenants": "接続テナント {count}",
+  "calendar.connectedTenants": "接続アカウント {count}",
   "calendar.visibleEvents": "表示予定 {count}",
-  "calendar.searchPlaceholder": "予定を検索 (件名/場所/テナント/参加者)",
+  "calendar.searchPlaceholder": "予定を検索 (件名/場所/アカウント/参加者)",
   "calendar.rangeTitle": "今日を中心に前後の予定",
   "calendar.rangeCurrent": "現在の範囲: ±{days}日",
   "calendar.range3": "±3日",
@@ -1022,13 +1153,22 @@ const jaJP: Dict = {
   "calendar.upcoming": "今後の予定",
   "calendar.none": "予定はありません。",
   "calendar.attendeesCount": "参加者 {count}名",
+  "calendar.controls.visibility": "表示フィルター",
+  "calendar.controls.scope": "カレンダー選択",
+  "calendar.modal.visibilityTitle": "表示オプション",
+  "calendar.modal.scopeTitle": "表示対象の選択",
+  "calendar.modal.tenantsTitle": "アカウント",
+  "calendar.modal.sourcesTitle": "カレンダー",
+  "calendar.modal.noSources": "接続されたカレンダーがありません。",
+  "calendar.modal.saving": "保存中...",
+  "calendar.error.saveSourceFailed": "カレンダー選択の保存に失敗しました。",
   "calendar.filter.includeTentative": "仮予定を含む",
   "calendar.filter.includeWorkingElsewhere": "他の場所で勤務を含む",
   "calendar.filter.includeAwaitingResponse": "未回答を含む",
   "calendar.filter.includeDeclined": "辞退予定を含む",
   "calendar.filter.includeCancelled": "キャンセル予定を含む",
   "alerts.title": "予定の競合アラート",
-  "alerts.subtitle": "異なるテナント間で時間が重なる予定を検出します。",
+  "alerts.subtitle": "異なるアカウント間で時間が重なる予定を検出します。",
   "alerts.count": "競合 {count}件",
   "alerts.none": "現在の範囲では競合が見つかりません。",
   "alerts.enableNotifications": "通知を有効化",
@@ -1043,7 +1183,7 @@ const jaJP: Dict = {
   "alerts.permission": "権限: {value}",
   "alerts.lastSent": "最終送信: {value}",
   "alerts.notificationTitle": "予定の競合 ({count}件)",
-  "alerts.notificationBody": "テナント間で時間が重なる予定を検出しました: {a} vs {b} ({start}-{end}). タップして確認してください。",
+  "alerts.notificationBody": "アカウント間で時間が重なる予定を検出しました: {a} vs {b} ({start}-{end}). タップして確認してください。",
   "push.title": "バックグラウンド Push",
   "push.subtitle": "アプリを閉じても通知を受け取ります(Web Push の購読が必要)。",
   "push.notSupported": "このデバイス/ブラウザーでは Web Push をサポートしていません。",
@@ -1065,7 +1205,7 @@ const jaJP: Dict = {
   "push.testSent": "テスト Push を要求しました。通知を確認してください。",
   "push.testFailed": "テスト Push の送信に失敗しました。",
   "event.detailTitle": "予定の詳細",
-  "event.sourceTenant": "元テナント",
+  "event.sourceTenant": "元アカウント",
   "event.sourceAccount": "元アカウント",
   "event.time": "時間",
   "event.duration": "所要時間",
@@ -1137,6 +1277,9 @@ const jaJP: Dict = {
   "settings.sessionTitle": "セッション",
   "settings.sessionSubtitle": "このデバイスから安全にログアウトします。",
   "settings.signOut": "ログアウト",
+  "settings.sessionCurrentLogin": "今回のログイン",
+  "settings.sessionPreviousLogin": "前回のログイン",
+  "settings.sessionNoLoginHistory": "前回ログイン履歴がありません。",
   "settings.languageTitle": "言語",
   "settings.languageSubtitle": "UI の言語を選択します。設定はアカウントに保存されます。",
   "settings.language.ko": "韓国語",
@@ -1148,20 +1291,43 @@ const jaJP: Dict = {
   "settings.theme.light": "ライト",
   "settings.theme.dark": "ダーク",
   "settings.theme.current": "現在のテーマ: {value}",
-  "settings.tenantColorsTitle": "テナントカラー",
-  "settings.tenantColorsSubtitle": "カレンダー予定やチップで使うテナント色を設定します。",
-  "settings.tenantColorsEmpty": "表示できるテナントがありません。先にアカウントを接続してください。",
+  "settings.calendarLayoutTitle": "カレンダー表示形式",
+  "settings.calendarLayoutSubtitle": "週/月カレンダーの開始曜日と表示形式を選択します。",
+  "settings.calendarWeekStartLabel": "週の開始曜日",
+  "settings.weekStart.sunday": "日曜日",
+  "settings.weekStart.monday": "月曜日",
+  "settings.weekStart.current": "現在の設定: {value}",
+  "settings.tenantColorsTitle": "アカウントカラー",
+  "settings.tenantColorsSubtitle": "カレンダー予定やチップで使うアカウント色を設定します。",
+  "settings.tenantColorsEmpty": "表示できるアカウントがありません。先にアカウントを接続してください。",
   "settings.tenantColorLabel": "色",
   "settings.tenantColorReset": "リセット",
   "settings.tenantColorResetAll": "すべてリセット",
   "settings.syncTitle": "手動同期",
-  "settings.syncSubtitle": "必要時に即時同期します。推奨周期: カレンダー 15分、組織 1日1回。",
+  "settings.syncSubtitle": "必要時に即時同期します。",
   "settings.syncAll": "すべて同期",
   "settings.syncCalendar": "カレンダー同期",
   "settings.syncPeople": "組織同期",
   "settings.syncing": "同期を実行中...",
   "settings.syncProgressHint": "接続アカウント数によっては最大20〜40秒ほどかかる場合があります。",
   "settings.removeConnection": "接続を削除",
+  "settings.reauthModalTitle": "セキュリティ更新のため再接続が必要です",
+  "settings.reauthModalBody":
+    "トークン保護強化のため、既存の接続アカウントは再認証が必要になりました。設定で各アカウントを再接続するとカレンダー/組織同期が再開されます。",
+  "settings.reauthModalCta": "設定へ移動",
+  "settings.reauthModalDismiss": "閉じる",
+  "settings.reauthInline": "一部の接続アカウントは再認証が必要です。再接続してください。",
+  "settings.summaryConnected": "接続アカウント",
+  "settings.summaryActive": "正常接続",
+  "settings.summaryReauth": "再認証が必要",
+  "settings.summaryProviders": "接続プロバイダー",
+  "settings.connectionStatus.active": "正常",
+  "settings.connectionStatus.revoked": "再認証が必要",
+  "settings.connectionStatus.other": "確認が必要",
+  "settings.graphScopeCheck": "Graph 権限チェック",
+  "settings.graphScopeMissingHint": "不足している権限は、管理者同意付きで再接続すると更新できます。",
+  "settings.scopeGranted": "付与済み",
+  "settings.scopeMissing": "不足",
   "pwa.title": "アプリをインストール",
   "pwa.subtitle": "Converge をインストールして、より速く起動しアプリのように使えます。",
   "pwa.cta": "インストール",
@@ -1193,16 +1359,19 @@ const jaJP: Dict = {
   "status.db_connection_read_failed": "接続アカウントの取得に失敗しました。",
   "status.db_app_user_failed": "ユーザー保存に失敗しました。",
   "status.db_connection_upsert_failed": "接続の保存に失敗しました。",
+  "status.db_connection_secret_upsert_failed": "セキュアトークンの保存に失敗しました。",
   "status.connection_deleted": "接続アカウントを削除しました。",
   "status.connection_delete_failed": "接続アカウントの削除に失敗しました。",
+  "status.security_reauth_required": "セキュリティ更新を適用しました。アカウントを再接続してください。",
   "status.manual_sync_done": "同期が完了しました。",
   "status.manual_sync_partial": "一部エラーを含めて同期が完了しました。",
   "status.manual_sync_failed": "同期に失敗しました。再試行してください。",
+  "status.manual_sync_rate_limited": "同期リクエストが多すぎます。しばらくして再試行してください。",
   "login.title": "メインアカウントで開始",
-  "login.subtitle": "ログインすると、統合カレンダーと複数テナントの社員検索をすぐ使えます。",
+  "login.subtitle": "ログインすると、統合カレンダーと複数アカウントの社員検索をすぐ使えます。",
   "login.feature.calendar": "統合カレンダー",
   "login.feature.people": "社員検索",
-  "login.feature.multitenant": "複数テナント",
+  "login.feature.multitenant": "複数アカウント",
   "login.emailLabel": "メール",
   "login.magicLinkCta": "マジックリンクでログイン",
   "login.microsoftCta": "Microsoft で続行",
@@ -1213,41 +1382,49 @@ const jaJP: Dict = {
   "login.status.auth_callback_error": "ログインコールバックの処理に失敗しました。",
   "login.status.signed_out": "安全にログアウトしました。",
   "login.status.microsoft_sso_error": "Microsoft SSO に失敗しました。Supabase Azure プロバイダー設定を確認してください。",
+  "login.status.rate_limited": "ログイン試行が多すぎます。しばらくして再試行してください。",
   "onboarding.start": "はじめる",
-  "onboarding.heroTitle": "複数テナント Microsoft 365 運用を 1 つのワークスペースへ",
+  "onboarding.updates": "変更履歴を見る",
+  "onboarding.heroTitle": "複数アカウントの Microsoft 365 運用を 1 つのワークスペースへ",
   "onboarding.heroDesc":
-    "Converge は複数テナントに分散したカレンダーとディレクトリ(社員)情報を単一画面で統合します。検索と標準アクション(メール/Teams/会議作成)をワークフローでつなぎ、切り替えコストを削減し、テナント間の予定競合を先回りで検出します。",
+    "Converge は複数アカウントに分散したカレンダーとディレクトリ(社員)情報を 1 つのワークスペースに統合します。日/平日週/週/月ビュー、表示範囲・可視性フィルター、社員クイックアクション(メール/Teams/会議)、アカウント間競合の通知(PWA任意)を 1 つの流れで利用できます。",
   "onboarding.coreLabel": "主要機能 {index}",
   "onboarding.core1Title": "統合カレンダー",
-  "onboarding.core1Desc": "テナント横断で予定を集約し、週/月ビューで検索とテナント別制御が可能です。",
+  "onboarding.core1Desc": "アカウント横断で予定を集約し、日/平日週/週/月ビューとアカウント・カレンダー選択、表示フィルターをまとめて扱えます。",
   "onboarding.core2Title": "ディレクトリ検索",
-  "onboarding.core2Desc": "名前/部署/テナントで探索し、メール/Teams/会議作成へ直結します。",
+  "onboarding.core2Desc": "名前/電話/部署/アカウント検索に対応し、お気に入り・最近見た人とプロフィール起点のクイックアクションを使えます。",
   "onboarding.core3Title": "競合検出",
-  "onboarding.core3Desc": "テナント間で時間が重なる予定を検出し、アプリ内通知と任意の通知で確認できます。",
+  "onboarding.core3Desc": "専用の予定競合タブで重複を確認し、同一件名・同一時間の重複は除外してアプリ内/PWA通知で案内します。",
   "onboarding.core4Title": "接続管理",
-  "onboarding.core4Desc": "Microsoft アカウントを追加接続し、接続状態を設定で一元管理します。",
+  "onboarding.core4Desc": "Microsoft/Google アカウント接続、手動同期、接続状態、再認証ガイドを設定で安全に管理できます。",
   "onboarding.howTitle": "導入フロー",
+  "onboarding.stepLabel": "ステップ {index}",
   "onboarding.step1Title": "認証",
   "onboarding.step1Desc": "メインアカウントで開始します(Supabase 認証または Microsoft)。",
-  "onboarding.step2Title": "追加テナント接続",
-  "onboarding.step2Desc": "設定で別テナントのアカウントを追加接続します。",
+  "onboarding.step2Title": "追加アカウント接続",
+  "onboarding.step2Desc": "設定で別アカウントを追加接続します。",
   "onboarding.step3Title": "検索と実行",
-  "onboarding.step3Desc": "統合カレンダー/ディレクトリ検索から、クイックアクションで即実行します。",
+  "onboarding.step3Desc": "カレンダー・予定競合・組織検索を 1 つの流れで使い、詳細パネルから即実行します。",
   "onboarding.screensTitle": "実際の画面",
-  "onboarding.screensDesc": "現在デプロイされている Converge の画面キャプチャです。",
+  "onboarding.screensDesc": "現在本番デプロイされている Converge ビルドの画面キャプチャです。",
   "onboarding.screen.calendarTitle": "統合カレンダー",
-  "onboarding.screen.calendarDesc": "テナント横断の集約、検索、週/月ナビゲーション、詳細確認を 1 画面で。",
+  "onboarding.screen.calendarDesc": "アカウント横断の集約、検索、週/月ナビゲーション、詳細確認を 1 画面で。",
   "onboarding.screen.peopleTitle": "ディレクトリ検索",
   "onboarding.screen.peopleDesc": "プロフィール起点のクイックアクションでメール/Teams/会議作成へ。",
   "onboarding.screen.settingsTitle": "設定",
   "onboarding.screen.settingsDesc": "接続、言語、インストール、通知などの運用設定を管理します。",
   "onboarding.viewCalendar": "カレンダーを開く",
+  "updates.title": "アップデート通知",
+  "updates.subtitle": "Converge に追加された主要機能を日付ごとに確認できます。",
+  "updates.back": "オンボーディングへ戻る",
+  "updates.latest": "最新アップデート: {date}",
+  "updates.empty": "登録されたアップデートはまだありません。",
   "people.title": "組織",
   "people.subtitle": "社員検索とプロフィール起点のクイックアクションを提供します。",
   "people.searchCount": "対象 {count}名",
-  "people.searchPlaceholder": "名前、メール、電話、部署、テナントで検索",
+  "people.searchPlaceholder": "名前、メール、電話、部署、アカウントで検索",
   "people.sort.default": "既定",
-  "people.sort.tenant": "テナント別",
+  "people.sort.tenant": "アカウント別",
   "people.filter.includeGuests": "ゲストを含む",
   "people.favoritesTitle": "お気に入り",
   "people.favoritesHint": "プロフィールの星ボタンでお気に入りに追加できます。",
@@ -1269,7 +1446,7 @@ const jaJP: Dict = {
   "people.field.mail": "メール",
   "people.field.phone": "電話番号",
   "people.field.office": "オフィス",
-  "people.field.tenant": "テナント",
+  "people.field.tenant": "アカウント",
   "people.field.upn": "ユーザー プリンシパル名 (UPN)",
   "people.field.sourceAccount": "接続アカウント",
   "people.field.provider": "プロバイダー",
@@ -1309,11 +1486,10 @@ const DICTS: Record<Locale, Dict> = {
   "ja-JP": jaJP
 };
 
-export function t(locale: Locale, key: I18nKey, vars?: Record<string, string | number>): string {
-  const template = DICTS[locale]?.[key] ?? DICTS[DEFAULT_LOCALE][key] ?? key;
-  if (!vars) return template;
-  return template.replace(/\{(\w+)\}/g, (match, varName: string) => {
-    const val = vars[varName];
-    return val === undefined || val === null ? match : String(val);
-  });
+export function getMessages(locale: Locale): I18nMessages {
+  return DICTS[locale] ?? DICTS[DEFAULT_LOCALE];
+}
+
+export function t(locale: Locale, key: I18nKey, vars?: I18nVars): string {
+  return formatI18nTemplate(getMessages(locale)[key] ?? key, vars);
 }

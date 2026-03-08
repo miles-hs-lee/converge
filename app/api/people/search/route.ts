@@ -1,5 +1,7 @@
+import * as Sentry from "@sentry/nextjs";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { accountCountBucket, applyStandardSentryScopeTags } from "@/lib/observability/sentry-tags";
 
 const NON_GUEST_FILTER =
   "and(user_type.is.null,user_principal_name.is.null),and(user_type.is.null,user_principal_name.not.ilike.%23EXT%23),and(user_type.not.ilike.guest,user_principal_name.is.null),and(user_type.not.ilike.guest,user_principal_name.not.ilike.%23EXT%23)";
@@ -11,6 +13,7 @@ type PersonRow = {
   jobTitle: string;
   department: string;
   tenantName: string;
+  tenantId?: string;
   officeLocation: string;
   mobilePhone: string;
   businessPhones: string[];
@@ -58,14 +61,28 @@ function parseBoolean(raw: string | null, fallback: boolean): boolean {
   return fallback;
 }
 
+function parseLocaleHeader(request: NextRequest): string | undefined {
+  const raw = request.headers.get("accept-language");
+  if (!raw) {
+    return undefined;
+  }
+  return (
+    raw
+      .split(",")
+      .map((token) => token.split(";")[0]?.trim())
+      .find((token): token is string => Boolean(token && token.length > 0)) ?? undefined
+  );
+}
+
 function toPersonRow(params: {
   person: Record<string, any>;
   tenantByConnection: Map<string, string>;
+  tenantIdByConnection: Map<string, string>;
   sourceByConnection: Map<string, string>;
   providerByConnection: Map<string, string>;
   includeDetail: boolean;
 }): PersonRow {
-  const { person, tenantByConnection, sourceByConnection, providerByConnection, includeDetail } = params;
+  const { person, tenantByConnection, tenantIdByConnection, sourceByConnection, providerByConnection, includeDetail } = params;
 
   const upn =
     ("user_principal_name" in person && typeof person.user_principal_name === "string" ? person.user_principal_name : "") ||
@@ -78,7 +95,8 @@ function toPersonRow(params: {
     mail: person.mail ?? "",
     jobTitle: person.job_title ?? "",
     department: person.department ?? "",
-    tenantName: tenantByConnection.get(person.connection_id) ?? "Connected Tenant",
+    tenantName: tenantByConnection.get(person.connection_id) ?? "Connected Account",
+    tenantId: tenantIdByConnection.get(person.connection_id) ?? "",
     officeLocation: includeDetail ? person.office_location ?? "" : "",
     mobilePhone: person.mobile_phone ?? "",
     businessPhones: person.business_phones ?? [],
@@ -127,18 +145,24 @@ function passesQuery(person: PersonRow, q: string): boolean {
   );
 }
 
+function matchesConnectionQuery(connection: {
+  tenant_name?: string | null;
+  m365_user_principal_name?: string | null;
+}, q: string): boolean {
+  if (!q) {
+    return false;
+  }
+
+  return (
+    (connection.tenant_name ?? "").toLowerCase().includes(q) ||
+    (connection.m365_user_principal_name ?? "").toLowerCase().includes(q)
+  );
+}
+
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
-  const supabase = await createClient();
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return NextResponse.json({ ok: false, error: "auth_required" }, { status: 401 });
-  }
-
+  const locale = parseLocaleHeader(request);
   const url = new URL(request.url);
   const q = normalizeQuery(url.searchParams.get("q") ?? "");
   const id = (url.searchParams.get("id") ?? "").trim();
@@ -152,93 +176,250 @@ export async function GET(request: NextRequest) {
   const offset = Number.isFinite(offsetRaw) ? Math.max(0, Math.floor(offsetRaw)) : 0;
   const limit = Number.isFinite(limitRaw) ? Math.min(200, Math.max(1, Math.floor(limitRaw))) : 60;
 
-  const { data: connections } = await supabase
-    .from("m365_connections")
-    .select("id,provider,tenant_name,m365_user_principal_name")
-    .order("created_at", { ascending: true });
+  return Sentry.startSpan(
+    {
+      name: "people.search.request",
+      op: "converge.people.search",
+      attributes: {
+        "converge.route": "/api/people/search",
+        "converge.provider": "mixed",
+        "converge.sync_mode": "people",
+        "converge.locale": locale ?? "unknown",
+        "converge.query_length": q.length,
+        "converge.include_guests": includeGuests,
+        "converge.include_detail": includeDetail
+      }
+    },
+    async () => {
+      const supabase = await createClient();
+      const {
+        data: { user }
+      } = await supabase.auth.getUser();
 
-  const connectionIds = (connections ?? []).map((connection) => connection.id);
-  if (connectionIds.length === 0) {
-    return NextResponse.json({ ok: true, items: [], offset, limit, hasMore: false, total: 0 });
-  }
+      if (!user) {
+        return NextResponse.json({ ok: false, error: "auth_required" }, { status: 401 });
+      }
 
-  const tenantByConnection = new Map<string, string>();
-  const sourceByConnection = new Map<string, string>();
-  const providerByConnection = new Map<string, string>();
-  (connections ?? []).forEach((connection) => {
-    tenantByConnection.set(connection.id, connection.tenant_name ?? "Connected Tenant");
-    sourceByConnection.set(connection.id, connection.m365_user_principal_name ?? "");
-    providerByConnection.set(connection.id, connection.provider ?? "microsoft");
-  });
+      const { data: connections } = await Sentry.startSpan(
+        {
+          name: "people.search.connections_query",
+          op: "db.query",
+          attributes: {
+            "converge.route": "/api/people/search"
+          }
+        },
+        () =>
+          supabase
+            .from("m365_connections")
+            .select("id,provider,tenant_id,tenant_name,m365_user_principal_name")
+      );
 
-  const summarySelect = "id,external_person_id,display_name,mail,job_title,department,mobile_phone,business_phones,manager_external_id,user_principal_name,user_type,connection_id";
-  const summaryFallback = "id,external_person_id,display_name,mail,job_title,department,mobile_phone,business_phones,manager_external_id,raw,connection_id";
-  const detailSelect =
-    "id,external_person_id,display_name,mail,job_title,department,office_location,mobile_phone,business_phones,manager_external_id,user_principal_name,company_name,employee_id,preferred_language,city,state,country,user_type,account_enabled,raw,connection_id";
-  const detailFallback =
-    "id,external_person_id,display_name,mail,job_title,department,office_location,mobile_phone,business_phones,manager_external_id,raw,connection_id";
+      const connectionIds = (connections ?? []).map((connection) => connection.id);
+      if (connectionIds.length === 0) {
+        return NextResponse.json({ ok: true, items: [], offset, limit, hasMore: false, total: 0 });
+      }
 
-  const queryPeople = (selectText: string) => {
-    const rangeEnd = id || externalPersonId ? offset + limit - 1 : offset + limit;
-    let query = supabase
-      .from("people_cache")
-      .select(selectText)
-      .in("connection_id", connectionIds)
-      .order("display_name", { ascending: true })
-      .range(offset, rangeEnd);
+      const tenantByConnection = new Map<string, string>();
+      const tenantIdByConnection = new Map<string, string>();
+      const sourceByConnection = new Map<string, string>();
+      const providerByConnection = new Map<string, string>();
+      (connections ?? []).forEach((connection) => {
+        tenantByConnection.set(connection.id, connection.tenant_name ?? "Connected Account");
+        tenantIdByConnection.set(connection.id, connection.tenant_id ?? "");
+        sourceByConnection.set(connection.id, connection.m365_user_principal_name ?? "");
+        providerByConnection.set(connection.id, connection.provider ?? "microsoft");
+      });
 
-    if (!includeGuests) {
-      query = query.or(NON_GUEST_FILTER);
-    }
+      const matchingConnectionIds = q ? (connections ?? []).filter((connection) => matchesConnectionQuery(connection, q)).map((connection) => connection.id) : [];
 
-    if (id) {
-      query = query.eq("id", id).limit(1);
-    } else if (externalPersonId) {
-      query = query.eq("external_person_id", externalPersonId).limit(1);
-    } else if (q) {
-      const safe = q.replace(/[%_,]/g, " ").trim();
-      if (safe) {
-        const pattern = `%${safe}%`;
-        query = query.or(
-          [
-            `display_name.ilike.${pattern}`,
-            `mail.ilike.${pattern}`,
-            `department.ilike.${pattern}`,
-            `job_title.ilike.${pattern}`,
-            `office_location.ilike.${pattern}`,
-            `mobile_phone.ilike.${pattern}`
-          ].join(",")
+      const summarySelect =
+        "id,external_person_id,display_name,mail,job_title,department,mobile_phone,business_phones,manager_external_id,user_principal_name,user_type,connection_id";
+      const summaryFallback =
+        "id,external_person_id,display_name,mail,job_title,department,mobile_phone,business_phones,manager_external_id,raw,connection_id";
+      const detailSelect =
+        "id,external_person_id,display_name,mail,job_title,department,office_location,mobile_phone,business_phones,manager_external_id,user_principal_name,company_name,employee_id,preferred_language,city,state,country,user_type,account_enabled,raw,connection_id";
+      const detailFallback =
+        "id,external_person_id,display_name,mail,job_title,department,office_location,mobile_phone,business_phones,manager_external_id,raw,connection_id";
+
+      const windowSize = id || externalPersonId ? limit : q ? Math.min(180, limit * 3) : limit + 1;
+
+      const queryPeople = (params: { selectText: string; scopedConnectionIds: string[]; applySearchFilter: boolean }) => {
+        const rangeEnd = offset + Math.max(1, windowSize) - 1;
+        let query = supabase
+          .from("people_cache")
+          .select(params.selectText)
+          .in("connection_id", params.scopedConnectionIds)
+          .order("display_name", { ascending: true })
+          .range(offset, rangeEnd);
+
+        if (!includeGuests) {
+          query = query.or(NON_GUEST_FILTER);
+        }
+
+        if (id) {
+          query = query.eq("id", id).limit(1);
+        } else if (externalPersonId) {
+          query = query.eq("external_person_id", externalPersonId).limit(1);
+        } else if (params.applySearchFilter && q) {
+          const safe = q.replace(/[%_,]/g, " ").trim();
+          if (safe) {
+            const pattern = `%${safe}%`;
+            query = query.or(
+              [
+                `display_name.ilike.${pattern}`,
+                `mail.ilike.${pattern}`,
+                `department.ilike.${pattern}`,
+                `job_title.ilike.${pattern}`,
+                `office_location.ilike.${pattern}`,
+                `mobile_phone.ilike.${pattern}`
+              ].join(",")
+            );
+          }
+        }
+
+        return query;
+      };
+
+      const runPeopleQuery = async (params: { scopedConnectionIds: string[]; applySearchFilter: boolean; queryKind: "primary" | "account" }) => {
+        const attributes = {
+          "converge.route": "/api/people/search",
+          "converge.query_length": q.length,
+          "converge.account_count_bucket": accountCountBucket(params.scopedConnectionIds.length),
+          "converge.include_detail": includeDetail
+        };
+
+        const primaryResult = await Sentry.startSpan(
+          {
+            name: `people.search.people_query.${params.queryKind}.primary`,
+            op: "db.query",
+            attributes
+          },
+          () =>
+            queryPeople({
+              selectText: includeDetail ? detailSelect : summarySelect,
+              scopedConnectionIds: params.scopedConnectionIds,
+              applySearchFilter: params.applySearchFilter
+            })
+        );
+
+        if (!primaryResult.error) {
+          return { data: (primaryResult.data ?? []) as Array<Record<string, any>>, error: null };
+        }
+
+        const fallbackResult = await Sentry.startSpan(
+          {
+            name: `people.search.people_query.${params.queryKind}.fallback`,
+            op: "db.query",
+            attributes
+          },
+          () =>
+            queryPeople({
+              selectText: includeDetail ? detailFallback : summaryFallback,
+              scopedConnectionIds: params.scopedConnectionIds,
+              applySearchFilter: params.applySearchFilter
+            })
+        );
+
+        return {
+          data: (fallbackResult.data ?? []) as Array<Record<string, any>>,
+          error: fallbackResult.error
+        };
+      };
+
+      const [primaryQuery, accountQuery] = await Promise.all([
+        runPeopleQuery({
+          scopedConnectionIds: connectionIds,
+          applySearchFilter: Boolean(q) && !id && !externalPersonId,
+          queryKind: "primary"
+        }),
+        !id && !externalPersonId && q && matchingConnectionIds.length > 0
+          ? runPeopleQuery({
+              scopedConnectionIds: matchingConnectionIds,
+              applySearchFilter: false,
+              queryKind: "account"
+            })
+          : Promise.resolve({ data: [] as Array<Record<string, any>>, error: null })
+      ]);
+
+      const error = primaryQuery.error ?? accountQuery.error;
+
+      if (error) {
+        Sentry.withScope((scope) => {
+          applyStandardSentryScopeTags(scope, {
+            route: "/api/people/search",
+            provider: "mixed",
+            syncMode: "people",
+            locale,
+            accountCount: connectionIds.length
+          });
+          scope.setUser({ id: user.id });
+          scope.setContext("people_search", {
+            includeDetail,
+            includeGuests,
+            queryLength: q.length,
+            offset,
+            limit
+          });
+          Sentry.captureException(error);
+        });
+        return NextResponse.json({ ok: false, error: "people_query_failed" }, { status: 500 });
+      }
+
+      const rowMap = new Map<string, Record<string, any>>();
+      [...primaryQuery.data, ...accountQuery.data].forEach((row) => {
+        if (row.id && !rowMap.has(row.id)) {
+          rowMap.set(row.id, row);
+        }
+      });
+
+      let items = Sentry.startSpan(
+        {
+          name: "people.search.transform",
+          op: "converge.people.search.transform",
+          attributes: {
+            "converge.route": "/api/people/search",
+            "converge.rows": rowMap.size
+          }
+        },
+        () =>
+          [...rowMap.values()].map((person) =>
+            toPersonRow({ person, tenantByConnection, tenantIdByConnection, sourceByConnection, providerByConnection, includeDetail })
+          )
+      );
+
+      if (!id && !externalPersonId && q) {
+        items = Sentry.startSpan(
+          {
+            name: "people.search.filter_local",
+            op: "converge.people.search.filter",
+            attributes: {
+              "converge.route": "/api/people/search",
+              "converge.query_length": q.length
+            }
+          },
+          () => items.filter((person) => passesQuery(person, q))
         );
       }
+
+      const hasMore = !id && !externalPersonId && items.length > limit;
+      const effectiveItems = hasMore ? items.slice(0, limit) : items;
+      const cacheControl = id || externalPersonId ? "private, max-age=300, stale-while-revalidate=600" : q ? "private, max-age=30, stale-while-revalidate=120" : "private, max-age=60, stale-while-revalidate=300";
+
+      return NextResponse.json(
+        {
+          ok: true,
+          items: effectiveItems,
+          offset,
+          limit,
+          hasMore,
+          total: null
+        },
+        {
+          headers: {
+            "Cache-Control": cacheControl
+          }
+        }
+      );
     }
-
-    return query;
-  };
-
-  const selectPrimary = includeDetail ? detailSelect : summarySelect;
-  const selectFallback = includeDetail ? detailFallback : summaryFallback;
-  const primaryResult = await queryPeople(selectPrimary);
-  const { data: dbPeople, error } = primaryResult.error ? await queryPeople(selectFallback) : primaryResult;
-
-  if (error) {
-    return NextResponse.json({ ok: false, error: "people_query_failed" }, { status: 500 });
-  }
-
-  const rows = (dbPeople ?? []) as Array<Record<string, any>>;
-  const hasMore = !id && !externalPersonId && rows.length > limit;
-  const effectiveRows = hasMore ? rows.slice(0, limit) : rows;
-  let items = effectiveRows.map((person) => toPersonRow({ person, tenantByConnection, sourceByConnection, providerByConnection, includeDetail }));
-
-  if (!id && !externalPersonId && q) {
-    items = items.filter((person) => passesQuery(person, q));
-  }
-
-  return NextResponse.json({
-    ok: true,
-    items,
-    offset,
-    limit,
-    hasMore,
-    total: null
-  });
+  );
 }

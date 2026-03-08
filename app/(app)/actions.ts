@@ -1,11 +1,16 @@
 "use server";
 
+import * as Sentry from "@sentry/nextjs";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { LOCALE_COOKIE } from "@/lib/i18n-server";
 import { normalizeLocale, type Locale } from "@/lib/i18n";
 import { syncUserConnections, type SyncMode, type SyncSummary } from "@/lib/connection-sync";
+import { consumeRateLimit } from "@/lib/rate-limit";
+import { analyticsEvents } from "@/lib/analytics/events";
+import { captureServerEvent } from "@/lib/analytics/server";
+import { applyStandardSentryScopeTags } from "@/lib/observability/sentry-tags";
 
 export async function signOutAction(): Promise<void> {
   const supabase = await createClient();
@@ -50,12 +55,56 @@ export async function manualSyncAction(formData: FormData): Promise<void> {
     redirect("/login?status=auth_required");
   }
 
+  await captureServerEvent({
+    event: analyticsEvents.manualSyncStarted,
+    distinctId: user.id,
+    properties: { mode }
+  });
+
+  const allowed = await consumeRateLimit({
+    scope: "manual_sync",
+    actor: `${user.id}:${mode}`,
+    limit: 2,
+    windowSeconds: 60
+  });
+  if (!allowed) {
+    redirect("/settings?status=manual_sync_rate_limited");
+  }
+
   let result: SyncSummary;
   try {
     result = await syncUserConnections({ userId: user.id, mode });
-  } catch {
+  } catch (error) {
+    Sentry.withScope((scope) => {
+      applyStandardSentryScopeTags(scope, {
+        route: "/settings",
+        provider: "mixed",
+        syncMode: mode
+      });
+      scope.setUser({ id: user.id });
+      Sentry.captureException(error);
+    });
+    await captureServerEvent({
+      event: analyticsEvents.manualSyncCompleted,
+      distinctId: user.id,
+      properties: { mode, ok: false, failures: 1, reason: "sync_error" }
+    });
     redirect("/settings?status=manual_sync_failed");
   }
+
+  await captureServerEvent({
+    event: analyticsEvents.manualSyncCompleted,
+    distinctId: user.id,
+    properties: {
+      mode,
+      ok: result.failures === 0,
+      failures: result.failures,
+      connectionsScanned: result.connectionsScanned,
+      calendarSynced: result.calendarSynced,
+      peopleSynced: result.peopleSynced,
+      partials: result.partials
+    }
+  });
 
   if (result.failures > 0) {
     redirect("/settings?status=manual_sync_partial");
@@ -84,11 +133,20 @@ export async function deleteConnectionAction(formData: FormData): Promise<void> 
     .delete()
     .eq("id", connectionId)
     .eq("user_id", user.id)
-    .select("id");
+    .select("id,provider");
 
   if (error || !data || data.length === 0) {
     redirect("/settings?status=connection_delete_failed");
   }
+
+  await captureServerEvent({
+    event: analyticsEvents.connectionDeleted,
+    distinctId: user.id,
+    properties: {
+      connectionId,
+      provider: data[0]?.provider ?? "unknown"
+    }
+  });
 
   redirect("/settings?status=connection_deleted");
 }

@@ -1,3 +1,6 @@
+import * as Sentry from "@sentry/nextjs";
+import { accountCountBucket } from "@/lib/observability/sentry-tags";
+
 export type CalendarEventLike = {
   id: string;
   tenantName: string;
@@ -16,6 +19,13 @@ export type CalendarConflict = {
   b: CalendarEventLike;
 };
 
+export type ConflictTraceOptions = {
+  route?: string;
+  source?: string;
+  locale?: string;
+  accountCount?: number;
+};
+
 function sortPair(a: string, b: string): [string, string] {
   return a < b ? [a, b] : [b, a];
 }
@@ -24,13 +34,18 @@ function normalizeKeyPart(value: string | undefined): string {
   return (value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
 }
 
+function compareText(a: string, b: string): number {
+  if (a === b) return 0;
+  return a < b ? -1 : 1;
+}
+
 function compareEvents(a: CalendarEventLike, b: CalendarEventLike): number {
   return (
-    a.tenantName.localeCompare(b.tenantName) ||
-    a.startAt.localeCompare(b.startAt) ||
-    a.endAt.localeCompare(b.endAt) ||
-    a.subject.localeCompare(b.subject) ||
-    a.id.localeCompare(b.id)
+    compareText(normalizeKeyPart(a.tenantName), normalizeKeyPart(b.tenantName)) ||
+    compareText(a.startAt, b.startAt) ||
+    compareText(a.endAt, b.endAt) ||
+    compareText(normalizeKeyPart(a.subject), normalizeKeyPart(b.subject)) ||
+    compareText(a.id, b.id)
   );
 }
 
@@ -118,4 +133,27 @@ export function detectTenantConflicts(events: CalendarEventLike[], opts?: { minO
   const conflicts = [...conflictByKey.values()];
   conflicts.sort((x, y) => new Date(x.overlapStart).getTime() - new Date(y.overlapStart).getTime());
   return conflicts;
+}
+
+export function detectTenantConflictsTraced(
+  events: CalendarEventLike[],
+  opts?: { minOverlapMs?: number },
+  trace?: ConflictTraceOptions
+): CalendarConflict[] {
+  return Sentry.startSpan(
+    {
+      name: "conflicts.detect",
+      op: "converge.conflicts.detect",
+      attributes: {
+        "converge.route": trace?.route ?? "unknown",
+        "converge.provider": "mixed",
+        "converge.sync_mode": "calendar",
+        "converge.locale": trace?.locale ?? "unknown",
+        "converge.account_count_bucket": accountCountBucket(trace?.accountCount),
+        "converge.source": trace?.source ?? "unknown",
+        "converge.events_count": events.length
+      }
+    },
+    () => detectTenantConflicts(events, opts)
+  );
 }

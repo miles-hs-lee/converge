@@ -1,7 +1,15 @@
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { THEME_MODE_STORAGE_KEY, TENANT_COLORS_STORAGE_KEY, normalizeThemeMode, type ThemeMode } from "@/lib/preferences";
+import {
+  CALENDAR_WEEK_START_STORAGE_KEY,
+  THEME_MODE_STORAGE_KEY,
+  TENANT_COLORS_STORAGE_KEY,
+  normalizeCalendarWeekStart,
+  normalizeThemeMode,
+  type CalendarWeekStart,
+  type ThemeMode
+} from "@/lib/preferences";
 import { colorForTenant, normalizeHexColor, sanitizeTenantColorMap, type TenantColorMap } from "@/lib/tenant-colors";
 
 type ResolvedTheme = "light" | "dark";
@@ -10,6 +18,8 @@ type AppPreferencesContextValue = {
   themeMode: ThemeMode;
   resolvedTheme: ResolvedTheme;
   setThemeMode: (mode: ThemeMode) => void;
+  calendarWeekStart: CalendarWeekStart;
+  setCalendarWeekStart: (value: CalendarWeekStart) => void;
   tenantColorMap: TenantColorMap;
   getTenantColor: (tenantName: string) => string;
   setTenantColor: (tenantName: string, color: string) => void;
@@ -38,12 +48,15 @@ function applyResolvedTheme(theme: ResolvedTheme) {
 
 export function AppPreferencesProvider({ children }: { children: ReactNode }) {
   const [themeMode, setThemeModeState] = useState<ThemeMode>("system");
+  const [calendarWeekStart, setCalendarWeekStartState] = useState<CalendarWeekStart>("mon");
   const [prefersDark, setPrefersDark] = useState<boolean>(false);
   const [tenantColorMap, setTenantColorMap] = useState<TenantColorMap>({});
 
   useEffect(() => {
     const nextMode = normalizeThemeMode(window.localStorage.getItem(THEME_MODE_STORAGE_KEY));
     setThemeModeState(nextMode);
+    const nextWeekStart = normalizeCalendarWeekStart(window.localStorage.getItem(CALENDAR_WEEK_START_STORAGE_KEY));
+    setCalendarWeekStartState(nextWeekStart);
     setPrefersDark(systemPrefersDark());
 
     const rawColors = window.localStorage.getItem(TENANT_COLORS_STORAGE_KEY);
@@ -75,6 +88,13 @@ export function AppPreferencesProvider({ children }: { children: ReactNode }) {
     setThemeModeState(mode);
     if (typeof window !== "undefined") {
       window.localStorage.setItem(THEME_MODE_STORAGE_KEY, mode);
+    }
+  };
+
+  const setCalendarWeekStart = (value: CalendarWeekStart) => {
+    setCalendarWeekStartState(value);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(CALENDAR_WEEK_START_STORAGE_KEY, value);
     }
   };
 
@@ -115,13 +135,15 @@ export function AppPreferencesProvider({ children }: { children: ReactNode }) {
       themeMode,
       resolvedTheme,
       setThemeMode,
+      calendarWeekStart,
+      setCalendarWeekStart,
       tenantColorMap,
       getTenantColor: (tenantName: string) => colorForTenant(tenantName, tenantColorMap),
       setTenantColor,
       resetTenantColor,
       resetAllTenantColors
     }),
-    [themeMode, resolvedTheme, tenantColorMap]
+    [themeMode, resolvedTheme, calendarWeekStart, tenantColorMap]
   );
 
   return <AppPreferencesContext.Provider value={value}>{children}</AppPreferencesContext.Provider>;
@@ -134,6 +156,8 @@ export function useAppPreferences(): AppPreferencesContextValue {
       themeMode: "system",
       resolvedTheme: "light",
       setThemeMode: () => {},
+      calendarWeekStart: "mon",
+      setCalendarWeekStart: () => {},
       tenantColorMap: {},
       getTenantColor: (tenantName: string) => colorForTenant(tenantName),
       setTenantColor: () => {},

@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useT, useIntlLocale } from "@/components/locale-provider";
+import { trackClientEvent } from "@/lib/analytics/client";
+import { analyticsEvents } from "@/lib/analytics/events";
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -89,8 +91,14 @@ export function PushNotificationsPanel({ enabled }: PanelProps) {
     setBusy(true);
     setStatus(null);
     try {
+      const previousPermission = permission;
       const permissionResult = await Notification.requestPermission();
       setPermission(permissionResult);
+      void trackClientEvent(analyticsEvents.notificationsPermissionChanged, {
+        source: "push_panel",
+        previousPermission,
+        nextPermission: permissionResult
+      });
       if (permissionResult !== "granted") {
         setStatus(t("push.permissionBlocked"));
         return;

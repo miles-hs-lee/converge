@@ -4,6 +4,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getGoogleScopeString } from "@/lib/google";
 import { serverEnv } from "@/lib/env/server";
 import { syncGoogleCalendarSnapshot } from "@/lib/google-sync";
+import { getOAuthConnectionSecret, upsertOAuthConnectionSecret } from "@/lib/oauth-connection-secrets";
+import { analyticsEvents } from "@/lib/analytics/events";
+import { captureServerEvent } from "@/lib/analytics/server";
 
 type GoogleTokenResponse = {
   access_token?: string;
@@ -20,7 +23,18 @@ type GoogleUserInfoResponse = {
   name?: string;
 };
 
-function redirectWithStatus(request: NextRequest, status: string): NextResponse {
+async function redirectWithStatus(request: NextRequest, status: string, distinctId: string = "anonymous"): Promise<NextResponse> {
+  const successStatuses = new Set(["google_oauth_connected", "google_oauth_connected_partial_sync"]);
+  if (!successStatuses.has(status)) {
+    await captureServerEvent({
+      event: analyticsEvents.oauthFailed,
+      distinctId,
+      properties: {
+        provider: "google",
+        reasonCode: status
+      }
+    });
+  }
   const response = NextResponse.redirect(new URL(`/settings?status=${status}`, request.url));
   response.cookies.set("converge_google_oauth_state", "", {
     httpOnly: true,
@@ -80,12 +94,12 @@ export async function GET(request: NextRequest) {
   });
 
   if (!tokenResponse.ok) {
-    return redirectWithStatus(request, "google_token_exchange_failed");
+    return redirectWithStatus(request, "google_token_exchange_failed", user.id);
   }
 
   const tokenData = (await tokenResponse.json()) as GoogleTokenResponse;
   if (!tokenData.access_token) {
-    return redirectWithStatus(request, "google_token_payload_invalid");
+    return redirectWithStatus(request, "google_token_payload_invalid", user.id);
   }
 
   const profileResponse = await fetch("https://openidconnect.googleapis.com/v1/userinfo", {
@@ -94,11 +108,11 @@ export async function GET(request: NextRequest) {
     }
   });
   if (!profileResponse.ok) {
-    return redirectWithStatus(request, "google_profile_failed");
+    return redirectWithStatus(request, "google_profile_failed", user.id);
   }
   const profile = (await profileResponse.json()) as GoogleUserInfoResponse;
   if (!profile.sub || !profile.email) {
-    return redirectWithStatus(request, "google_profile_incomplete");
+    return redirectWithStatus(request, "google_profile_incomplete", user.id);
   }
 
   const expiresIn = Number(tokenData.expires_in || 3600);
@@ -114,24 +128,32 @@ export async function GET(request: NextRequest) {
     .eq("is_primary", true)
     .maybeSingle();
   if (primaryCheckError) {
-    return redirectWithStatus(request, "db_primary_check_failed");
+    return redirectWithStatus(request, "db_primary_check_failed", user.id);
   }
 
   const { data: existingConnection, error: existingConnectionError } = await adminClient
     .from("m365_connections")
-    .select("id,is_primary,refresh_token_enc")
+    .select("id,is_primary")
     .eq("user_id", user.id)
     .eq("provider", "google")
     .eq("tenant_id", "google")
     .eq("m365_user_id", profile.sub)
     .maybeSingle();
   if (existingConnectionError) {
-    return redirectWithStatus(request, "db_connection_read_failed");
+    return redirectWithStatus(request, "db_connection_read_failed", user.id);
   }
 
-  const refreshToken = tokenData.refresh_token ?? existingConnection?.refresh_token_enc;
+  let existingSecret = null;
+  if (existingConnection?.id) {
+    try {
+      existingSecret = await getOAuthConnectionSecret(existingConnection.id);
+    } catch {
+      return redirectWithStatus(request, "db_connection_read_failed", user.id);
+    }
+  }
+  const refreshToken = tokenData.refresh_token ?? existingSecret?.refresh_token_enc;
   if (!refreshToken) {
-    return redirectWithStatus(request, "google_refresh_token_missing");
+    return redirectWithStatus(request, "google_refresh_token_missing", user.id);
   }
 
   const shouldBePrimary = existingConnection?.is_primary ?? !primaryConnection;
@@ -146,7 +168,7 @@ export async function GET(request: NextRequest) {
     { onConflict: "id" }
   );
   if (appUserError) {
-    return redirectWithStatus(request, "db_app_user_failed");
+    return redirectWithStatus(request, "db_app_user_failed", user.id);
   }
 
   const { error: connectionError } = await adminClient.from("m365_connections").upsert(
@@ -157,8 +179,8 @@ export async function GET(request: NextRequest) {
       tenant_name: "Google",
       m365_user_id: profile.sub,
       m365_user_principal_name: profile.email,
-      access_token_enc: tokenData.access_token,
-      refresh_token_enc: refreshToken,
+      access_token_enc: "__migrated__",
+      refresh_token_enc: "__migrated__",
       token_expires_at: tokenExpiresAt,
       scopes,
       is_primary: shouldBePrimary,
@@ -168,7 +190,7 @@ export async function GET(request: NextRequest) {
     { onConflict: "user_id,tenant_id,m365_user_id" }
   );
   if (connectionError) {
-    return redirectWithStatus(request, "db_connection_upsert_failed");
+    return redirectWithStatus(request, "db_connection_upsert_failed", user.id);
   }
 
   const { data: connectionRow, error: connectionReadError } = await adminClient
@@ -180,7 +202,16 @@ export async function GET(request: NextRequest) {
     .eq("m365_user_id", profile.sub)
     .maybeSingle();
   if (connectionReadError || !connectionRow?.id) {
-    return redirectWithStatus(request, "db_connection_read_failed");
+    return redirectWithStatus(request, "db_connection_read_failed", user.id);
+  }
+
+  const secretStored = await upsertOAuthConnectionSecret({
+    connectionId: connectionRow.id,
+    accessToken: tokenData.access_token,
+    refreshToken
+  });
+  if (!secretStored) {
+    return redirectWithStatus(request, "db_connection_secret_upsert_failed", user.id);
   }
 
   const syncResult = await syncGoogleCalendarSnapshot({
@@ -191,12 +222,37 @@ export async function GET(request: NextRequest) {
   });
 
   if (!syncResult.ok) {
-    return redirectWithStatus(request, "google_oauth_connected_sync_failed");
+    return redirectWithStatus(request, "google_oauth_connected_sync_failed", user.id);
   }
 
   if (syncResult.partial) {
-    return redirectWithStatus(request, "google_oauth_connected_partial_sync");
+    await captureServerEvent({
+      event: analyticsEvents.oauthConnected,
+      distinctId: user.id,
+      properties: {
+        provider: "google",
+        tenantId: "google",
+        tenantName: "Google",
+        scopesCount: scopes.length,
+        syncedCount: syncResult.syncedCount,
+        partial: true
+      }
+    });
+    return redirectWithStatus(request, "google_oauth_connected_partial_sync", user.id);
   }
 
-  return redirectWithStatus(request, "google_oauth_connected");
+  await captureServerEvent({
+    event: analyticsEvents.oauthConnected,
+    distinctId: user.id,
+    properties: {
+      provider: "google",
+      tenantId: "google",
+      tenantName: "Google",
+      scopesCount: scopes.length,
+      syncedCount: syncResult.syncedCount,
+      partial: false
+    }
+  });
+
+  return redirectWithStatus(request, "google_oauth_connected", user.id);
 }

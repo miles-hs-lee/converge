@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { buildCalendarWindow } from "@/lib/calendar-window";
 
 type GoogleCalendarListItem = {
   id?: string;
@@ -181,8 +182,7 @@ export async function syncGoogleCalendarSnapshot(params: {
     sourceByExternalId.set(source.external_calendar_id, source.id);
   });
 
-  const fromIso = new Date(Date.now() - 1000 * 60 * 60 * 24 * 14).toISOString();
-  const toIsoDate = new Date(Date.now() + 1000 * 60 * 60 * 24 * 21).toISOString();
+  const { fromIso, toIso: toIsoDate } = buildCalendarWindow();
 
   const eventRows: Array<Record<string, unknown>> = [];
   let partialFailure = false;

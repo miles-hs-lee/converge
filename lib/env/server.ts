@@ -18,10 +18,13 @@ function getOptionalServerEnv(
     | "GOOGLE_CLIENT_ID"
     | "GOOGLE_CLIENT_SECRET"
     | "GOOGLE_REDIRECT_URI"
+    | "POSTHOG_API_KEY"
+    | "POSTHOG_HOST"
     | "VAPID_PUBLIC_KEY"
     | "VAPID_PRIVATE_KEY"
     | "VAPID_SUBJECT"
     | "CRON_SECRET"
+    | "OAUTH_SECRETS_ENCRYPTION_KEY"
 ): string | undefined {
   const value = process.env[key];
   if (!value) {
@@ -39,8 +42,11 @@ export const serverEnv = {
   googleClientId: getOptionalServerEnv("GOOGLE_CLIENT_ID"),
   googleClientSecret: getOptionalServerEnv("GOOGLE_CLIENT_SECRET"),
   googleRedirectUri: getOptionalServerEnv("GOOGLE_REDIRECT_URI"),
+  posthogApiKey: getOptionalServerEnv("POSTHOG_API_KEY"),
+  posthogHost: getOptionalServerEnv("POSTHOG_HOST"),
   vapidPublicKey: getOptionalServerEnv("VAPID_PUBLIC_KEY"),
   vapidPrivateKey: getOptionalServerEnv("VAPID_PRIVATE_KEY"),
   vapidSubject: getOptionalServerEnv("VAPID_SUBJECT"),
-  cronSecret: getOptionalServerEnv("CRON_SECRET")
+  cronSecret: getOptionalServerEnv("CRON_SECRET"),
+  oauthSecretsEncryptionKey: getOptionalServerEnv("OAUTH_SECRETS_ENCRYPTION_KEY")
 };

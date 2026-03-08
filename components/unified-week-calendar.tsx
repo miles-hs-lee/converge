@@ -1,10 +1,18 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { X } from "lucide-react";
 import { ModalPortal } from "@/components/modal-portal";
-import { EventDetailModal } from "@/components/event-detail-modal";
 import { useAppPreferences } from "@/components/app-preferences-provider";
 import { useIntlLocale, useT } from "@/components/locale-provider";
+import { trackClientEvent } from "@/lib/analytics/client";
+import { analyticsEvents } from "@/lib/analytics/events";
+
+const EventDetailModal = dynamic(() => import("@/components/event-detail-modal").then((mod) => mod.EventDetailModal), {
+  loading: () => null,
+  ssr: false
+});
 
 type CalendarEvent = {
   id: string;
@@ -50,7 +58,8 @@ type UnifiedWeekCalendarProps = {
   tenants: string[];
 };
 
-type ViewMode = "day" | "week" | "month";
+type ViewMode = "day" | "workweek" | "week" | "month";
+type WeekStart = "sun" | "mon";
 
 function addDays(date: Date, days: number): Date {
   const result = new Date(date);
@@ -68,7 +77,16 @@ function startOfDay(date: Date): Date {
   return result;
 }
 
-function startOfWeek(date: Date): Date {
+function startOfWeek(date: Date, weekStart: WeekStart): Date {
+  const result = new Date(date);
+  const day = result.getDay();
+  const distanceFromWeekStart = weekStart === "sun" ? day : day === 0 ? 6 : day - 1;
+  result.setHours(0, 0, 0, 0);
+  result.setDate(result.getDate() - distanceFromWeekStart);
+  return result;
+}
+
+function startOfWorkWeek(date: Date): Date {
   const result = new Date(date);
   const day = result.getDay();
   const distanceFromMonday = day === 0 ? 6 : day - 1;
@@ -77,14 +95,14 @@ function startOfWeek(date: Date): Date {
   return result;
 }
 
-function startOfMonthGrid(date: Date): Date {
+function startOfMonthGrid(date: Date, weekStart: WeekStart): Date {
   const first = new Date(date.getFullYear(), date.getMonth(), 1);
-  return startOfWeek(first);
+  return startOfWeek(first, weekStart);
 }
 
-function weekLabel(weekStart: Date, intl: string): string {
-  const end = addDays(weekStart, 6);
-  return `${weekStart.toLocaleDateString(intl, { month: "short", day: "numeric" })} - ${end.toLocaleDateString(intl, {
+function rangeLabel(start: Date, days: number, intl: string): string {
+  const end = addDays(start, days - 1);
+  return `${start.toLocaleDateString(intl, { month: "short", day: "numeric" })} - ${end.toLocaleDateString(intl, {
     month: "short",
     day: "numeric"
   })}`;
@@ -110,13 +128,63 @@ function clamp(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, n));
 }
 
-export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProps) {
+function dayKeysForRange(startTs: number, endTs: number): Array<{ key: string; dayStartTs: number }> {
+  if (!Number.isFinite(startTs) || !Number.isFinite(endTs) || endTs <= startTs) {
+    return [];
+  }
+
+  const start = startOfDay(new Date(startTs));
+  // End is exclusive; if it lands exactly on 00:00, include the previous day only.
+  const inclusiveEndTs = Math.max(startTs, endTs - 1);
+  const end = startOfDay(new Date(inclusiveEndTs));
+  const out: Array<{ key: string; dayStartTs: number }> = [];
+
+  for (let cursor = new Date(start); cursor.getTime() <= end.getTime(); cursor = addDays(cursor, 1)) {
+    out.push({
+      key: dayKey(cursor),
+      dayStartTs: cursor.getTime()
+    });
+  }
+
+  return out;
+}
+
+function dayKeysForAllDayRange(startTs: number, endTs: number): Array<{ key: string; dayStartTs: number }> {
+  if (!Number.isFinite(startTs) || !Number.isFinite(endTs) || endTs <= startTs) {
+    return [];
+  }
+
+  const startDay = startOfDay(new Date(startTs));
+  const diffMs = endTs - startTs;
+  // All-day events should follow day-count semantics, not local clock boundaries.
+  const spanDays = Math.max(1, Math.round(diffMs / (24 * 60 * 60 * 1000)));
+  const out: Array<{ key: string; dayStartTs: number }> = [];
+
+  for (let i = 0; i < spanDays; i += 1) {
+    const day = addDays(startDay, i);
+    out.push({
+      key: dayKey(day),
+      dayStartTs: day.getTime()
+    });
+  }
+
+  return out;
+}
+
+function isUnconfirmedEvent(event: Pick<CalendarEvent, "showAs" | "responseStatus">): boolean {
+  const showAs = (event.showAs ?? "").trim().toLowerCase();
+  const response = (event.responseStatus ?? "").trim().toLowerCase();
+  return showAs === "tentative" || response === "tentative" || response === "tentativelyaccepted" || response === "notresponded";
+}
+
+export function UnifiedWeekCalendar({ events, tenants: _tenants }: UnifiedWeekCalendarProps) {
   const t = useT();
   const intl = useIntlLocale();
-  const { getTenantColor } = useAppPreferences();
+  const { getTenantColor, calendarWeekStart } = useAppPreferences();
 
   const [viewMode, setViewMode] = useState<ViewMode>("week");
   const [offsetDay, setOffsetDay] = useState(0);
+  const [offsetWorkWeek, setOffsetWorkWeek] = useState(0);
   const [offsetWeek, setOffsetWeek] = useState(0);
   const [offsetMonth, setOffsetMonth] = useState(0);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
@@ -132,44 +200,79 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
     return addDays(base, offsetDay);
   }, [offsetDay]);
 
+  const workWeekStart = useMemo(() => {
+    const base = startOfWorkWeek(new Date());
+    return addDays(base, offsetWorkWeek * 7);
+  }, [offsetWorkWeek]);
+
   const weekStart = useMemo(() => {
-    const base = startOfWeek(new Date());
+    const base = startOfWeek(new Date(), calendarWeekStart);
     return addDays(base, offsetWeek * 7);
-  }, [offsetWeek]);
+  }, [calendarWeekStart, offsetWeek]);
 
   const monthDate = useMemo(() => {
     const base = new Date();
     return new Date(base.getFullYear(), base.getMonth() + offsetMonth, 1);
   }, [offsetMonth]);
 
+  const workWeekDays = useMemo(() => Array.from({ length: 5 }, (_, idx) => addDays(workWeekStart, idx)), [workWeekStart]);
   const weekDays = useMemo(() => Array.from({ length: 7 }, (_, idx) => addDays(weekStart, idx)), [weekStart]);
   const monthDays = useMemo(() => {
-    const start = startOfMonthGrid(monthDate);
+    const start = startOfMonthGrid(monthDate, calendarWeekStart);
     return Array.from({ length: 42 }, (_, idx) => addDays(start, idx));
-  }, [monthDate]);
+  }, [calendarWeekStart, monthDate]);
 
-  // Keep signature but avoid tenant order affecting colors.
-  useMemo(() => tenants, [tenants]);
+  const eventRows = useMemo(() => {
+    return events
+      .map((event) => {
+        const startTs = new Date(event.startAt).getTime();
+        const endTs = new Date(event.endAt).getTime();
+        if (!Number.isFinite(startTs) || !Number.isFinite(endTs) || endTs <= startTs) {
+          return null;
+        }
+        return {
+          event,
+          startTs,
+          endTs
+        };
+      })
+      .filter((row): row is { event: CalendarEvent; startTs: number; endTs: number } => Boolean(row));
+  }, [events]);
+
+  const eventsById = useMemo(() => {
+    return new Map(events.map((event) => [event.id, event]));
+  }, [events]);
 
   const eventsByDay = useMemo(() => {
     const map = new Map<string, CalendarEvent[]>();
-    events.forEach((event) => {
-      const start = new Date(event.startAt);
-      const key = dayKey(start);
-      const existing = map.get(key) ?? [];
-      existing.push(event);
-      existing.sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
-      map.set(key, existing);
+    const rowMap = new Map<string, Array<{ event: CalendarEvent; startTs: number }>>();
+
+    eventRows.forEach((row) => {
+      const keys = row.event.isAllDay ? dayKeysForAllDayRange(row.startTs, row.endTs) : dayKeysForRange(row.startTs, row.endTs);
+      keys.forEach(({ key, dayStartTs }) => {
+        const existing = rowMap.get(key) ?? [];
+        existing.push({ event: row.event, startTs: Math.max(row.startTs, dayStartTs) });
+        rowMap.set(key, existing);
+      });
     });
+
+    rowMap.forEach((rows, key) => {
+      rows.sort((a, b) => a.startTs - b.startTs);
+      map.set(
+        key,
+        rows.map((row) => row.event)
+      );
+    });
+
     return map;
-  }, [events]);
+  }, [eventRows]);
 
   const selectedEvent = useMemo(() => {
     if (!selectedEventId) {
       return null;
     }
-    return events.find((event) => event.id === selectedEventId) ?? null;
-  }, [events, selectedEventId]);
+    return eventsById.get(selectedEventId) ?? null;
+  }, [eventsById, selectedEventId]);
 
   const moreEvents = useMemo(() => {
     if (!moreDayKeyValue) {
@@ -178,7 +281,14 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
     return eventsByDay.get(moreDayKeyValue) ?? [];
   }, [eventsByDay, moreDayKeyValue]);
 
-  const label = viewMode === "day" ? dayLabel(dayDate, intl) : viewMode === "week" ? weekLabel(weekStart, intl) : monthLabel(monthDate, intl);
+  const label =
+    viewMode === "day"
+      ? dayLabel(dayDate, intl)
+      : viewMode === "workweek"
+        ? rangeLabel(workWeekStart, 5, intl)
+        : viewMode === "week"
+          ? rangeLabel(weekStart, 7, intl)
+          : monthLabel(monthDate, intl);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -213,6 +323,10 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
       setOffsetDay((prev) => prev - 1);
       return;
     }
+    if (viewMode === "workweek") {
+      setOffsetWorkWeek((prev) => prev - 1);
+      return;
+    }
     if (viewMode === "week") {
       setOffsetWeek((prev) => prev - 1);
       return;
@@ -222,6 +336,7 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
 
   function goToday() {
     setOffsetDay(0);
+    setOffsetWorkWeek(0);
     setOffsetWeek(0);
     setOffsetMonth(0);
   }
@@ -229,6 +344,10 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
   function goNext() {
     if (viewMode === "day") {
       setOffsetDay((prev) => prev + 1);
+      return;
+    }
+    if (viewMode === "workweek") {
+      setOffsetWorkWeek((prev) => prev + 1);
       return;
     }
     if (viewMode === "week") {
@@ -239,7 +358,28 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
   }
 
   function openEvent(eventId: string) {
+    const event = eventsById.get(eventId);
+    if (event) {
+      void trackClientEvent(analyticsEvents.calendarEventOpened, {
+        source: "calendar_grid",
+        eventId: event.id,
+        tenantName: event.tenantName,
+        provider: event.provider ?? "unknown",
+        isAllDay: Boolean(event.isAllDay)
+      });
+    }
     setSelectedEventId(eventId);
+  }
+
+  function switchViewMode(nextViewMode: ViewMode) {
+    if (nextViewMode === viewMode) {
+      return;
+    }
+    void trackClientEvent(analyticsEvents.calendarViewModeChanged, {
+      from: viewMode,
+      to: nextViewMode
+    });
+    setViewMode(nextViewMode);
   }
 
   function closeEventModal() {
@@ -267,25 +407,38 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
   const inlineLimitMonth = 3;
 
   const weekdayLabels = useMemo(() => {
-    return [t("weekday.mon"), t("weekday.tue"), t("weekday.wed"), t("weekday.thu"), t("weekday.fri"), t("weekday.sat"), t("weekday.sun")];
-  }, [t]);
+    const ordered = calendarWeekStart === "sun" ? [0, 1, 2, 3, 4, 5, 6] : [1, 2, 3, 4, 5, 6, 0];
+    return ordered.map((dayOfWeek) => ({
+      dayOfWeek,
+      label:
+        dayOfWeek === 0
+          ? t("weekday.sun")
+          : dayOfWeek === 1
+            ? t("weekday.mon")
+            : dayOfWeek === 2
+              ? t("weekday.tue")
+              : dayOfWeek === 3
+                ? t("weekday.wed")
+                : dayOfWeek === 4
+                  ? t("weekday.thu")
+                  : dayOfWeek === 5
+                    ? t("weekday.fri")
+                    : t("weekday.sat")
+    }));
+  }, [calendarWeekStart, t]);
+
+  const visibleWeekDays = viewMode === "workweek" ? workWeekDays : weekDays;
 
   const dayEvents = useMemo(() => {
     const dayStart = startOfDay(dayDate);
-    const dayEnd = addDays(dayStart, 1);
     const startTs = dayStart.getTime();
-    const endTs = dayEnd.getTime();
+    const endTs = startTs + 24 * 60 * 60 * 1000;
 
-    return events
-      .map((event) => {
-        const s = new Date(event.startAt).getTime();
-        const e = new Date(event.endAt).getTime();
-        return { event, s, e };
-      })
-      .filter((row) => Number.isFinite(row.s) && Number.isFinite(row.e) && row.e > row.s && row.s < endTs && row.e > startTs)
-      .sort((a, b) => a.s - b.s)
+    return eventRows
+      .filter((row) => row.startTs < endTs && row.endTs > startTs)
+      .sort((a, b) => a.startTs - b.startTs)
       .map((row) => row.event);
-  }, [dayDate, events]);
+  }, [dayDate, eventRows]);
 
   const dayLayout = useMemo(() => {
     if (dayEvents.length === 0) {
@@ -414,21 +567,28 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
             <div className="inline-flex rounded-xl border border-line bg-white p-0.5 text-sm">
               <button
                 className={`rounded-lg px-3 py-1.5 font-medium ${viewMode === "day" ? "bg-accent text-white" : "text-slate-700"}`}
-                onClick={() => setViewMode("day")}
+                onClick={() => switchViewMode("day")}
                 type="button"
               >
                 {t("common.day")}
               </button>
               <button
+                className={`rounded-lg px-3 py-1.5 font-medium ${viewMode === "workweek" ? "bg-accent text-white" : "text-slate-700"}`}
+                onClick={() => switchViewMode("workweek")}
+                type="button"
+              >
+                {t("common.workWeek")}
+              </button>
+              <button
                 className={`rounded-lg px-3 py-1.5 font-medium ${viewMode === "week" ? "bg-accent text-white" : "text-slate-700"}`}
-                onClick={() => setViewMode("week")}
+                onClick={() => switchViewMode("week")}
                 type="button"
               >
                 {t("common.week")}
               </button>
               <button
                 className={`rounded-lg px-3 py-1.5 font-medium ${viewMode === "month" ? "bg-accent text-white" : "text-slate-700"}`}
-                onClick={() => setViewMode("month")}
+                onClick={() => switchViewMode("month")}
                 type="button"
               >
                 {t("common.month")}
@@ -486,6 +646,7 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
                     {dayLayout.map((item) => {
                       const { event, startMin, endMin, col, colCount } = item;
                       const color = getTenantColor(event.tenantName);
+                      const unconfirmed = isUnconfirmedEvent(event);
                       const top = (startMin / 60) * 56;
                       const height = Math.max(28, ((endMin - startMin) / 60) * 56);
                       const gap = colCount >= 4 ? 4 : colCount === 3 ? 6 : 8;
@@ -505,7 +666,9 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
 
                       return (
                         <button
-                          className={`absolute rounded-xl border border-line bg-white text-left shadow-soft transition hover:border-accent/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 ${
+                          className={`absolute rounded-xl border text-left shadow-soft transition hover:border-accent/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 ${
+                            unconfirmed ? "border-dashed border-amber-300/80 bg-amber-50/70" : "border-line bg-white"
+                          } ${
                             padClass
                           }`}
                           key={event.id}
@@ -556,9 +719,9 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
               </div>
             </div>
           </div>
-        ) : viewMode === "week" ? (
-          <div className="grid gap-2 md:grid-cols-7">
-            {weekDays.map((day) => {
+        ) : viewMode === "week" || viewMode === "workweek" ? (
+          <div className={`grid gap-2 ${viewMode === "workweek" ? "md:grid-cols-5" : "md:grid-cols-7"}`}>
+            {visibleWeekDays.map((day) => {
               const key = dayKey(day);
               const dailyEvents = eventsByDay.get(key) ?? [];
               const isToday = sameDate(day, new Date());
@@ -583,9 +746,12 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
                   <div className="space-y-2">
                     {dailyEvents.slice(0, inlineLimitWeek).map((event) => {
                       const color = getTenantColor(event.tenantName);
+                      const unconfirmed = isUnconfirmedEvent(event);
                       return (
                         <button
-                          className="w-full rounded-lg border border-line bg-white p-2 text-left transition hover:border-accent/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
+                          className={`w-full rounded-lg border p-2 text-left transition hover:border-accent/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 ${
+                            unconfirmed ? "border-dashed border-amber-300/80 bg-amber-50/70" : "border-line bg-white"
+                          }`}
                           key={event.id}
                           onClick={() => openEvent(event.id)}
                           onFocus={(e) => openHover(event, e.currentTarget)}
@@ -596,7 +762,7 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
                         >
                           <p className="line-clamp-1 text-xs font-semibold">{event.subject}</p>
                           <p className="mt-1 text-[11px] text-muted">
-                            {new Date(event.startAt).toLocaleTimeString(intl, { hour: "2-digit", minute: "2-digit" })}
+                            {event.isAllDay ? t("event.allDay") : new Date(event.startAt).toLocaleTimeString(intl, { hour: "2-digit", minute: "2-digit" })}
                           </p>
                           <div
                             className="mt-1 inline-flex max-w-full items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium"
@@ -627,11 +793,11 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
           <div className="-mx-1 overflow-x-auto pb-1">
             <div className="min-w-[720px] px-1">
               <div className="mb-2 grid grid-cols-7 gap-2 text-center text-xs uppercase tracking-[0.12em] text-muted">
-                {weekdayLabels.map((dayLabel, index) => {
-                  const weekendClass = index === 5 ? "text-sky-600" : index === 6 ? "text-rose-600" : "";
+                {weekdayLabels.map((weekday) => {
+                  const weekendClass = weekday.dayOfWeek === 6 ? "text-sky-600" : weekday.dayOfWeek === 0 ? "text-rose-600" : "";
                   return (
-                    <p className={weekendClass} key={dayLabel}>
-                      {dayLabel}
+                    <p className={weekendClass} key={`weekday-${weekday.dayOfWeek}`}>
+                      {weekday.label}
                     </p>
                   );
                 })}
@@ -659,9 +825,12 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
                       <div className="mt-2 space-y-1">
                         {dailyEvents.slice(0, inlineLimitMonth).map((event) => {
                           const color = getTenantColor(event.tenantName);
+                          const unconfirmed = isUnconfirmedEvent(event);
                           return (
                             <button
-                              className="block w-full truncate rounded-md px-1.5 py-1 text-left text-[11px] transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
+                              className={`block w-full truncate rounded-md border px-1.5 py-1 text-left text-[11px] transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 ${
+                                unconfirmed ? "border-dashed border-amber-300/80" : "border-transparent"
+                              }`}
                               key={event.id}
                               onClick={() => openEvent(event.id)}
                               onFocus={(e) => openHover(event, e.currentTarget)}
@@ -671,7 +840,7 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
                               style={{ backgroundColor: `${color}1f`, color }}
                               type="button"
                             >
-                              {new Date(event.startAt).toLocaleTimeString(intl, { hour: "2-digit", minute: "2-digit" })} {event.subject}
+                              {event.isAllDay ? `${t("event.allDay")} ${event.subject}` : `${new Date(event.startAt).toLocaleTimeString(intl, { hour: "2-digit", minute: "2-digit" })} ${event.subject}`}
                             </button>
                           );
                         })}
@@ -791,17 +960,25 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
                   </h3>
                   <p className="mt-1 text-xs text-muted">{t("common.total", { count: moreEvents.length })}</p>
                 </div>
-                <button className="btn btn-secondary px-3 py-1.5" onClick={closeMore} type="button">
-                  {t("common.close")}
+                <button
+                  aria-label={t("common.close")}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-line bg-white/80 text-muted transition hover:border-accent/45 hover:text-accent"
+                  onClick={closeMore}
+                  type="button"
+                >
+                  <X size={16} />
                 </button>
               </div>
 
               <div className="mt-4 space-y-2">
                 {moreEvents.map((event) => {
                   const color = getTenantColor(event.tenantName);
+                  const unconfirmed = isUnconfirmedEvent(event);
                   return (
                     <button
-                      className="w-full rounded-xl border border-line bg-white/90 p-3 text-left transition hover:border-accent/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
+                      className={`w-full rounded-xl border p-3 text-left transition hover:border-accent/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 ${
+                        unconfirmed ? "border-dashed border-amber-300/80 bg-amber-50/70" : "border-line bg-white/90"
+                      }`}
                       key={event.id}
                       onClick={() => {
                         closeMore();
@@ -817,8 +994,12 @@ export function UnifiedWeekCalendar({ events, tenants }: UnifiedWeekCalendarProp
                         <div>
                           <p className="text-sm font-semibold">{event.subject}</p>
                           <p className="mt-1 text-xs text-muted">
-                            {new Date(event.startAt).toLocaleTimeString(intl, { hour: "2-digit", minute: "2-digit" })} -{" "}
-                            {new Date(event.endAt).toLocaleTimeString(intl, { hour: "2-digit", minute: "2-digit" })}
+                            {event.isAllDay
+                              ? t("event.allDay")
+                              : `${new Date(event.startAt).toLocaleTimeString(intl, { hour: "2-digit", minute: "2-digit" })} - ${new Date(event.endAt).toLocaleTimeString(intl, {
+                                  hour: "2-digit",
+                                  minute: "2-digit"
+                                })}`}
                           </p>
                           <p className="mt-1 text-xs text-muted">{event.location}</p>
                         </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { setLocaleAction } from "@/app/(app)/actions";
 import { useLocale, useT } from "@/components/locale-provider";
@@ -15,10 +15,15 @@ const options: Array<{ value: Locale; labelKey: "settings.language.ko" | "settin
 export function LanguageSelector({ initialLocale }: { initialLocale: Locale }) {
   const t = useT();
   const router = useRouter();
-  const { locale, setLocale } = useLocale();
+  const { locale } = useLocale();
   const [pending, startTransition] = useTransition();
+  const [optimisticLocale, setOptimisticLocale] = useState<Locale | null>(null);
 
-  const current = locale ?? initialLocale;
+  useEffect(() => {
+    setOptimisticLocale(null);
+  }, [locale]);
+
+  const current = optimisticLocale ?? locale ?? initialLocale;
 
   return (
     <div className="inline-flex flex-wrap gap-2">
@@ -30,8 +35,12 @@ export function LanguageSelector({ initialLocale }: { initialLocale: Locale }) {
             disabled={pending}
             key={opt.value}
             onClick={() => {
+              if (current === opt.value) {
+                return;
+              }
+
+              setOptimisticLocale(opt.value);
               startTransition(async () => {
-                setLocale(opt.value);
                 await setLocaleAction(opt.value);
                 router.refresh();
               });
@@ -45,4 +54,3 @@ export function LanguageSelector({ initialLocale }: { initialLocale: Locale }) {
     </div>
   );
 }
-

@@ -34,6 +34,8 @@ function isCacheableRequest(request) {
   if (url.origin !== self.location.origin) return false;
   if (url.pathname.startsWith("/api/")) return false;
   if (url.pathname.startsWith("/auth/")) return false;
+  if (url.pathname.startsWith("/_next/data/")) return false;
+  if (url.searchParams.has("_rsc")) return false;
   if (url.pathname.startsWith("/_next/webpack-hmr")) return false;
   return true;
 }
@@ -50,9 +52,7 @@ self.addEventListener("fetch", (event) => {
     request.destination === "font" ||
     request.destination === "image" ||
     url.pathname.startsWith("/_next/static/") ||
-    url.pathname.startsWith("/icons/") ||
-    url.pathname.startsWith("/splash/") ||
-    url.pathname.startsWith("/onboarding/");
+    url.pathname.startsWith("/icons/");
 
   if (isNav) {
     event.respondWith(
@@ -83,16 +83,13 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Default: network-first with cache fallback.
+  // Default: network-only to avoid caching personalized HTML/RSC responses.
   event.respondWith(
     (async () => {
-      const cache = await caches.open(CACHE_NAME);
       try {
-        const response = await fetch(request);
-        if (response && response.ok && response.type === "basic") cache.put(request, response.clone());
-        return response;
+        return await fetch(request);
       } catch {
-        return (await cache.match(request)) || new Response("", { status: 504 });
+        return new Response("", { status: 504 });
       }
     })()
   );

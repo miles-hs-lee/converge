@@ -1,16 +1,23 @@
 "use client";
 
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import { Search } from "lucide-react";
-import { UnifiedWeekCalendar } from "@/components/unified-week-calendar";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
+import { Search, X } from "lucide-react";
 import { ModalPortal } from "@/components/modal-portal";
 import { EventDetailModal } from "@/components/event-detail-modal";
 import { useAppPreferences } from "@/components/app-preferences-provider";
 import { useT, useIntlLocale } from "@/components/locale-provider";
-import { detectTenantConflicts } from "@/lib/calendar-conflicts";
+import { detectTenantConflictsTraced } from "@/lib/calendar-conflicts";
 import { isMockMode } from "@/lib/mock-mode";
 import { getNotificationPermissionSafe, sendPwaNotification } from "@/lib/pwa-notifications";
+import { trackClientEvent } from "@/lib/analytics/client";
+import { analyticsEvents } from "@/lib/analytics/events";
+
+const UnifiedWeekCalendar = dynamic(() => import("@/components/unified-week-calendar").then((mod) => mod.UnifiedWeekCalendar), {
+  ssr: false,
+  loading: () => <div className="mt-5 rounded-2xl border border-line bg-white/78 p-4 text-sm text-muted">Loading calendar...</div>
+});
 
 export type CalendarEventRow = {
   id: string;
@@ -153,6 +160,7 @@ function EventList({
   emptyText,
   attendeesLabel,
   intl,
+  hydrated,
   onOpenEvent,
   onHoverEvent,
   onLeaveEvent
@@ -162,6 +170,7 @@ function EventList({
   emptyText: string;
   attendeesLabel: (count: number) => string;
   intl: string;
+  hydrated: boolean;
   onOpenEvent: (event: CalendarEventRow) => void;
   onHoverEvent: (event: CalendarEventRow, el: HTMLElement) => void;
   onLeaveEvent: () => void;
@@ -186,8 +195,9 @@ function EventList({
             >
               <p className="text-sm font-medium">{event.subject}</p>
               <p className="mt-1 text-xs text-muted">
-                {new Date(event.startAt).toLocaleString(intl)} -{" "}
-                {new Date(event.endAt).toLocaleTimeString(intl, { hour: "2-digit", minute: "2-digit" })}
+                {hydrated
+                  ? `${new Date(event.startAt).toLocaleString(intl)} - ${new Date(event.endAt).toLocaleTimeString(intl, { hour: "2-digit", minute: "2-digit" })}`
+                  : `${event.startAt} - ${event.endAt}`}
               </p>
               <p className="mt-1 text-xs text-muted">
                 {event.tenantName} · {event.sourceAccount} · {event.location}
@@ -203,7 +213,11 @@ function EventList({
   );
 }
 
-function formatDateTimeRange(startIso: string, endIso: string, intl: string): string {
+function formatDateTimeRange(startIso: string, endIso: string, intl: string, hydrated: boolean): string {
+  if (!hydrated) {
+    return `${startIso} - ${endIso}`;
+  }
+
   const start = new Date(startIso);
   const end = new Date(endIso);
   const sameDay = start.toDateString() === end.toDateString();
@@ -233,6 +247,7 @@ export function CalendarEventsOverview({
   lazyEventDetail = false
 }: CalendarEventsOverviewProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const t = useT();
   const intl = useIntlLocale();
   const { getTenantColor } = useAppPreferences();
@@ -247,29 +262,29 @@ export function CalendarEventsOverview({
   const [permissionBlocked, setPermissionBlocked] = useState(false);
   const [permissionLabel, setPermissionLabel] = useState<string>("unknown");
   const [lastSentIso, setLastSentIso] = useState<string | null>(null);
-  const [nowMarker, setNowMarker] = useState<number>(() => Date.now());
+  const [nowMarker, setNowMarker] = useState<number>(0);
   const [showAllConflicts, setShowAllConflicts] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEventRow | null>(null);
   const [detailLoadingEventId, setDetailLoadingEventId] = useState<string | null>(null);
   const [canHover, setCanHover] = useState(false);
   const [hovered, setHovered] = useState<{ event: CalendarEventRow; rect: DOMRect } | null>(null);
+  const [visibilityModalOpen, setVisibilityModalOpen] = useState(false);
+  const [scopeModalOpen, setScopeModalOpen] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
   const [sourceSelection, setSourceSelection] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(calendarSources.map((source) => [source.id, source.isSelected]))
   );
   const [savingSourceId, setSavingSourceId] = useState<string | null>(null);
-  const [visibilityFilters, setVisibilityFilters] = useState<EventVisibilityFilters>(() => {
-    if (typeof window === "undefined") {
-      return DEFAULT_EVENT_VISIBILITY_FILTERS;
-    }
-    return parseEventVisibilityFilters(window.localStorage.getItem(EVENT_VISIBILITY_FILTERS_STORAGE_KEY));
-  });
+  const [visibilityFilters, setVisibilityFilters] = useState<EventVisibilityFilters>(DEFAULT_EVENT_VISIBILITY_FILTERS);
   const deferredQuery = useDeferredValue(query.trim().toLowerCase());
+  const lastTrackedSearchKeyRef = useRef<string>("");
   const selectedSourceIds = useMemo(
     () => new Set(Object.entries(sourceSelection).filter(([, selected]) => selected).map(([sourceId]) => sourceId)),
     [sourceSelection]
   );
 
   const enabledTenants = useMemo(() => tenants.filter((tenant) => !disabledTenants.has(tenant)), [disabledTenants, tenants]);
+  const activeVisibilityFilterCount = useMemo(() => Object.values(visibilityFilters).filter(Boolean).length, [visibilityFilters]);
 
   const visibilityFilteredEvents = useMemo(() => {
     return localEvents.filter((event) => passesVisibilityFilters(event, visibilityFilters));
@@ -299,12 +314,29 @@ export function CalendarEventsOverview({
     });
   }, [calendarSources.length, deferredQuery, disabledTenants, selectedSourceIds, visibilityFilteredEvents]);
 
+  useEffect(() => {
+    if (!deferredQuery) {
+      return;
+    }
+    const key = `${deferredQuery}|${filteredEvents.length}|${enabledTenants.length}|${selectedSourceIds.size}`;
+    if (lastTrackedSearchKeyRef.current === key) {
+      return;
+    }
+    lastTrackedSearchKeyRef.current = key;
+    void trackClientEvent(analyticsEvents.calendarSearchSubmitted, {
+      queryLength: deferredQuery.length,
+      resultsCount: filteredEvents.length,
+      enabledTenantCount: enabledTenants.length,
+      selectedSourceCount: selectedSourceIds.size
+    });
+  }, [deferredQuery, enabledTenants.length, filteredEvents.length, selectedSourceIds.size]);
+
   const eventsById = useMemo(() => {
     return new Map(localEvents.map((event) => [event.id, event]));
   }, [localEvents]);
 
   const pastEvents = useMemo(() => {
-    if (!showRangeOverview) return [];
+    if (!showRangeOverview || !hydrated) return [];
     const nowTs = Date.now();
     const rangeMs = rangeDays * 24 * 60 * 60 * 1000;
     return [...filteredEvents]
@@ -314,10 +346,10 @@ export function CalendarEventsOverview({
       })
       .sort((a, b) => new Date(b.startAt).getTime() - new Date(a.startAt).getTime())
       .slice(0, 8);
-  }, [filteredEvents, rangeDays, showRangeOverview]);
+  }, [filteredEvents, hydrated, rangeDays, showRangeOverview]);
 
   const upcomingEvents = useMemo(() => {
-    if (!showRangeOverview) return [];
+    if (!showRangeOverview || !hydrated) return [];
     const nowTs = Date.now();
     const rangeMs = rangeDays * 24 * 60 * 60 * 1000;
     return [...filteredEvents]
@@ -327,7 +359,7 @@ export function CalendarEventsOverview({
       })
       .sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime())
       .slice(0, 8);
-  }, [filteredEvents, rangeDays, showRangeOverview]);
+  }, [filteredEvents, hydrated, rangeDays, showRangeOverview]);
 
   const conflictEvents = useMemo(() => {
     if (!showConflicts) return [];
@@ -343,7 +375,7 @@ export function CalendarEventsOverview({
 
   const conflicts = useMemo(() => {
     if (!showConflicts) return [];
-    return detectTenantConflicts(
+    return detectTenantConflictsTraced(
       deferredConflictEvents.map((event) => ({
         id: event.id,
         tenantName: event.tenantName,
@@ -352,39 +384,82 @@ export function CalendarEventsOverview({
         endAt: event.endAt,
         location: event.location,
         sourceAccount: event.sourceAccount
-      }))
+      })),
+      undefined,
+      {
+        route: "/calendar",
+        source: "calendar_events_overview",
+        locale: intl,
+        accountCount: enabledTenants.length
+      }
     );
-  }, [deferredConflictEvents, showConflicts]);
+  }, [deferredConflictEvents, enabledTenants.length, intl, showConflicts]);
 
   useEffect(() => {
     setLocalEvents(events);
   }, [events]);
 
   useEffect(() => {
+    setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    setVisibilityFilters(parseEventVisibilityFilters(window.localStorage.getItem(EVENT_VISIBILITY_FILTERS_STORAGE_KEY)));
+  }, []);
+
+  useEffect(() => {
     setSourceSelection(Object.fromEntries(calendarSources.map((source) => [source.id, source.isSelected])));
   }, [calendarSources]);
 
-  const [dismissedKeys, setDismissedKeys] = useState<Set<string>>(() => {
-    if (typeof window === "undefined") return new Set();
-    return safeParseSet(localStorage.getItem("converge_conflicts_dismissed"));
-  });
+  useEffect(() => {
+    setVisibilityModalOpen(false);
+    setScopeModalOpen(false);
+    setHovered(null);
+    setSelectedEvent(null);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!visibilityModalOpen && !scopeModalOpen) {
+      return;
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setVisibilityModalOpen(false);
+        setScopeModalOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [scopeModalOpen, visibilityModalOpen]);
+
+  const [dismissedKeys, setDismissedKeys] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setDismissedKeys(safeParseSet(localStorage.getItem("converge_conflicts_dismissed")));
+  }, []);
 
   const visibleConflicts = useMemo(() => {
     if (!showConflicts) return [];
     return conflicts.filter((c) => {
       if (dismissedKeys.has(c.key)) return false;
+      if (nowMarker <= 0) return true;
       const overlapEnd = new Date(c.overlapEnd).getTime();
       return Number.isFinite(overlapEnd) && overlapEnd >= nowMarker;
     });
   }, [conflicts, dismissedKeys, nowMarker, showConflicts]);
 
   useEffect(() => {
-    if (!showConflicts) return;
+    if (!showConflicts || !hydrated) return;
+    setNowMarker(Date.now());
     const timer = window.setInterval(() => {
       setNowMarker(Date.now());
     }, 60_000);
     return () => window.clearInterval(timer);
-  }, [showConflicts]);
+  }, [hydrated, showConflicts]);
 
   useEffect(() => {
     if (!showConflicts) return;
@@ -407,7 +482,7 @@ export function CalendarEventsOverview({
   }, []);
 
   useEffect(() => {
-    if (!showConflicts) return;
+    if (!showConflicts || !hydrated) return;
     if (typeof window === "undefined") return;
     const stored = localStorage.getItem("converge_notifications_enabled");
     setNotificationsEnabled(stored === "true");
@@ -418,10 +493,10 @@ export function CalendarEventsOverview({
     }
     setPermissionLabel(String(getNotificationPermissionSafe()));
     setLastSentIso(localStorage.getItem("converge_notifications_last_sent"));
-  }, [showConflicts]);
+  }, [hydrated, showConflicts]);
 
   useEffect(() => {
-    if (!showConflicts) return;
+    if (!showConflicts || !hydrated) return;
     if (typeof window === "undefined") return;
 
     const seen = safeParseSet(localStorage.getItem("converge_conflicts_seen"));
@@ -473,7 +548,7 @@ export function CalendarEventsOverview({
     }
 
     return () => window.clearTimeout(timer);
-  }, [intl, notificationsEnabled, showConflicts, t, visibleConflicts]);
+  }, [hydrated, intl, notificationsEnabled, showConflicts, t, visibleConflicts]);
 
   async function enableNotifications() {
     if (typeof window === "undefined" || typeof window.Notification === "undefined") {
@@ -481,8 +556,14 @@ export function CalendarEventsOverview({
     }
 
     try {
+      const previousPermission = Notification.permission;
       const permission = await Notification.requestPermission();
       setPermissionLabel(permission);
+      void trackClientEvent(analyticsEvents.notificationsPermissionChanged, {
+        source: "calendar_conflicts",
+        previousPermission,
+        nextPermission: permission
+      });
       if (permission === "granted") {
         localStorage.setItem("converge_notifications_enabled", "true");
         setNotificationsEnabled(true);
@@ -543,7 +624,7 @@ export function CalendarEventsOverview({
     const end = new Date(start);
     end.setMinutes(end.getMinutes() + 30);
 
-    const tenant = enabledTenants.find((name) => name !== enabledTenants[0]) ?? enabledTenants[0] ?? "Mock Tenant";
+    const tenant = enabledTenants.find((name) => name !== enabledTenants[0]) ?? enabledTenants[0] ?? "Mock Account";
     const id = `evt-sim-${Date.now()}`;
 
     setLocalEvents((prev) => [
@@ -562,17 +643,39 @@ export function CalendarEventsOverview({
   }
 
   function toggleVisibilityFilter(key: keyof EventVisibilityFilters) {
+    let nextEnabled = false;
     setVisibilityFilters((prev) => {
-      const next = { ...prev, [key]: !prev[key] };
+      nextEnabled = !prev[key];
+      const next = { ...prev, [key]: nextEnabled };
       if (typeof window !== "undefined") {
         localStorage.setItem(EVENT_VISIBILITY_FILTERS_STORAGE_KEY, JSON.stringify(next));
       }
       return next;
     });
+    void trackClientEvent(analyticsEvents.calendarFilterChanged, {
+      filterKey: key,
+      enabled: nextEnabled,
+      surface: "visibility_modal"
+    });
   }
 
-  function openEvent(event: CalendarEventRow) {
+  function openEvent(event: CalendarEventRow, source: string = "calendar_overview") {
     closeHover();
+    void trackClientEvent(analyticsEvents.calendarEventOpened, {
+      source,
+      eventId: event.id,
+      tenantName: event.tenantName,
+      provider: event.provider ?? "unknown",
+      isAllDay: Boolean(event.isAllDay)
+    });
+    if (source === "conflict_inline") {
+      void trackClientEvent(analyticsEvents.conflictsItemOpened, {
+        source: "inline",
+        eventId: event.id,
+        tenantName: event.tenantName,
+        provider: event.provider ?? "unknown"
+      });
+    }
     setSelectedEvent(event);
     if (!lazyEventDetail || event.detailLoaded) {
       return;
@@ -624,9 +727,30 @@ export function CalendarEventsOverview({
     setHovered(null);
   }
 
+  function toggleTenant(tenant: string) {
+    let tenantVisible = true;
+    setDisabledTenants((prev) => {
+      const next = new Set(prev);
+      if (next.has(tenant)) {
+        next.delete(tenant);
+      } else {
+        next.add(tenant);
+      }
+      tenantVisible = !next.has(tenant);
+      return next;
+    });
+    void trackClientEvent(analyticsEvents.calendarFilterChanged, {
+      filterKey: `tenant:${tenant}`,
+      enabled: tenantVisible,
+      surface: "scope_modal"
+    });
+  }
+
   async function toggleSourceSelection(sourceId: string) {
     const current = Boolean(sourceSelection[sourceId]);
     const next = !current;
+    const nextSelection = { ...sourceSelection, [sourceId]: next };
+    const selectedCount = Object.values(nextSelection).filter(Boolean).length;
     setSourceSelection((prev) => ({ ...prev, [sourceId]: next }));
     setSavingSourceId(sourceId);
 
@@ -639,10 +763,17 @@ export function CalendarEventsOverview({
       if (!response.ok) {
         throw new Error("save_failed");
       }
+      void trackClientEvent(analyticsEvents.calendarSourcesSaved, {
+        sourceId,
+        isSelected: next,
+        selectedCount,
+        sourceCount: calendarSources.length,
+        tenantCount: tenants.length
+      });
       router.refresh();
     } catch {
       setSourceSelection((prev) => ({ ...prev, [sourceId]: current }));
-      setToast("캘린더 선택 저장에 실패했습니다.");
+      setToast(t("calendar.error.saveSourceFailed"));
     } finally {
       setSavingSourceId((currentSaving) => (currentSaving === sourceId ? null : currentSaving));
     }
@@ -685,103 +816,14 @@ export function CalendarEventsOverview({
             value={query}
           />
         </label>
-      </div>
-
-      <div className="mt-3 flex flex-wrap gap-2">
-        <button
-          aria-pressed={visibilityFilters.includeTentative}
-          className={`badge transition ${visibilityFilters.includeTentative ? "border-accent/50 bg-accent/10 text-accent" : "bg-white/90 text-muted"}`}
-          onClick={() => toggleVisibilityFilter("includeTentative")}
-          type="button"
-        >
-          {t("calendar.filter.includeTentative")}
+        <button className="btn btn-secondary px-3 py-2" onClick={() => setVisibilityModalOpen(true)} type="button">
+          {t("calendar.controls.visibility")} {activeVisibilityFilterCount > 0 ? `(${activeVisibilityFilterCount})` : ""}
         </button>
-        <button
-          aria-pressed={visibilityFilters.includeWorkingElsewhere}
-          className={`badge transition ${visibilityFilters.includeWorkingElsewhere ? "border-accent/50 bg-accent/10 text-accent" : "bg-white/90 text-muted"}`}
-          onClick={() => toggleVisibilityFilter("includeWorkingElsewhere")}
-          type="button"
-        >
-          {t("calendar.filter.includeWorkingElsewhere")}
-        </button>
-        <button
-          aria-pressed={visibilityFilters.includeAwaitingResponse}
-          className={`badge transition ${visibilityFilters.includeAwaitingResponse ? "border-accent/50 bg-accent/10 text-accent" : "bg-white/90 text-muted"}`}
-          onClick={() => toggleVisibilityFilter("includeAwaitingResponse")}
-          type="button"
-        >
-          {t("calendar.filter.includeAwaitingResponse")}
-        </button>
-        <button
-          aria-pressed={visibilityFilters.includeDeclined}
-          className={`badge transition ${visibilityFilters.includeDeclined ? "border-accent/50 bg-accent/10 text-accent" : "bg-white/90 text-muted"}`}
-          onClick={() => toggleVisibilityFilter("includeDeclined")}
-          type="button"
-        >
-          {t("calendar.filter.includeDeclined")}
-        </button>
-        <button
-          aria-pressed={visibilityFilters.includeCancelled}
-          className={`badge transition ${visibilityFilters.includeCancelled ? "border-accent/50 bg-accent/10 text-accent" : "bg-white/90 text-muted"}`}
-          onClick={() => toggleVisibilityFilter("includeCancelled")}
-          type="button"
-        >
-          {t("calendar.filter.includeCancelled")}
+        <button className="btn btn-secondary px-3 py-2" onClick={() => setScopeModalOpen(true)} type="button">
+          {t("calendar.controls.scope")}{" "}
+          {calendarSources.length > 0 ? `(${selectedSourceIds.size}/${calendarSources.length})` : ""}
         </button>
       </div>
-
-      <div className="mt-2 flex flex-wrap gap-2">
-        {tenants.map((tenant) => {
-          const enabled = !disabledTenants.has(tenant);
-          const color = getTenantColor(tenant);
-          return (
-            <button
-              aria-pressed={enabled}
-              className={`badge gap-2 bg-white/90 transition hover:border-accent/45 ${enabled ? "" : "opacity-45 line-through"}`}
-              key={tenant}
-              onClick={() => {
-                setDisabledTenants((prev) => {
-                  const next = new Set(prev);
-                  if (next.has(tenant)) {
-                    next.delete(tenant);
-                  } else {
-                    next.add(tenant);
-                  }
-                  return next;
-                });
-              }}
-              type="button"
-            >
-              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
-              {tenant}
-            </button>
-          );
-        })}
-      </div>
-
-      {calendarSources.length > 0 ? (
-        <div className="mt-2 rounded-xl border border-line bg-white/70 p-2.5">
-          <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">Calendars</p>
-          <div className="flex flex-wrap gap-2">
-            {calendarSources.map((source) => {
-              const enabled = Boolean(sourceSelection[source.id]);
-              const busy = savingSourceId === source.id;
-              return (
-                <button
-                  aria-pressed={enabled}
-                  className={`badge max-w-[280px] gap-2 bg-white/90 text-left transition ${enabled ? "" : "opacity-45 line-through"} ${busy ? "cursor-progress" : ""}`}
-                  disabled={busy}
-                  key={source.id}
-                  onClick={() => void toggleSourceSelection(source.id)}
-                  type="button"
-                >
-                  <span className="max-w-[240px] truncate">{source.tenantName} · {source.name}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      ) : null}
 
       {showCalendar ? <UnifiedWeekCalendar events={filteredEvents} tenants={enabledTenants} /> : null}
 
@@ -814,6 +856,7 @@ export function CalendarEventsOverview({
             attendeesLabel={(count) => t("calendar.attendeesCount", { count })}
             emptyText={t("calendar.none")}
             events={pastEvents}
+            hydrated={hydrated}
             intl={intl}
             onHoverEvent={openHover}
             onLeaveEvent={closeHover}
@@ -824,6 +867,7 @@ export function CalendarEventsOverview({
             attendeesLabel={(count) => t("calendar.attendeesCount", { count })}
             emptyText={t("calendar.none")}
             events={upcomingEvents}
+            hydrated={hydrated}
             intl={intl}
             onHoverEvent={openHover}
             onLeaveEvent={closeHover}
@@ -896,7 +940,7 @@ export function CalendarEventsOverview({
             {(showAllConflicts ? visibleConflicts : visibleConflicts.slice(0, 8)).map((conflict) => {
               const aColor = getTenantColor(conflict.a.tenantName);
               const bColor = getTenantColor(conflict.b.tenantName);
-              const overlap = formatDateTimeRange(conflict.overlapStart, conflict.overlapEnd, intl);
+              const overlap = formatDateTimeRange(conflict.overlapStart, conflict.overlapEnd, intl, hydrated);
               const eventA = conflictEventToRow(conflict.a);
               const eventB = conflictEventToRow(conflict.b);
 
@@ -908,7 +952,7 @@ export function CalendarEventsOverview({
                       <button
                         className="mt-1 block text-left text-sm font-semibold text-text hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
                         onBlur={closeHover}
-                        onClick={() => openEvent(eventA)}
+                        onClick={() => openEvent(eventA, "conflict_inline")}
                         onFocus={(event) => openHover(eventA, event.currentTarget)}
                         onMouseEnter={(event) => openHover(eventA, event.currentTarget)}
                         onMouseLeave={closeHover}
@@ -919,7 +963,7 @@ export function CalendarEventsOverview({
                       <button
                         className="mt-1 block text-left text-sm font-semibold text-text hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
                         onBlur={closeHover}
-                        onClick={() => openEvent(eventB)}
+                        onClick={() => openEvent(eventB, "conflict_inline")}
                         onFocus={(event) => openHover(eventB, event.currentTarget)}
                         onMouseEnter={(event) => openHover(eventB, event.currentTarget)}
                         onMouseLeave={closeHover}
@@ -960,6 +1004,137 @@ export function CalendarEventsOverview({
       </section>
       ) : null}
 
+      {visibilityModalOpen ? (
+        <ModalPortal>
+          <div className="fixed inset-0 z-[72] flex items-center justify-center bg-slate-900/40 p-3" onClick={() => setVisibilityModalOpen(false)}>
+            <section
+              className="panel-glass card w-full max-w-md rounded-2xl p-4"
+              onClick={(event) => event.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
+              aria-label={t("calendar.modal.visibilityTitle")}
+            >
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <h3 className="text-sm font-semibold tracking-tight">{t("calendar.modal.visibilityTitle")}</h3>
+                <button
+                  aria-label={t("common.close")}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-line bg-white/80 text-muted transition hover:border-accent/45 hover:text-accent"
+                  onClick={() => setVisibilityModalOpen(false)}
+                  type="button"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              <div className="space-y-2">
+                {(
+                  [
+                    ["includeTentative", "calendar.filter.includeTentative"],
+                    ["includeWorkingElsewhere", "calendar.filter.includeWorkingElsewhere"],
+                    ["includeAwaitingResponse", "calendar.filter.includeAwaitingResponse"],
+                    ["includeDeclined", "calendar.filter.includeDeclined"],
+                    ["includeCancelled", "calendar.filter.includeCancelled"]
+                  ] as const
+                ).map(([key, labelKey]) => (
+                  <label className="flex items-center gap-3 rounded-xl border border-line bg-white/80 px-3 py-2.5 text-sm" key={key}>
+                    <input
+                      checked={visibilityFilters[key]}
+                      className="h-4 w-4 rounded border-line text-accent focus:ring-accent/40"
+                      onChange={() => toggleVisibilityFilter(key)}
+                      type="checkbox"
+                    />
+                    <span>{t(labelKey)}</span>
+                  </label>
+                ))}
+              </div>
+            </section>
+          </div>
+        </ModalPortal>
+      ) : null}
+
+      {scopeModalOpen ? (
+        <ModalPortal>
+          <div className="fixed inset-0 z-[72] flex items-center justify-center bg-slate-900/40 p-3" onClick={() => setScopeModalOpen(false)}>
+            <section
+              className="panel-glass card w-full max-w-2xl rounded-2xl p-4"
+              onClick={(event) => event.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
+              aria-label={t("calendar.modal.scopeTitle")}
+            >
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <h3 className="text-sm font-semibold tracking-tight">{t("calendar.modal.scopeTitle")}</h3>
+                <button
+                  aria-label={t("common.close")}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-line bg-white/80 text-muted transition hover:border-accent/45 hover:text-accent"
+                  onClick={() => setScopeModalOpen(false)}
+                  type="button"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div className="max-h-[72vh] space-y-4 overflow-y-auto pr-1">
+                <section>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-[0.1em] text-muted">{t("calendar.modal.tenantsTitle")}</p>
+                  <div className="space-y-2">
+                    {tenants.map((tenant) => {
+                      const enabled = !disabledTenants.has(tenant);
+                      const color = getTenantColor(tenant);
+                      return (
+                        <label className="flex items-center gap-3 rounded-xl border border-line bg-white/80 px-3 py-2.5 text-sm" key={tenant}>
+                          <input
+                            checked={enabled}
+                            className="h-4 w-4 rounded border-line text-accent focus:ring-accent/40"
+                            onChange={() => toggleTenant(tenant)}
+                            type="checkbox"
+                          />
+                          <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color }} />
+                          <span className="truncate">{tenant}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </section>
+
+                <section>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-[0.1em] text-muted">{t("calendar.modal.sourcesTitle")}</p>
+                  {calendarSources.length === 0 ? (
+                    <p className="muted">{t("calendar.modal.noSources")}</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {calendarSources.map((source) => {
+                        const enabled = Boolean(sourceSelection[source.id]);
+                        const busy = savingSourceId === source.id;
+                        return (
+                          <label
+                            className={`flex items-center gap-3 rounded-xl border border-line bg-white/80 px-3 py-2.5 text-sm ${busy ? "opacity-70" : ""}`}
+                            key={source.id}
+                          >
+                            <input
+                              checked={enabled}
+                              className="h-4 w-4 rounded border-line text-accent focus:ring-accent/40"
+                              disabled={busy}
+                              onChange={() => void toggleSourceSelection(source.id)}
+                              type="checkbox"
+                            />
+                            <span className="min-w-0 flex-1 truncate">
+                              <span className="font-medium">{source.tenantName}</span>
+                              <span className="mx-1 text-muted">·</span>
+                              <span className="text-muted">{source.name}</span>
+                            </span>
+                            {busy ? <span className="text-xs text-muted">{t("calendar.modal.saving")}</span> : null}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                </section>
+              </div>
+            </section>
+          </div>
+        </ModalPortal>
+      ) : null}
+
       {hovered ? (
         <ModalPortal>
           {(() => {
@@ -971,7 +1146,7 @@ export function CalendarEventsOverview({
             const preferAbove = hovered.rect.bottom + 12 + 180 > vh;
             const top = preferAbove ? Math.max(12, hovered.rect.top - 12) : hovered.rect.bottom + 10;
             const transform = preferAbove ? "translate(-50%, -100%)" : "translate(-50%, 0)";
-            const timeLine = formatDateTimeRange(hovered.event.startAt, hovered.event.endAt, intl);
+            const timeLine = formatDateTimeRange(hovered.event.startAt, hovered.event.endAt, intl, hydrated);
 
             return (
               <div className="pointer-events-none fixed inset-0 z-[60]">

@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { buildCalendarWindow } from "@/lib/calendar-window";
 
 type GraphDateTimeField = {
   dateTime?: string;
@@ -18,6 +19,7 @@ type GraphCalendarListResponse = {
 
 type GraphEvent = {
   id?: string;
+  seriesMasterId?: string;
   "@removed"?: {
     reason?: string;
   };
@@ -229,7 +231,7 @@ function buildCalendarDeltaUrl(params: { calendarId: string; fromIso: string; to
     startDateTime: params.fromIso,
     endDateTime: params.toIso,
     $select:
-      "id,subject,bodyPreview,importance,sensitivity,categories,type,start,end,originalStartTimeZone,originalEndTimeZone,isAllDay,isCancelled,isOnlineMeeting,onlineMeeting,location,organizer,attendees,webLink,createdDateTime,lastModifiedDateTime,showAs,responseStatus,recurrence"
+      "id,seriesMasterId,subject,bodyPreview,importance,sensitivity,categories,type,start,end,originalStartTimeZone,originalEndTimeZone,isAllDay,isCancelled,isOnlineMeeting,onlineMeeting,location,organizer,attendees,webLink,createdDateTime,lastModifiedDateTime,showAs,responseStatus,recurrence"
   });
   return `https://graph.microsoft.com/v1.0/me/calendars/${encodeURIComponent(params.calendarId)}/calendarView/delta?${query.toString()}`;
 }
@@ -246,6 +248,48 @@ function chunkValues<T>(values: T[], size: number): T[][] {
   return chunks;
 }
 
+const CALENDAR_DELTA_SCHEMA_VERSION = 5;
+const UNTITLED_PLACEHOLDER = "(제목 없음)";
+
+function hasMeaningfulSubject(subject: unknown): subject is string {
+  if (typeof subject !== "string") {
+    return false;
+  }
+  const normalized = subject.trim();
+  if (normalized.length === 0) {
+    return false;
+  }
+  if (normalized === UNTITLED_PLACEHOLDER) {
+    return false;
+  }
+  if (normalized === "(Untitled)") {
+    return false;
+  }
+  return true;
+}
+
+async function fetchSeriesMasterSubject(accessToken: string, params: { calendarId: string; seriesMasterId: string }): Promise<string | null> {
+  const { calendarId, seriesMasterId } = params;
+
+  const byCalendarResponse = await fetchGraphJson<{ subject?: string }>(
+    `https://graph.microsoft.com/v1.0/me/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(seriesMasterId)}?$select=subject`,
+    accessToken
+  );
+  if (byCalendarResponse.ok && hasMeaningfulSubject(byCalendarResponse.data?.subject)) {
+    return byCalendarResponse.data!.subject.trim();
+  }
+
+  const byMeResponse = await fetchGraphJson<{ subject?: string }>(
+    `https://graph.microsoft.com/v1.0/me/events/${encodeURIComponent(seriesMasterId)}?$select=subject`,
+    accessToken
+  );
+  if (byMeResponse.ok && hasMeaningfulSubject(byMeResponse.data?.subject)) {
+    return byMeResponse.data!.subject.trim();
+  }
+
+  return null;
+}
+
 export async function syncMicrosoftCalendarSnapshot(params: {
   accessToken: string;
   accountEmail: string;
@@ -257,9 +301,10 @@ export async function syncMicrosoftCalendarSnapshot(params: {
   const { accessToken, accountEmail, connectionId, calendarState, maxDeltaPagesPerCalendar, adminClient } = params;
 
   const currentCalendarState = isRecord(calendarState) ? calendarState : {};
-  const nowTs = Date.now();
-  const defaultFromIso = new Date(nowTs - 1000 * 60 * 60 * 24 * 14).toISOString();
-  const defaultToIso = new Date(nowTs + 1000 * 60 * 60 * 24 * 21).toISOString();
+  const currentDeltaSchemaVersion =
+    typeof currentCalendarState.deltaSchemaVersion === "number" ? Math.floor(currentCalendarState.deltaSchemaVersion) : 0;
+  const shouldResetDeltaBySchema = currentDeltaSchemaVersion !== CALENDAR_DELTA_SCHEMA_VERSION;
+  const { fromIso: defaultFromIso, toIso: defaultToIso } = buildCalendarWindow();
   const previousWindowStart = parseIsoDate(currentCalendarState.windowStart);
   const previousWindowEnd = parseIsoDate(currentCalendarState.windowEnd);
   const desiredFromTs = Date.parse(defaultFromIso);
@@ -274,7 +319,7 @@ export async function syncMicrosoftCalendarSnapshot(params: {
 
   const fromIso = windowOutdated ? defaultFromIso : previousWindowStart!;
   const toIsoDate = windowOutdated ? defaultToIso : previousWindowEnd!;
-  const previousDeltaByCalendar = windowOutdated ? {} : parseDeltaByCalendar(currentCalendarState.deltaByCalendar);
+  const previousDeltaByCalendar = windowOutdated || shouldResetDeltaBySchema ? {} : parseDeltaByCalendar(currentCalendarState.deltaByCalendar);
 
   const calendarsResponse = await fetchGraphJson<GraphCalendarListResponse>(
     "https://graph.microsoft.com/v1.0/me/calendars?$top=8&$select=id,name,color,isDefaultCalendar",
@@ -353,6 +398,7 @@ export async function syncMicrosoftCalendarSnapshot(params: {
 
   const eventRows: Array<Record<string, unknown>> = [];
   const deletedExternalEventIds = new Set<string>();
+  const missingSubjectRows: Array<{ rowIndex: number; externalEventId: string; calendarId: string; seriesMasterId: string | null }> = [];
   const nextDeltaByCalendar: Record<string, string> = { ...previousDeltaByCalendar };
   const deltaPageGuardLimitRaw = typeof maxDeltaPagesPerCalendar === "number" ? maxDeltaPagesPerCalendar : NaN;
   const deltaPageGuardLimit = Number.isFinite(deltaPageGuardLimitRaw) && deltaPageGuardLimitRaw > 0 ? Math.floor(deltaPageGuardLimitRaw) : 60;
@@ -406,7 +452,7 @@ export async function syncMicrosoftCalendarSnapshot(params: {
         }
 
         const externalEventId = `${calendar.id}:${event.id}`;
-        if (event["@removed"] || event.showAs === "free") {
+        if (event["@removed"]) {
           deletedExternalEventIds.add(externalEventId);
           return;
         }
@@ -437,12 +483,14 @@ export async function syncMicrosoftCalendarSnapshot(params: {
         const createdExternal = createdTimeRaw && Number.isFinite(new Date(createdTimeRaw).getTime()) ? new Date(createdTimeRaw).toISOString() : null;
         const lastModifiedRaw = event.lastModifiedDateTime;
         const lastModifiedExternal = lastModifiedRaw && Number.isFinite(new Date(lastModifiedRaw).getTime()) ? new Date(lastModifiedRaw).toISOString() : null;
+        const normalizedSubject = typeof event.subject === "string" && event.subject.trim().length > 0 ? event.subject : null;
+        const rowIndex = eventRows.length;
 
         eventRows.push({
           connection_id: connectionId,
           calendar_source_id: sourceId,
           external_event_id: externalEventId,
-          subject: event.subject ?? "(제목 없음)",
+          subject: normalizedSubject,
           body_preview: event.bodyPreview ?? null,
           importance: event.importance ?? null,
           sensitivity: event.sensitivity ?? null,
@@ -470,6 +518,15 @@ export async function syncMicrosoftCalendarSnapshot(params: {
           raw: event,
           synced_at: nowIso
         });
+
+        if (!normalizedSubject) {
+          missingSubjectRows.push({
+            rowIndex,
+            externalEventId,
+            calendarId: calendar.id!,
+            seriesMasterId: typeof event.seriesMasterId === "string" && event.seriesMasterId.length > 0 ? event.seriesMasterId : null
+          });
+        }
       });
 
       if (typeof payload["@odata.nextLink"] === "string" && payload["@odata.nextLink"].length > 0) {
@@ -497,6 +554,110 @@ export async function syncMicrosoftCalendarSnapshot(params: {
     } else if (!previousDeltaLink) {
       partialFailure = true;
     }
+  }
+
+  if (eventRows.length > 0 && missingSubjectRows.length > 0) {
+    const missingExternalIds = Array.from(new Set(missingSubjectRows.map((row) => row.externalEventId)));
+    const existingSubjectByExternalId = new Map<string, string>();
+
+    for (const chunk of chunkValues(missingExternalIds, 400)) {
+      const { data: existingRows, error: existingRowsError } = await adminClient
+        .from("calendar_events_cache")
+        .select("external_event_id,subject")
+        .eq("connection_id", connectionId)
+        .in("external_event_id", chunk);
+
+      if (existingRowsError) {
+        partialFailure = true;
+        continue;
+      }
+
+      (existingRows ?? []).forEach((row) => {
+        if (typeof row.external_event_id !== "string" || !hasMeaningfulSubject(row.subject)) {
+          return;
+        }
+        existingSubjectByExternalId.set(row.external_event_id, row.subject.trim());
+      });
+    }
+
+    const missingSeriesMasterExternalIds = Array.from(
+      new Set(
+        missingSubjectRows
+          .filter((row) => row.seriesMasterId)
+          .map((row) => `${row.calendarId}:${row.seriesMasterId as string}`)
+      )
+    );
+    const subjectBySeriesMasterExternalId = new Map<string, string>();
+
+    for (const chunk of chunkValues(missingSeriesMasterExternalIds, 300)) {
+      const { data: masterRows, error: masterRowsError } = await adminClient
+        .from("calendar_events_cache")
+        .select("external_event_id,subject")
+        .eq("connection_id", connectionId)
+        .in("external_event_id", chunk);
+
+      if (masterRowsError) {
+        partialFailure = true;
+        continue;
+      }
+
+      (masterRows ?? []).forEach((row) => {
+        if (typeof row.external_event_id !== "string" || !hasMeaningfulSubject(row.subject)) {
+          return;
+        }
+        subjectBySeriesMasterExternalId.set(row.external_event_id, row.subject.trim());
+      });
+    }
+
+    const unresolvedSeriesMasterEntries = Array.from(
+      new Set(
+        missingSubjectRows
+          .filter((row) => {
+            if (!row.seriesMasterId) {
+              return false;
+            }
+            const bySelf = existingSubjectByExternalId.get(row.externalEventId);
+            if (hasMeaningfulSubject(bySelf)) {
+              return false;
+            }
+            const byMasterCache = subjectBySeriesMasterExternalId.get(`${row.calendarId}:${row.seriesMasterId}`);
+            return !hasMeaningfulSubject(byMasterCache);
+          })
+          .map((row) => `${row.calendarId}::${row.seriesMasterId as string}`)
+      )
+    );
+
+    const subjectBySeriesMasterRef = new Map<string, string>();
+    for (const entry of unresolvedSeriesMasterEntries) {
+      const [calendarId, seriesMasterId] = entry.split("::");
+      if (!calendarId || !seriesMasterId) {
+        continue;
+      }
+      const subject = await fetchSeriesMasterSubject(accessToken, { calendarId, seriesMasterId });
+      if (hasMeaningfulSubject(subject)) {
+        subjectBySeriesMasterRef.set(`${calendarId}:${seriesMasterId}`, subject.trim());
+      }
+    }
+
+    missingSubjectRows.forEach((meta) => {
+      const row = eventRows[meta.rowIndex];
+      if (!row) {
+        return;
+      }
+
+      const currentSubject = typeof row.subject === "string" ? row.subject.trim() : "";
+      if (currentSubject.length > 0) {
+        return;
+      }
+
+      const resolvedSubject =
+        existingSubjectByExternalId.get(meta.externalEventId) ??
+        (meta.seriesMasterId ? subjectBySeriesMasterExternalId.get(`${meta.calendarId}:${meta.seriesMasterId}`) : null) ??
+        (meta.seriesMasterId ? subjectBySeriesMasterRef.get(`${meta.calendarId}:${meta.seriesMasterId}`) : null) ??
+        UNTITLED_PLACEHOLDER;
+
+      row.subject = resolvedSubject;
+    });
   }
 
   const deleteIds = [...deletedExternalEventIds];
@@ -528,6 +689,7 @@ export async function syncMicrosoftCalendarSnapshot(params: {
       deltaByCalendar: nextDeltaByCalendar,
       windowStart: fromIso,
       windowEnd: toIsoDate,
+      deltaSchemaVersion: CALENDAR_DELTA_SCHEMA_VERSION,
       sourceSelectionInitialized: true
     }
   };

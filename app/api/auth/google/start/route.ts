@@ -2,9 +2,16 @@ import { NextResponse } from "next/server";
 import { serverEnv } from "@/lib/env/server";
 import { getGoogleScopeString } from "@/lib/google";
 import { createClient } from "@/lib/supabase/server";
+import { analyticsEvents } from "@/lib/analytics/events";
+import { captureServerEvent } from "@/lib/analytics/server";
 
 export async function GET(request: Request) {
   if (!serverEnv.googleClientId || !serverEnv.googleRedirectUri) {
+    await captureServerEvent({
+      event: analyticsEvents.oauthFailed,
+      distinctId: "anonymous",
+      properties: { provider: "google", reasonCode: "google_config_missing", flow: "direct_connect", surface: "settings" }
+    });
     return NextResponse.redirect(new URL("/settings?status=google_config_missing", request.url));
   }
 
@@ -13,8 +20,19 @@ export async function GET(request: Request) {
     data: { user }
   } = await supabase.auth.getUser();
   if (!user) {
+    await captureServerEvent({
+      event: analyticsEvents.oauthFailed,
+      distinctId: "anonymous",
+      properties: { provider: "google", reasonCode: "auth_required", flow: "direct_connect", surface: "settings" }
+    });
     return NextResponse.redirect(new URL("/login?status=auth_required", request.url));
   }
+
+  await captureServerEvent({
+    event: analyticsEvents.oauthStart,
+    distinctId: user.id,
+    properties: { provider: "google", flow: "direct_connect", surface: "settings" }
+  });
 
   const state = crypto.randomUUID();
   const params = new URLSearchParams({

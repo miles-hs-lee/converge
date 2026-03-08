@@ -76,26 +76,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "missing_id" }, { status: 400 });
   }
 
-  const { data: connections } = await supabase
-    .from("m365_connections")
-    .select("id,provider,tenant_name,m365_user_principal_name")
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: true });
-
-  const connectionIds = (connections ?? []).map((connection) => connection.id);
-  if (connectionIds.length === 0) {
-    return NextResponse.json({ ok: false, error: "no_connections" }, { status: 404 });
-  }
-
-  const tenantByConnection = new Map<string, string>();
-  const accountByConnection = new Map<string, string>();
-  const providerByConnection = new Map<string, string>();
-  (connections ?? []).forEach((connection) => {
-    tenantByConnection.set(connection.id, connection.tenant_name ?? "Connected Tenant");
-    accountByConnection.set(connection.id, connection.m365_user_principal_name ?? "unknown@account");
-    providerByConnection.set(connection.id, connection.provider ?? "microsoft");
-  });
-
   const eventSelectExpanded =
     "id,subject,start_at,end_at,is_all_day,location,connection_id,organizer,organizer_name,attendees,web_link,last_modified_external,created_external,calendar_source_id,body_preview,importance,sensitivity,show_as,response_status,response_time,is_cancelled,is_online_meeting,online_meeting_url,event_type,categories,timezone_start,timezone_end";
   const eventSelectFallback = "id,subject,start_at,end_at,is_all_day,location,connection_id,organizer,attendees,web_link,last_modified_external,calendar_source_id";
@@ -104,7 +84,6 @@ export async function GET(request: NextRequest) {
       .from("calendar_events_cache")
       .select(selectText)
       .eq("id", eventId)
-      .in("connection_id", connectionIds)
       .maybeSingle();
 
   const primary = await queryEvent(eventSelectExpanded);
@@ -116,6 +95,17 @@ export async function GET(request: NextRequest) {
 
   const eventRow = dbEvent as Record<string, any>;
 
+  const { data: connection } = await supabase
+    .from("m365_connections")
+    .select("id,provider,tenant_name,m365_user_principal_name")
+    .eq("id", eventRow.connection_id)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (!connection) {
+    return NextResponse.json({ ok: false, error: "event_not_found" }, { status: 404 });
+  }
+
   const { data: source } = await supabase
     .from("calendar_sources")
     .select("name")
@@ -126,22 +116,22 @@ export async function GET(request: NextRequest) {
   const item = {
     id: eventRow.id,
     calendarSourceId: typeof eventRow.calendar_source_id === "string" ? eventRow.calendar_source_id : undefined,
-    tenantName: tenantByConnection.get(eventRow.connection_id) ?? "Connected Tenant",
+    tenantName: connection.tenant_name ?? "Connected Account",
     subject: eventRow.subject ?? "(Untitled)",
     startAt: eventRow.start_at,
     endAt: eventRow.end_at,
     location: eventRow.location ?? "Unspecified",
-    sourceAccount: accountByConnection.get(eventRow.connection_id) ?? eventRow.organizer ?? "unknown@account",
+    sourceAccount: connection.m365_user_principal_name ?? eventRow.organizer ?? "unknown@account",
     attendees: attendeeEmails,
     attendeeDetails,
-    organizer: eventRow.organizer ?? accountByConnection.get(eventRow.connection_id) ?? "unknown@account",
+    organizer: eventRow.organizer ?? connection.m365_user_principal_name ?? "unknown@account",
     organizerName: typeof eventRow.organizer_name === "string" ? eventRow.organizer_name : null,
     isAllDay: Boolean(eventRow.is_all_day),
     webLink: eventRow.web_link ?? null,
     lastModifiedAt: eventRow.last_modified_external ?? null,
     createdAt: typeof eventRow.created_external === "string" ? eventRow.created_external : null,
     calendarName: source?.name ?? "Calendar",
-    provider: providerByConnection.get(eventRow.connection_id) ?? "microsoft",
+    provider: connection.provider ?? "microsoft",
     bodyPreview: typeof eventRow.body_preview === "string" ? eventRow.body_preview : null,
     importance: typeof eventRow.importance === "string" ? eventRow.importance : null,
     sensitivity: typeof eventRow.sensitivity === "string" ? eventRow.sensitivity : null,
@@ -158,5 +148,12 @@ export async function GET(request: NextRequest) {
     detailLoaded: true
   };
 
-  return NextResponse.json({ ok: true, item });
+  return NextResponse.json(
+    { ok: true, item },
+    {
+      headers: {
+        "Cache-Control": "private, max-age=300, stale-while-revalidate=600"
+      }
+    }
+  );
 }

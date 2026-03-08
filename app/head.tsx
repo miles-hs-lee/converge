@@ -1,6 +1,5 @@
 export default function Head() {
-  // iOS uses these for standalone (Add to Home Screen) launch screens.
-  // Keep the list short but cover common modern iPhones.
+  // iOS standalone launch screens. Keep only the current high-traffic portrait sizes.
   return (
     <>
       <link
@@ -23,22 +22,6 @@ export default function Head() {
         href="/splash/apple-splash-1290-2796.png"
         media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"
       />
-      <link
-        rel="apple-touch-startup-image"
-        href="/splash/apple-splash-828-1792.png"
-        media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)"
-      />
-      <link
-        rel="apple-touch-startup-image"
-        href="/splash/apple-splash-750-1334.png"
-        media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)"
-      />
-      <link
-        rel="apple-touch-startup-image"
-        href="/splash/apple-splash-640-1136.png"
-        media="(device-width: 320px) and (device-height: 568px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)"
-      />
     </>
   );
 }
-

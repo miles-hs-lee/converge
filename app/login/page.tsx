@@ -4,8 +4,10 @@ import { AlertCircle } from "lucide-react";
 import { requestMagicLink } from "@/app/login/actions";
 import { createClient } from "@/lib/supabase/server";
 import { BrandLogo } from "@/components/brand-logo";
+import { TrackEventOnMount } from "@/components/analytics/track-event-on-mount";
 import { getServerLocale } from "@/lib/i18n-server";
 import { t, type I18nKey } from "@/lib/i18n";
+import { analyticsEvents } from "@/lib/analytics/events";
 
 const loginStatusKey: Record<string, I18nKey> = {
   magic_link_sent: "login.status.magic_link_sent",
@@ -14,7 +16,8 @@ const loginStatusKey: Record<string, I18nKey> = {
   auth_callback_error: "login.status.auth_callback_error",
   signed_out: "login.status.signed_out",
   auth_required: "status.auth_required",
-  microsoft_sso_error: "login.status.microsoft_sso_error"
+  microsoft_sso_error: "login.status.microsoft_sso_error",
+  rate_limited: "login.status.rate_limited"
 };
 
 type LoginPageProps = {
@@ -39,6 +42,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
   return (
     <main className="page-wrap flex min-h-screen max-w-xl items-center py-12" data-testid="page-login">
+      <TrackEventOnMount event={analyticsEvents.loginViewed} />
       <section className="panel-glass card w-full p-7 md:p-9">
         <BrandLogo subtitle={tt("brand.subtitle")} />
         <h1 className="title-xl mt-5">{tt("login.title")}</h1>

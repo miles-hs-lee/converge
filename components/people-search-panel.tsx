@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronDown,
@@ -8,8 +9,9 @@ import {
   Search,
   Star
 } from "lucide-react";
-import { PeopleDetailModal } from "@/components/people-detail-modal";
 import { useIntlLocale, useT } from "@/components/locale-provider";
+import { trackClientEvent } from "@/lib/analytics/client";
+import { analyticsEvents } from "@/lib/analytics/events";
 
 type PersonRow = {
   id: string;
@@ -18,6 +20,7 @@ type PersonRow = {
   jobTitle: string;
   department: string;
   tenantName: string;
+  tenantId?: string;
   officeLocation: string;
   mobilePhone: string;
   businessPhones: string[];
@@ -55,10 +58,31 @@ type VirtualListItem =
   | { key: string; kind: "tenantHeader"; tenantName: string; count: number; collapsed: boolean }
   | { key: string; kind: "person"; person: PersonRow; hideTenant: boolean };
 
+const PeopleDetailModal = dynamic(() => import("@/components/people-detail-modal").then((mod) => mod.PeopleDetailModal), {
+  loading: () => null,
+  ssr: false
+});
+
 function buildActionLinks(person: PersonRow) {
-  const email = person.mail;
-  const mailto = email ? `mailto:${email}` : "#";
-  const teams = email ? `https://teams.microsoft.com/l/chat/0/0?users=${encodeURIComponent(email)}` : "#";
+  const normalizedMail = (person.mail ?? "").trim();
+  const normalizedUpn = (person.upn ?? "").trim();
+  const upnLooksGuest = normalizedUpn.toLowerCase().includes("#ext#");
+  const teamsIdentity =
+    person.provider === "microsoft"
+      ? normalizedUpn && !upnLooksGuest
+        ? normalizedUpn
+        : normalizedMail || normalizedUpn
+      : normalizedMail || normalizedUpn;
+  const identity = teamsIdentity;
+  const mailto = identity ? `mailto:${identity}` : "#";
+  const teams = (() => {
+    if (!identity) return "#";
+    const params = new URLSearchParams({ users: identity });
+    if (person.provider === "microsoft" && person.tenantId) {
+      params.set("tenantId", person.tenantId);
+    }
+    return `https://teams.microsoft.com/l/chat/0/0?${params.toString()}`;
+  })();
 
   const start = new Date();
   start.setDate(start.getDate() + 1);
@@ -66,11 +90,11 @@ function buildActionLinks(person: PersonRow) {
   const end = new Date(start);
   end.setMinutes(end.getMinutes() + 30);
 
-  const calendar = email
-    ? `https://outlook.office.com/calendar/0/deeplink/compose?subject=${encodeURIComponent(`${person.displayName} meeting`)}&to=${encodeURIComponent(email)}&startdt=${encodeURIComponent(start.toISOString())}&enddt=${encodeURIComponent(end.toISOString())}`
+  const calendar = identity
+    ? `https://outlook.office.com/calendar/0/deeplink/compose?subject=${encodeURIComponent(`${person.displayName} meeting`)}&to=${encodeURIComponent(identity)}&startdt=${encodeURIComponent(start.toISOString())}&enddt=${encodeURIComponent(end.toISOString())}`
     : "#";
 
-  return { mailto, teams, calendar, disabled: !email };
+  return { mailto, teams, calendar, disabled: !identity };
 }
 
 function readStoredIds(key: string): string[] {
@@ -126,6 +150,19 @@ function isGuestPerson(person: PersonRow): boolean {
   return upn.includes("#ext#");
 }
 
+function isAbortLikeError(error: unknown): boolean {
+  if (error && typeof error === "object") {
+    const candidate = error as { name?: unknown; message?: unknown };
+    if (candidate.name === "AbortError") {
+      return true;
+    }
+    if (typeof candidate.message === "string" && candidate.message.toLowerCase().includes("aborted")) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export function PeopleSearchPanel({ people, serverSearchEnabled = false, initialHasMore = false }: PeopleSearchPanelProps) {
   const t = useT();
   const intl = useIntlLocale();
@@ -151,11 +188,14 @@ export function PeopleSearchPanel({ people, serverSearchEnabled = false, initial
   const [includeGuests, setIncludeGuests] = useState(false);
   const listViewportRef = useRef<HTMLDivElement | null>(null);
   const profilePhotoByPersonIdRef = useRef<Record<string, string>>({});
+  const detailCacheRef = useRef<Record<string, PersonRow>>({});
+  const managerCacheRef = useRef<Record<string, PersonRow | null>>({});
   const [virtualScrollTop, setVirtualScrollTop] = useState(0);
   const [virtualViewportHeight, setVirtualViewportHeight] = useState(640);
 
   const deferredQuery = useDeferredValue(query.trim());
   const [debouncedQuery, setDebouncedQuery] = useState(deferredQuery);
+  const lastTrackedSearchKeyRef = useRef<string>("");
   const activePeople = serverSearchEnabled ? loadedPeople : people;
   const visiblePeople = useMemo(() => {
     if (includeGuests) {
@@ -187,6 +227,17 @@ export function PeopleSearchPanel({ people, serverSearchEnabled = false, initial
   }, [profilePhotoByPersonId]);
 
   useEffect(() => {
+    activePeople.forEach((person) => {
+      if (person.detailLoaded) {
+        detailCacheRef.current[person.id] = person;
+      }
+      if (person.externalPersonId) {
+        managerCacheRef.current[person.externalPersonId] = person;
+      }
+    });
+  }, [activePeople]);
+
+  useEffect(() => {
     return () => {
       Object.values(profilePhotoByPersonIdRef.current).forEach((objectUrl) => URL.revokeObjectURL(objectUrl));
     };
@@ -199,6 +250,23 @@ export function PeopleSearchPanel({ people, serverSearchEnabled = false, initial
     return () => window.clearTimeout(timer);
   }, [deferredQuery]);
 
+  useEffect(() => {
+    const normalized = debouncedQuery.trim();
+    if (!normalized) {
+      return;
+    }
+    const key = `${normalized.toLowerCase()}|${includeGuests ? "1" : "0"}|${serverSearchEnabled ? "1" : "0"}`;
+    if (lastTrackedSearchKeyRef.current === key) {
+      return;
+    }
+    lastTrackedSearchKeyRef.current = key;
+    void trackClientEvent(analyticsEvents.peopleSearchSubmitted, {
+      queryLength: normalized.length,
+      includeGuests,
+      serverSearchEnabled
+    });
+  }, [debouncedQuery, includeGuests, serverSearchEnabled]);
+
   async function fetchPeoplePage(params: { offset: number; append: boolean; queryValue: string; includeGuests: boolean; signal?: AbortSignal }) {
     const search = new URLSearchParams({
       mode: "summary",
@@ -207,7 +275,7 @@ export function PeopleSearchPanel({ people, serverSearchEnabled = false, initial
       limit: String(SEARCH_PAGE_SIZE),
       includeGuests: params.includeGuests ? "true" : "false"
     });
-    const response = await fetch(`/api/people/search?${search.toString()}`, { cache: "no-store", signal: params.signal });
+    const response = await fetch(`/api/people/search?${search.toString()}`, { signal: params.signal });
     if (!response.ok) {
       throw new Error("people_search_failed");
     }
@@ -353,6 +421,12 @@ export function PeopleSearchPanel({ people, serverSearchEnabled = false, initial
       setDetailLoadingId((current) => (current === target.id ? null : current));
       return;
     }
+    const cachedDetail = detailCacheRef.current[target.id];
+    if (cachedDetail) {
+      setLoadedPeople((prev) => prev.map((row) => (row.id === cachedDetail.id ? { ...row, ...cachedDetail, detailLoaded: true } : row)));
+      setDetailLoadingId((current) => (current === target.id ? null : current));
+      return;
+    }
     if (detailLookupTried.has(target.id)) {
       setDetailLoadingId((current) => (current === target.id ? null : current));
       return;
@@ -369,17 +443,24 @@ export function PeopleSearchPanel({ people, serverSearchEnabled = false, initial
         includeGuests: "true",
         limit: "1"
       });
-      const response = await fetch(`/api/people/search?${search.toString()}`, { cache: "no-store", signal: controller.signal });
+      const response = await fetch(`/api/people/search?${search.toString()}`, { signal: controller.signal });
       if (!response.ok) return;
       const json = (await response.json()) as { ok: boolean; items: PersonRow[] };
       if (!json.ok || !json.items?.[0]) return;
       const full = json.items[0];
+      detailCacheRef.current[full.id] = { ...full, detailLoaded: true };
       setLoadedPeople((prev) => prev.map((row) => (row.id === full.id ? { ...row, ...full, detailLoaded: true } : row)));
     };
 
-    void run().finally(() => {
-      setDetailLoadingId((current) => (current === target.id ? null : current));
-    });
+    void run()
+      .catch((error) => {
+        if (controller.signal.aborted || isAbortLikeError(error)) {
+          return;
+        }
+      })
+      .finally(() => {
+        setDetailLoadingId((current) => (current === target.id ? null : current));
+      });
 
     return () => {
       controller.abort();
@@ -394,6 +475,14 @@ export function PeopleSearchPanel({ people, serverSearchEnabled = false, initial
     if (managerLookupTried.has(selectedPerson.managerExternalId)) {
       return;
     }
+    const cachedManager = managerCacheRef.current[selectedPerson.managerExternalId];
+    if (cachedManager) {
+      setLoadedPeople((prev) => (prev.some((item) => item.id === cachedManager.id) ? prev : [...prev, cachedManager]));
+      return;
+    }
+    if (cachedManager === null) {
+      return;
+    }
 
     let cancelled = false;
     const managerExternalId = selectedPerson.managerExternalId;
@@ -406,13 +495,17 @@ export function PeopleSearchPanel({ people, serverSearchEnabled = false, initial
         includeGuests: "true",
         limit: "1"
       });
-      const response = await fetch(`/api/people/search?${search.toString()}`, { cache: "no-store" });
+      const response = await fetch(`/api/people/search?${search.toString()}`);
       if (!response.ok) return;
       const json = (await response.json()) as { ok: boolean; items: PersonRow[] };
-      if (!json.ok || !json.items || json.items.length === 0) return;
+      if (!json.ok || !json.items || json.items.length === 0) {
+        managerCacheRef.current[managerExternalId] = null;
+        return;
+      }
       if (cancelled) return;
       setLoadedPeople((prev) => {
         const manager = json.items[0]!;
+        managerCacheRef.current[managerExternalId] = manager;
         if (prev.some((item) => item.id === manager.id)) {
           return prev;
         }
@@ -457,7 +550,6 @@ export function PeopleSearchPanel({ people, serverSearchEnabled = false, initial
 
     const run = async () => {
       const response = await fetch(`/api/people/photo?id=${encodeURIComponent(targetId)}`, {
-        cache: "no-store",
         signal: controller.signal
       });
       if (!response.ok) {
@@ -498,17 +590,48 @@ export function PeopleSearchPanel({ people, serverSearchEnabled = false, initial
   const selectedPhone = selectedPerson ? getPrimaryPhone(selectedPerson) : "";
   const showPinnedSections = query.trim().length === 0;
 
+  function trackQuickAction(action: "mail" | "teams" | "meeting" | "copy_mail" | "copy_phone", person?: PersonRow | null) {
+    const target = person ?? selectedPerson;
+    if (!target) {
+      return;
+    }
+    void trackClientEvent(analyticsEvents.peopleQuickActionClicked, {
+      action,
+      personId: target.id,
+      tenantName: target.tenantName,
+      provider: target.provider
+    });
+  }
+
   function openPerson(personId: string) {
+    const person = activePeople.find((item) => item.id === personId);
+    if (person) {
+      void trackClientEvent(analyticsEvents.peopleProfileOpened, {
+        personId: person.id,
+        tenantName: person.tenantName,
+        provider: person.provider
+      });
+    }
     setSelectedPersonId(personId);
     setRecentIds((prev) => [personId, ...prev.filter((id) => id !== personId)].slice(0, 8));
   }
 
   function toggleFavorite(personId: string) {
+    let state: "on" | "off" = "on";
     setFavoriteIds((prev) => {
       if (prev.includes(personId)) {
+        state = "off";
         return prev.filter((id) => id !== personId);
       }
+      state = "on";
       return [personId, ...prev].slice(0, 16);
+    });
+    const person = activePeople.find((item) => item.id === personId);
+    void trackClientEvent(analyticsEvents.peopleFavoriteToggled, {
+      personId,
+      state,
+      tenantName: person?.tenantName ?? "unknown",
+      provider: person?.provider ?? "unknown"
     });
   }
 
@@ -533,13 +656,14 @@ export function PeopleSearchPanel({ people, serverSearchEnabled = false, initial
     }
   }
 
-  async function copyToClipboard(value: string, field: "mail" | "phone") {
+  async function copyToClipboard(value: string, field: "mail" | "phone", person?: PersonRow | null) {
     if (!value) {
       return;
     }
 
     try {
       await navigator.clipboard.writeText(value);
+      trackQuickAction(field === "mail" ? "copy_mail" : "copy_phone", person);
       setCopiedField(field);
       window.setTimeout(() => {
         setCopiedField((current) => (current === field ? null : current));
@@ -864,13 +988,16 @@ export function PeopleSearchPanel({ people, serverSearchEnabled = false, initial
         onClose={() => setSelectedPersonId(null)}
         onCopyMail={() => {
           if (selectedPerson) {
-            void copyToClipboard(selectedPerson.mail, "mail");
+            void copyToClipboard(selectedPerson.mail, "mail", selectedPerson);
           }
         }}
         onCopyPhone={() => {
           if (selectedPerson) {
-            void copyToClipboard(selectedPhone, "phone");
+            void copyToClipboard(selectedPhone, "phone", selectedPerson);
           }
+        }}
+        onQuickAction={(action) => {
+          trackQuickAction(action, selectedPerson);
         }}
         onToggleFavorite={() => {
           if (selectedPerson) {

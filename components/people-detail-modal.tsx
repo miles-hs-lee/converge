@@ -61,6 +61,7 @@ type PeopleDetailModalProps = {
   onCopyMail: () => void;
   onCopyPhone: () => void;
   onOpenManager: () => void;
+  onQuickAction: (action: "mail" | "teams" | "meeting") => void;
 };
 
 function initials(name: string): string {
@@ -112,7 +113,8 @@ export function PeopleDetailModal({
   onClose,
   onCopyMail,
   onCopyPhone,
-  onOpenManager
+  onOpenManager,
+  onQuickAction
 }: PeopleDetailModalProps) {
   const t = useT();
   const [photoZoomOpen, setPhotoZoomOpen] = useState(false);
@@ -133,7 +135,7 @@ export function PeopleDetailModal({
 
   return (
     <ModalPortal>
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-3 sm:p-4" role="dialog" aria-modal="true">
+      <div className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-900/45 p-3 sm:p-4" role="dialog" aria-modal="true">
         <button aria-label={t("common.close")} className="absolute inset-0 cursor-default" onClick={onClose} type="button" />
 
         <section className="panel-glass card relative z-10 max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl">
@@ -195,6 +197,7 @@ export function PeopleDetailModal({
                 <a
                   className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium ${actionLinks.disabled ? "pointer-events-none border-slate-200 bg-slate-100 text-slate-400" : "border-line bg-white text-slate-700 hover:border-accent/45"}`}
                   href={actionLinks.disabled ? undefined : actionLinks.mailto}
+                  onClick={() => onQuickAction("mail")}
                   rel="noreferrer"
                   target="_blank"
                 >
@@ -203,6 +206,7 @@ export function PeopleDetailModal({
                 <a
                   className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium ${actionLinks.disabled ? "pointer-events-none border-slate-200 bg-slate-100 text-slate-400" : "border-line bg-white text-slate-700 hover:border-accent/45"}`}
                   href={actionLinks.disabled ? undefined : actionLinks.teams}
+                  onClick={() => onQuickAction("teams")}
                   rel="noreferrer"
                   target="_blank"
                 >
@@ -211,6 +215,7 @@ export function PeopleDetailModal({
                 <a
                   className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium ${actionLinks.disabled ? "pointer-events-none border-slate-200 bg-slate-100 text-slate-400" : "border-line bg-white text-slate-700 hover:border-accent/45"}`}
                   href={actionLinks.disabled ? undefined : actionLinks.calendar}
+                  onClick={() => onQuickAction("meeting")}
                   rel="noreferrer"
                   target="_blank"
                 >
@@ -299,7 +304,7 @@ export function PeopleDetailModal({
         </section>
 
         {photoZoomOpen && profilePhotoUrl ? (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/80 p-4" role="dialog" aria-modal="true">
+          <div className="fixed inset-0 z-[140] flex items-center justify-center bg-slate-950/80 p-4" role="dialog" aria-modal="true">
             <button aria-label={t("common.close")} className="absolute inset-0 cursor-default" onClick={() => setPhotoZoomOpen(false)} type="button" />
             <div className="relative z-10">
               {/* eslint-disable-next-line @next/next/no-img-element */}

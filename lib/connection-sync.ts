@@ -1,8 +1,16 @@
+import * as Sentry from "@sentry/nextjs";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { serverEnv } from "@/lib/env/server";
 import { getMicrosoftScopeString, requiredMicrosoftGraphScopes } from "@/lib/microsoft";
 import { syncMicrosoftCalendarSnapshot, syncMicrosoftPeopleSnapshot } from "@/lib/microsoft-sync";
 import { syncGoogleCalendarSnapshot } from "@/lib/google-sync";
+import { accountCountBucket } from "@/lib/observability/sentry-tags";
+import {
+  getOAuthConnectionSecrets,
+  isSecretEncrypted,
+  upsertOAuthConnectionSecret,
+  type OAuthConnectionSecretRow
+} from "@/lib/oauth-connection-secrets";
 
 export type SyncMode = "calendar" | "people" | "all";
 
@@ -11,8 +19,6 @@ type ConnectionRow = {
   user_id: string;
   provider: string;
   m365_user_principal_name: string | null;
-  access_token_enc: string;
-  refresh_token_enc: string;
   token_expires_at: string;
   scopes: string[] | null;
   sync_state: Record<string, unknown> | null;
@@ -142,7 +148,12 @@ function tokenStillValid(tokenExpiresAt: string): boolean {
   return expiresAt > Date.now() + 1000 * 60;
 }
 
-async function refreshMicrosoftAccessToken(connection: ConnectionRow): Promise<{ ok: true; accessToken: string } | { ok: false; error: string }> {
+async function refreshMicrosoftAccessToken(params: {
+  admin: ReturnType<typeof createAdminClient>;
+  connection: ConnectionRow;
+  secret: OAuthConnectionSecretRow;
+}): Promise<{ ok: true; accessToken: string } | { ok: false; error: string }> {
+  const { admin, connection, secret } = params;
   const mergedScopes = new Set<string>(connection.scopes?.length ? connection.scopes : getMicrosoftScopeString().split(" "));
   requiredMicrosoftGraphScopes.forEach((scope) => mergedScopes.add(scope));
   const scope = [...mergedScopes].join(" ");
@@ -154,7 +165,7 @@ async function refreshMicrosoftAccessToken(connection: ConnectionRow): Promise<{
       client_id: serverEnv.azureClientId,
       client_secret: serverEnv.azureClientSecret,
       grant_type: "refresh_token",
-      refresh_token: connection.refresh_token_enc,
+      refresh_token: secret.refresh_token_enc,
       scope
     })
   });
@@ -177,29 +188,46 @@ async function refreshMicrosoftAccessToken(connection: ConnectionRow): Promise<{
   const expiresIn = Number(payload.expires_in || 3600);
   const tokenExpiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
   const scopes = (payload.scope ?? "").split(" ").filter(Boolean);
+  const refreshedAccessToken = payload.access_token;
+  const refreshedRefreshToken = payload.refresh_token ?? secret.refresh_token_enc;
+  const nowIso = new Date().toISOString();
 
-  const admin = createAdminClient();
-  await admin
+  const [connectionUpdate, secretStored] = await Promise.all([
+    admin
     .from("m365_connections")
     .update({
-      access_token_enc: payload.access_token,
-      refresh_token_enc: payload.refresh_token ?? connection.refresh_token_enc,
       token_expires_at: tokenExpiresAt,
       scopes: scopes.length > 0 ? scopes : connection.scopes ?? [],
       status: "active",
-      updated_at: new Date().toISOString()
+      updated_at: nowIso
     })
-    .eq("id", connection.id);
+    .eq("id", connection.id),
+    upsertOAuthConnectionSecret({
+      connectionId: connection.id,
+      accessToken: refreshedAccessToken,
+      refreshToken: refreshedRefreshToken,
+      adminClient: admin
+    })
+  ]);
 
-  connection.access_token_enc = payload.access_token;
-  connection.refresh_token_enc = payload.refresh_token ?? connection.refresh_token_enc;
+  if (connectionUpdate.error || !secretStored) {
+    return { ok: false, error: "ms_refresh_persist_failed" };
+  }
+
   connection.token_expires_at = tokenExpiresAt;
   connection.scopes = scopes.length > 0 ? scopes : connection.scopes;
+  secret.access_token_enc = refreshedAccessToken;
+  secret.refresh_token_enc = refreshedRefreshToken;
 
-  return { ok: true, accessToken: payload.access_token };
+  return { ok: true, accessToken: refreshedAccessToken };
 }
 
-async function refreshGoogleAccessToken(connection: ConnectionRow): Promise<{ ok: true; accessToken: string } | { ok: false; error: string }> {
+async function refreshGoogleAccessToken(params: {
+  admin: ReturnType<typeof createAdminClient>;
+  connection: ConnectionRow;
+  secret: OAuthConnectionSecretRow;
+}): Promise<{ ok: true; accessToken: string } | { ok: false; error: string }> {
+  const { admin, connection, secret } = params;
   if (!serverEnv.googleClientId || !serverEnv.googleClientSecret) {
     return { ok: false, error: "google_env_missing" };
   }
@@ -211,7 +239,7 @@ async function refreshGoogleAccessToken(connection: ConnectionRow): Promise<{ ok
       client_id: serverEnv.googleClientId,
       client_secret: serverEnv.googleClientSecret,
       grant_type: "refresh_token",
-      refresh_token: connection.refresh_token_enc
+      refresh_token: secret.refresh_token_enc
     })
   });
 
@@ -232,36 +260,66 @@ async function refreshGoogleAccessToken(connection: ConnectionRow): Promise<{ ok
   const expiresIn = Number(payload.expires_in || 3600);
   const tokenExpiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
   const scopes = (payload.scope ?? "").split(" ").filter(Boolean);
+  const refreshedAccessToken = payload.access_token;
+  const nowIso = new Date().toISOString();
 
-  const admin = createAdminClient();
-  await admin
+  const [connectionUpdate, secretStored] = await Promise.all([
+    admin
     .from("m365_connections")
     .update({
-      access_token_enc: payload.access_token,
       token_expires_at: tokenExpiresAt,
       scopes: scopes.length > 0 ? scopes : connection.scopes ?? [],
       status: "active",
-      updated_at: new Date().toISOString()
+      updated_at: nowIso
     })
-    .eq("id", connection.id);
+    .eq("id", connection.id),
+    upsertOAuthConnectionSecret({
+      connectionId: connection.id,
+      accessToken: refreshedAccessToken,
+      refreshToken: secret.refresh_token_enc,
+      adminClient: admin
+    })
+  ]);
 
-  connection.access_token_enc = payload.access_token;
+  if (connectionUpdate.error || !secretStored) {
+    return { ok: false, error: "google_refresh_persist_failed" };
+  }
+
   connection.token_expires_at = tokenExpiresAt;
   connection.scopes = scopes.length > 0 ? scopes : connection.scopes;
+  secret.access_token_enc = refreshedAccessToken;
 
-  return { ok: true, accessToken: payload.access_token };
+  return { ok: true, accessToken: refreshedAccessToken };
 }
 
-async function ensureAccessToken(connection: ConnectionRow): Promise<{ ok: true; accessToken: string } | { ok: false; error: string }> {
-  if (tokenStillValid(connection.token_expires_at) && connection.access_token_enc) {
-    return { ok: true, accessToken: connection.access_token_enc };
+async function ensureAccessToken(params: {
+  admin: ReturnType<typeof createAdminClient>;
+  connection: ConnectionRow;
+  secret: OAuthConnectionSecretRow | null;
+}): Promise<{ ok: true; accessToken: string } | { ok: false; error: string }> {
+  const { admin, connection, secret } = params;
+
+  if (!secret?.refresh_token_enc) {
+    return { ok: false, error: "reauth_required:missing_secret" };
+  }
+
+  if (tokenStillValid(connection.token_expires_at) && secret.access_token_enc) {
+    if (!isSecretEncrypted(secret.access_token_enc) || !isSecretEncrypted(secret.refresh_token_enc)) {
+      await upsertOAuthConnectionSecret({
+        connectionId: connection.id,
+        accessToken: secret.access_token_enc,
+        refreshToken: secret.refresh_token_enc,
+        adminClient: admin
+      });
+    }
+    return { ok: true, accessToken: secret.access_token_enc };
   }
 
   if (connection.provider === "microsoft") {
-    return refreshMicrosoftAccessToken(connection);
+    return refreshMicrosoftAccessToken({ admin, connection, secret });
   }
   if (connection.provider === "google") {
-    return refreshGoogleAccessToken(connection);
+    return refreshGoogleAccessToken({ admin, connection, secret });
   }
   return { ok: false, error: `unsupported_provider:${connection.provider}` };
 }
@@ -289,6 +347,7 @@ async function insertSyncJob(params: {
 
 type RunConnectionParams = {
   connection: ConnectionRow;
+  connectionSecret: OAuthConnectionSecretRow | null;
   mode: SyncMode;
   calendarStaleMs?: number;
   calendarMaxDeltaPagesPerCalendar?: number;
@@ -296,7 +355,7 @@ type RunConnectionParams = {
 };
 
 async function runConnectionSync(params: RunConnectionParams): Promise<SyncSummary> {
-  const { connection, mode, calendarStaleMs, calendarMaxDeltaPagesPerCalendar, peopleStaleMs } = params;
+  const { connection, connectionSecret, mode, calendarStaleMs, calendarMaxDeltaPagesPerCalendar, peopleStaleMs } = params;
   const admin = createAdminClient();
   const summary = emptySummary();
   summary.connectionsScanned = 1;
@@ -318,8 +377,27 @@ async function runConnectionSync(params: RunConnectionParams): Promise<SyncSumma
     return summary;
   }
 
-  const token = await ensureAccessToken(connection);
+  const token = await ensureAccessToken({ admin, connection, secret: connectionSecret });
   if (!token.ok) {
+    if (token.error.startsWith("reauth_required:")) {
+      const nowIso = new Date().toISOString();
+      await admin
+        .from("m365_connections")
+        .update({
+          status: "revoked",
+          sync_state: {
+            ...syncState,
+            security: {
+              reauthRequired: true,
+              reason: token.error,
+              at: nowIso
+            }
+          },
+          updated_at: nowIso
+        })
+        .eq("id", connection.id);
+    }
+
     summary.failures += 1;
     if (runCalendar) {
       await insertSyncJob({
@@ -349,22 +427,48 @@ async function runConnectionSync(params: RunConnectionParams): Promise<SyncSumma
     const currentCalendarState = parseSyncState(syncState.calendar);
     let calendarResult: SyncResult = { ok: true, partial: false, syncedCount: 0 };
     if (connection.provider === "microsoft") {
-      calendarResult = await syncMicrosoftCalendarSnapshot({
-        accessToken: token.accessToken,
-        accountEmail: connection.m365_user_principal_name ?? "unknown@account",
-        connectionId: connection.id,
-        calendarState: currentCalendarState,
-        maxDeltaPagesPerCalendar: calendarMaxDeltaPagesPerCalendar,
-        adminClient: admin
-      });
+      calendarResult = await Sentry.startSpan(
+        {
+          name: "sync.microsoft.calendar_snapshot",
+          op: "converge.sync.calendar",
+          attributes: {
+            "converge.route": "syncUserConnections",
+            "converge.provider": "microsoft",
+            "converge.sync_mode": "calendar",
+            "converge.account_count_bucket": accountCountBucket(1)
+          }
+        },
+        () =>
+          syncMicrosoftCalendarSnapshot({
+            accessToken: token.accessToken,
+            accountEmail: connection.m365_user_principal_name ?? "unknown@account",
+            connectionId: connection.id,
+            calendarState: currentCalendarState,
+            maxDeltaPagesPerCalendar: calendarMaxDeltaPagesPerCalendar,
+            adminClient: admin
+          })
+      );
     } else if (connection.provider === "google") {
-      calendarResult = await syncGoogleCalendarSnapshot({
-        accessToken: token.accessToken,
-        accountEmail: connection.m365_user_principal_name ?? "unknown@account",
-        connectionId: connection.id,
-        calendarState: currentCalendarState,
-        adminClient: admin
-      });
+      calendarResult = await Sentry.startSpan(
+        {
+          name: "sync.google.calendar_snapshot",
+          op: "converge.sync.calendar",
+          attributes: {
+            "converge.route": "syncUserConnections",
+            "converge.provider": "google",
+            "converge.sync_mode": "calendar",
+            "converge.account_count_bucket": accountCountBucket(1)
+          }
+        },
+        () =>
+          syncGoogleCalendarSnapshot({
+            accessToken: token.accessToken,
+            accountEmail: connection.m365_user_principal_name ?? "unknown@account",
+            connectionId: connection.id,
+            calendarState: currentCalendarState,
+            adminClient: admin
+          })
+      );
     } else {
       calendarResult = { ok: false, partial: false, syncedCount: 0 };
     }
@@ -404,11 +508,24 @@ async function runConnectionSync(params: RunConnectionParams): Promise<SyncSumma
   if (runPeople) {
     let peopleResult: SyncResult = { ok: true, partial: false, syncedCount: 0 };
     if (connection.provider === "microsoft") {
-      peopleResult = await syncMicrosoftPeopleSnapshot({
-        accessToken: token.accessToken,
-        connectionId: connection.id,
-        adminClient: admin
-      });
+      peopleResult = await Sentry.startSpan(
+        {
+          name: "sync.microsoft.people_snapshot",
+          op: "converge.sync.people",
+          attributes: {
+            "converge.route": "syncUserConnections",
+            "converge.provider": "microsoft",
+            "converge.sync_mode": "people",
+            "converge.account_count_bucket": accountCountBucket(1)
+          }
+        },
+        () =>
+          syncMicrosoftPeopleSnapshot({
+            accessToken: token.accessToken,
+            connectionId: connection.id,
+            adminClient: admin
+          })
+      );
     } else {
       // Google provider does not expose org directory in this app's scope.
       peopleResult = { ok: true, partial: false, syncedCount: 0 };
@@ -471,7 +588,7 @@ export async function syncUserConnections(params: {
 
   let query = admin
     .from("m365_connections")
-    .select("id,user_id,provider,m365_user_principal_name,access_token_enc,refresh_token_enc,token_expires_at,scopes,sync_state")
+    .select("id,user_id,provider,m365_user_principal_name,token_expires_at,scopes,sync_state")
     .eq("user_id", userId)
     .eq("status", "active")
     .order("created_at", { ascending: true });
@@ -485,10 +602,12 @@ export async function syncUserConnections(params: {
     return summary;
   }
 
+  const secretByConnectionId = await getOAuthConnectionSecrets((connections as ConnectionRow[]).map((row) => row.id));
   const perConnection = await runWithConcurrency(connections as ConnectionRow[], resolveConnectionSyncConcurrency(), async (row) => {
     try {
       return await runConnectionSync({
         connection: row,
+        connectionSecret: secretByConnectionId.get(row.id) ?? null,
         mode,
         calendarStaleMs,
         calendarMaxDeltaPagesPerCalendar,

@@ -3,7 +3,10 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { decodeJwtPayload, getMicrosoftScopeString } from "@/lib/microsoft";
 import { syncMicrosoftCalendarSnapshot, syncMicrosoftPeopleSnapshot } from "@/lib/microsoft-sync";
+import { upsertOAuthConnectionSecret } from "@/lib/oauth-connection-secrets";
 import { serverEnv } from "@/lib/env/server";
+import { analyticsEvents } from "@/lib/analytics/events";
+import { captureServerEvent } from "@/lib/analytics/server";
 
 type MicrosoftTokenResponse = {
   access_token: string;
@@ -45,7 +48,17 @@ function deriveTenantName(me: MicrosoftMeResponse, tenantId: string): string {
   return tenantId;
 }
 
-function redirectWithStatus(request: NextRequest, status: string): NextResponse {
+async function redirectWithStatus(request: NextRequest, status: string, distinctId: string = "anonymous"): Promise<NextResponse> {
+  if (status !== "oauth_connected") {
+    await captureServerEvent({
+      event: analyticsEvents.oauthFailed,
+      distinctId,
+      properties: {
+        provider: "microsoft",
+        reasonCode: status
+      }
+    });
+  }
   const response = NextResponse.redirect(new URL(`/settings?status=${status}`, request.url));
   response.cookies.set("converge_ms_oauth_state", "", {
     httpOnly: true,
@@ -103,12 +116,12 @@ export async function GET(request: NextRequest) {
   );
 
   if (!tokenResponse.ok) {
-    return redirectWithStatus(request, "token_exchange_failed");
+    return redirectWithStatus(request, "token_exchange_failed", user.id);
   }
 
   const tokenData = (await tokenResponse.json()) as MicrosoftTokenResponse;
   if (!tokenData.access_token || !tokenData.refresh_token) {
-    return redirectWithStatus(request, "token_payload_invalid");
+    return redirectWithStatus(request, "token_payload_invalid", user.id);
   }
 
   const meResponse = await fetch("https://graph.microsoft.com/v1.0/me?$select=id,displayName,userPrincipalName,mail", {
@@ -117,7 +130,7 @@ export async function GET(request: NextRequest) {
     }
   });
   if (!meResponse.ok) {
-    return redirectWithStatus(request, "graph_me_failed");
+    return redirectWithStatus(request, "graph_me_failed", user.id);
   }
 
   const me = (await meResponse.json()) as MicrosoftMeResponse;
@@ -128,7 +141,7 @@ export async function GET(request: NextRequest) {
   const tokenExpiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
 
   if (!tenantId || !me.id) {
-    return redirectWithStatus(request, "profile_incomplete");
+    return redirectWithStatus(request, "profile_incomplete", user.id);
   }
 
   const adminClient = createAdminClient();
@@ -140,7 +153,7 @@ export async function GET(request: NextRequest) {
     .eq("is_primary", true)
     .maybeSingle();
   if (primaryCheckError) {
-    return redirectWithStatus(request, "db_primary_check_failed");
+    return redirectWithStatus(request, "db_primary_check_failed", user.id);
   }
 
   const { data: existingConnection, error: existingConnectionError } = await adminClient
@@ -151,7 +164,7 @@ export async function GET(request: NextRequest) {
     .eq("m365_user_id", me.id)
     .maybeSingle();
   if (existingConnectionError) {
-    return redirectWithStatus(request, "db_connection_read_failed");
+    return redirectWithStatus(request, "db_connection_read_failed", user.id);
   }
 
   const shouldBePrimary = existingConnection?.is_primary ?? !primaryConnection;
@@ -167,7 +180,7 @@ export async function GET(request: NextRequest) {
     { onConflict: "id" }
   );
   if (appUserError) {
-    return redirectWithStatus(request, "db_app_user_failed");
+    return redirectWithStatus(request, "db_app_user_failed", user.id);
   }
 
   const { error: connectionError } = await adminClient.from("m365_connections").upsert(
@@ -178,8 +191,8 @@ export async function GET(request: NextRequest) {
       tenant_name: tenantName,
       m365_user_id: me.id,
       m365_user_principal_name: me.userPrincipalName ?? idClaims?.preferred_username ?? null,
-      access_token_enc: tokenData.access_token,
-      refresh_token_enc: tokenData.refresh_token,
+      access_token_enc: "__migrated__",
+      refresh_token_enc: "__migrated__",
       token_expires_at: tokenExpiresAt,
       scopes,
       is_primary: shouldBePrimary,
@@ -189,7 +202,7 @@ export async function GET(request: NextRequest) {
     { onConflict: "user_id,tenant_id,m365_user_id" }
   );
   if (connectionError) {
-    return redirectWithStatus(request, "db_connection_upsert_failed");
+    return redirectWithStatus(request, "db_connection_upsert_failed", user.id);
   }
 
   const { data: connectionRow, error: connectionReadError } = await adminClient
@@ -201,7 +214,16 @@ export async function GET(request: NextRequest) {
     .eq("m365_user_id", me.id)
     .maybeSingle();
   if (connectionReadError || !connectionRow?.id) {
-    return redirectWithStatus(request, "db_connection_read_failed");
+    return redirectWithStatus(request, "db_connection_read_failed", user.id);
+  }
+
+  const secretStored = await upsertOAuthConnectionSecret({
+    connectionId: connectionRow.id,
+    accessToken: tokenData.access_token,
+    refreshToken: tokenData.refresh_token
+  });
+  if (!secretStored) {
+    return redirectWithStatus(request, "db_connection_secret_upsert_failed", user.id);
   }
 
   const accountEmail = me.userPrincipalName ?? me.mail ?? user.email;
@@ -246,5 +268,20 @@ export async function GET(request: NextRequest) {
     })
     .eq("id", connectionRow.id);
 
-  return redirectWithStatus(request, "oauth_connected");
+  await captureServerEvent({
+    event: analyticsEvents.oauthConnected,
+    distinctId: user.id,
+    properties: {
+      provider: "microsoft",
+      tenantId,
+      tenantName,
+      scopesCount: scopes.length,
+      calendarSyncedCount: calendarSync.syncedCount,
+      peopleSyncedCount: peopleSync.syncedCount,
+      calendarPartial: calendarSync.partial,
+      peoplePartial: peopleSync.partial
+    }
+  });
+
+  return redirectWithStatus(request, "oauth_connected", user.id);
 }

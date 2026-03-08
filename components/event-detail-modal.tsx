@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { X } from "lucide-react";
 import { ModalPortal } from "@/components/modal-portal";
 import { useIntlLocale, useT } from "@/components/locale-provider";
 
@@ -184,7 +185,7 @@ export function EventDetailModal({ event, isLoading = false, onClose }: EventDet
 
   return (
     <ModalPortal>
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-3 sm:p-4" role="dialog" aria-modal="true">
+      <div className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-900/45 p-3 sm:p-4" role="dialog" aria-modal="true">
         <button aria-label={t("common.close")} className="absolute inset-0 cursor-default" onClick={onClose} type="button" />
 
         <section className="panel-glass card relative z-10 max-h-[88vh] w-full max-w-3xl overflow-y-auto rounded-2xl p-4 sm:p-5">
@@ -204,8 +205,13 @@ export function EventDetailModal({ event, isLoading = false, onClose }: EventDet
                 </span>
               ) : null}
             </div>
-            <button className="btn btn-secondary px-3 py-1.5" onClick={onClose} type="button">
-              {t("common.close")}
+            <button
+              aria-label={t("common.close")}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-line bg-white/80 text-muted transition hover:border-accent/45 hover:text-accent"
+              onClick={onClose}
+              type="button"
+            >
+              <X size={16} />
             </button>
           </header>
 

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { detectTenantConflicts } from "@/lib/calendar-conflicts";
+import { detectTenantConflictsTraced } from "@/lib/calendar-conflicts";
 import { getWebPush } from "@/lib/web-push";
 import { serverEnv } from "@/lib/env/server";
 import { normalizeLocale, t } from "@/lib/i18n";
@@ -17,6 +17,18 @@ function isAuthorized(request: NextRequest): boolean {
 
 function jsonError(message: string, status = 400) {
   return NextResponse.json({ ok: false, error: message }, { status });
+}
+
+function normalizeTimeZone(value: string | null | undefined): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: value });
+    return value;
+  } catch {
+    return undefined;
+  }
 }
 
 export async function GET(request: NextRequest) {
@@ -57,8 +69,9 @@ export async function GET(request: NextRequest) {
   for (const [userId, userSubs] of subsByUser.entries()) {
     usersScanned += 1;
 
-    const { data: userRow } = await admin.from("app_users").select("locale").eq("id", userId).maybeSingle();
+    const { data: userRow } = await admin.from("app_users").select("locale,timezone").eq("id", userId).maybeSingle();
     const locale = normalizeLocale(userRow?.locale ?? undefined);
+    const userTimeZone = normalizeTimeZone(userRow?.timezone);
     const tt = (key: Parameters<typeof t>[1], vars?: Parameters<typeof t>[2]) => t(locale, key, vars);
 
     const { data: connections, error: connError } = await admin
@@ -75,15 +88,15 @@ export async function GET(request: NextRequest) {
     const connIds: string[] = [];
     connections.forEach((c) => {
       connIds.push(c.id);
-      tenantByConn.set(c.id, c.tenant_name ?? "Connected Tenant");
+      tenantByConn.set(c.id, c.tenant_name ?? "Connected Account");
     });
 
     const { data: events, error: eventsError } = await admin
       .from("calendar_events_cache")
       .select("id,subject,start_at,end_at,connection_id")
       .in("connection_id", connIds)
-      .gte("start_at", fromIso)
       .lte("start_at", toIso)
+      .gte("end_at", fromIso)
       .order("start_at", { ascending: true })
       .limit(800);
 
@@ -91,14 +104,21 @@ export async function GET(request: NextRequest) {
       continue;
     }
 
-    const conflicts = detectTenantConflicts(
+    const conflicts = detectTenantConflictsTraced(
       events.map((e) => ({
         id: e.id,
-        tenantName: tenantByConn.get(e.connection_id) ?? "Connected Tenant",
+        tenantName: tenantByConn.get(e.connection_id) ?? "Connected Account",
         subject: e.subject ?? "(Untitled)",
         startAt: e.start_at,
         endAt: e.end_at
-      }))
+      })),
+      undefined,
+      {
+        route: "/api/cron/conflicts",
+        source: "cron_conflicts",
+        locale,
+        accountCount: connIds.length
+      }
     );
 
     if (conflicts.length === 0) {
@@ -123,13 +143,15 @@ export async function GET(request: NextRequest) {
       month: "short",
       day: "numeric",
       hour: "2-digit",
-      minute: "2-digit"
+      minute: "2-digit",
+      ...(userTimeZone ? { timeZone: userTimeZone } : {})
     });
     const overlapEnd = new Date(first.overlapEnd).toLocaleString(locale, {
       month: "short",
       day: "numeric",
       hour: "2-digit",
-      minute: "2-digit"
+      minute: "2-digit",
+      ...(userTimeZone ? { timeZone: userTimeZone } : {})
     });
     const payload = JSON.stringify({
       title: tt("alerts.notificationTitle", { count: unsent.length }),

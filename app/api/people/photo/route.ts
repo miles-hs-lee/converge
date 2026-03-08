@@ -1,13 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { serverEnv } from "@/lib/env/server";
 import { getMicrosoftScopeString, requiredMicrosoftGraphScopes } from "@/lib/microsoft";
+import {
+  getOAuthConnectionSecret,
+  isSecretEncrypted,
+  upsertOAuthConnectionSecret,
+  type OAuthConnectionSecretRow
+} from "@/lib/oauth-connection-secrets";
 
-type ConnectionTokenRow = {
+type ConnectionRow = {
   id: string;
   provider: string;
-  access_token_enc: string;
-  refresh_token_enc: string;
   token_expires_at: string;
   scopes: string[] | null;
 };
@@ -20,7 +25,12 @@ function tokenStillValid(tokenExpiresAt: string): boolean {
   return expiresAt > Date.now() + 1000 * 60;
 }
 
-async function refreshMicrosoftAccessToken(supabase: Awaited<ReturnType<typeof createClient>>, connection: ConnectionTokenRow): Promise<string | null> {
+async function refreshMicrosoftAccessToken(params: {
+  admin: ReturnType<typeof createAdminClient>;
+  connection: ConnectionRow;
+  secret: OAuthConnectionSecretRow;
+}): Promise<string | null> {
+  const { admin, connection, secret } = params;
   const mergedScopes = new Set<string>(connection.scopes?.length ? connection.scopes : getMicrosoftScopeString().split(" "));
   requiredMicrosoftGraphScopes.forEach((scope) => mergedScopes.add(scope));
   const scope = [...mergedScopes].join(" ");
@@ -32,7 +42,7 @@ async function refreshMicrosoftAccessToken(supabase: Awaited<ReturnType<typeof c
       client_id: serverEnv.azureClientId,
       client_secret: serverEnv.azureClientSecret,
       grant_type: "refresh_token",
-      refresh_token: connection.refresh_token_enc,
+      refresh_token: secret.refresh_token_enc,
       scope
     })
   });
@@ -54,27 +64,60 @@ async function refreshMicrosoftAccessToken(supabase: Awaited<ReturnType<typeof c
   const expiresIn = Number(payload.expires_in || 3600);
   const tokenExpiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
   const scopes = (payload.scope ?? "").split(" ").filter(Boolean);
+  const refreshedAccessToken = payload.access_token;
+  const refreshedRefreshToken = payload.refresh_token ?? secret.refresh_token_enc;
+  const nowIso = new Date().toISOString();
 
-  await supabase
+  const [connectionUpdate, secretStored] = await Promise.all([
+    admin
     .from("m365_connections")
     .update({
-      access_token_enc: payload.access_token,
-      refresh_token_enc: payload.refresh_token ?? connection.refresh_token_enc,
       token_expires_at: tokenExpiresAt,
       scopes: scopes.length > 0 ? scopes : connection.scopes ?? [],
       status: "active",
-      updated_at: new Date().toISOString()
+      updated_at: nowIso
     })
-    .eq("id", connection.id);
+    .eq("id", connection.id),
+    upsertOAuthConnectionSecret({
+      connectionId: connection.id,
+      accessToken: refreshedAccessToken,
+      refreshToken: refreshedRefreshToken,
+      adminClient: admin
+    })
+  ]);
 
-  return payload.access_token;
+  if (connectionUpdate.error || !secretStored) {
+    return null;
+  }
+
+  secret.access_token_enc = refreshedAccessToken;
+  secret.refresh_token_enc = refreshedRefreshToken;
+  return refreshedAccessToken;
 }
 
-async function ensureMicrosoftAccessToken(supabase: Awaited<ReturnType<typeof createClient>>, connection: ConnectionTokenRow): Promise<string | null> {
-  if (tokenStillValid(connection.token_expires_at) && connection.access_token_enc) {
-    return connection.access_token_enc;
+async function ensureMicrosoftAccessToken(params: {
+  admin: ReturnType<typeof createAdminClient>;
+  connection: ConnectionRow;
+  secret: OAuthConnectionSecretRow | null;
+}): Promise<string | null> {
+  const { admin, connection, secret } = params;
+
+  if (!secret?.refresh_token_enc) {
+    return null;
   }
-  return refreshMicrosoftAccessToken(supabase, connection);
+
+  if (tokenStillValid(connection.token_expires_at) && secret.access_token_enc) {
+    if (!isSecretEncrypted(secret.access_token_enc) || !isSecretEncrypted(secret.refresh_token_enc)) {
+      await upsertOAuthConnectionSecret({
+        connectionId: connection.id,
+        accessToken: secret.access_token_enc,
+        refreshToken: secret.refresh_token_enc,
+        adminClient: admin
+      });
+    }
+    return secret.access_token_enc;
+  }
+  return refreshMicrosoftAccessToken({ admin, connection, secret });
 }
 
 export const dynamic = "force-dynamic";
@@ -104,7 +147,7 @@ export async function GET(request: NextRequest) {
 
   const { data: connection } = await supabase
     .from("m365_connections")
-    .select("id,provider,access_token_enc,refresh_token_enc,token_expires_at,scopes")
+    .select("id,provider,token_expires_at,scopes")
     .eq("id", person.connection_id)
     .eq("user_id", user.id)
     .maybeSingle();
@@ -112,7 +155,18 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "unsupported_provider" }, { status: 404 });
   }
 
-  const accessToken = await ensureMicrosoftAccessToken(supabase, connection as ConnectionTokenRow);
+  const admin = createAdminClient();
+  let secret: OAuthConnectionSecretRow | null = null;
+  try {
+    secret = await getOAuthConnectionSecret(connection.id);
+  } catch {
+    return NextResponse.json({ ok: false, error: "token_store_unavailable" }, { status: 500 });
+  }
+  const accessToken = await ensureMicrosoftAccessToken({
+    admin,
+    connection: connection as ConnectionRow,
+    secret
+  });
   if (!accessToken) {
     return NextResponse.json({ ok: false, error: "token_unavailable" }, { status: 401 });
   }

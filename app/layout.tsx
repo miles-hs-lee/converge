@@ -1,22 +1,20 @@
 import type { Metadata, Viewport } from "next";
 import { Plus_Jakarta_Sans, Noto_Sans_KR } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
-import { LocaleProvider } from "@/components/locale-provider";
-import { AppPreferencesProvider } from "@/components/app-preferences-provider";
-import { getServerLocale } from "@/lib/i18n-server";
-import { htmlLang } from "@/lib/i18n";
-import { PwaRegister } from "@/components/pwa-register";
-import { THEME_MODE_STORAGE_KEY } from "@/lib/preferences";
+import { DEFAULT_LOCALE, htmlLang } from "@/lib/i18n";
 
 const jakarta = Plus_Jakarta_Sans({
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800"],
+  weight: ["400", "600", "700"],
+  display: "swap",
   variable: "--font-jakarta"
 });
 
 const noto = Noto_Sans_KR({
   subsets: ["latin"],
-  weight: ["400", "500", "700"],
+  weight: ["400", "700"],
+  display: "swap",
   variable: "--font-noto"
 });
 
@@ -47,32 +45,13 @@ export const viewport: Viewport = {
   colorScheme: "light dark"
 };
 
-const themeBootScript = `
-(() => {
-  try {
-    const key = ${JSON.stringify(THEME_MODE_STORAGE_KEY)};
-    const saved = localStorage.getItem(key);
-    const mode = saved === "light" || saved === "dark" || saved === "system" ? saved : "system";
-    const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-    const resolved = mode === "dark" || (mode === "system" && prefersDark) ? "dark" : "light";
-    const root = document.documentElement;
-    root.classList.remove("theme-light", "theme-dark");
-    root.classList.add(resolved === "dark" ? "theme-dark" : "theme-light");
-    root.style.colorScheme = resolved;
-  } catch {}
-})();
-`;
-
-export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  const locale = await getServerLocale();
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const locale = DEFAULT_LOCALE;
   return (
     <html className="theme-light" lang={htmlLang(locale)} suppressHydrationWarning>
       <body className={`${jakarta.variable} ${noto.variable}`}>
-        <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
-        <PwaRegister />
-        <AppPreferencesProvider>
-          <LocaleProvider initialLocale={locale}>{children}</LocaleProvider>
-        </AppPreferencesProvider>
+        <Script src="/theme-init.js" strategy="beforeInteractive" />
+        {children}
       </body>
     </html>
   );

@@ -33,20 +33,68 @@ function getOptionalServerEnv(
   return value;
 }
 
-export const serverEnv = {
-  supabaseServiceRoleKey: getServerEnv("SUPABASE_SERVICE_ROLE_KEY"),
-  azureClientId: getServerEnv("AZURE_CLIENT_ID"),
-  azureClientSecret: getServerEnv("AZURE_CLIENT_SECRET"),
-  azureTenantId: getServerEnv("AZURE_TENANT_ID"),
-  azureRedirectUri: getServerEnv("AZURE_REDIRECT_URI"),
-  googleClientId: getOptionalServerEnv("GOOGLE_CLIENT_ID"),
-  googleClientSecret: getOptionalServerEnv("GOOGLE_CLIENT_SECRET"),
-  googleRedirectUri: getOptionalServerEnv("GOOGLE_REDIRECT_URI"),
-  posthogApiKey: getOptionalServerEnv("POSTHOG_API_KEY"),
-  posthogHost: getOptionalServerEnv("POSTHOG_HOST"),
-  vapidPublicKey: getOptionalServerEnv("VAPID_PUBLIC_KEY"),
-  vapidPrivateKey: getOptionalServerEnv("VAPID_PRIVATE_KEY"),
-  vapidSubject: getOptionalServerEnv("VAPID_SUBJECT"),
-  cronSecret: getOptionalServerEnv("CRON_SECRET"),
-  oauthSecretsEncryptionKey: getOptionalServerEnv("OAUTH_SECRETS_ENCRYPTION_KEY")
+type ServerEnv = {
+  readonly supabaseServiceRoleKey: string;
+  readonly azureClientId: string;
+  readonly azureClientSecret: string;
+  readonly azureTenantId: string;
+  readonly azureRedirectUri: string;
+  readonly googleClientId: string | undefined;
+  readonly googleClientSecret: string | undefined;
+  readonly googleRedirectUri: string | undefined;
+  readonly posthogApiKey: string | undefined;
+  readonly posthogHost: string | undefined;
+  readonly vapidPublicKey: string | undefined;
+  readonly vapidPrivateKey: string | undefined;
+  readonly vapidSubject: string | undefined;
+  readonly cronSecret: string | undefined;
+  readonly oauthSecretsEncryptionKey: string | undefined;
+};
+
+export const serverEnv: ServerEnv = {
+  get supabaseServiceRoleKey() {
+    return getServerEnv("SUPABASE_SERVICE_ROLE_KEY");
+  },
+  get azureClientId() {
+    return getServerEnv("AZURE_CLIENT_ID");
+  },
+  get azureClientSecret() {
+    return getServerEnv("AZURE_CLIENT_SECRET");
+  },
+  get azureTenantId() {
+    return getServerEnv("AZURE_TENANT_ID");
+  },
+  get azureRedirectUri() {
+    return getServerEnv("AZURE_REDIRECT_URI");
+  },
+  get googleClientId() {
+    return getOptionalServerEnv("GOOGLE_CLIENT_ID");
+  },
+  get googleClientSecret() {
+    return getOptionalServerEnv("GOOGLE_CLIENT_SECRET");
+  },
+  get googleRedirectUri() {
+    return getOptionalServerEnv("GOOGLE_REDIRECT_URI");
+  },
+  get posthogApiKey() {
+    return getOptionalServerEnv("POSTHOG_API_KEY");
+  },
+  get posthogHost() {
+    return getOptionalServerEnv("POSTHOG_HOST");
+  },
+  get vapidPublicKey() {
+    return getOptionalServerEnv("VAPID_PUBLIC_KEY");
+  },
+  get vapidPrivateKey() {
+    return getOptionalServerEnv("VAPID_PRIVATE_KEY");
+  },
+  get vapidSubject() {
+    return getOptionalServerEnv("VAPID_SUBJECT");
+  },
+  get cronSecret() {
+    return getOptionalServerEnv("CRON_SECRET");
+  },
+  get oauthSecretsEncryptionKey() {
+    return getOptionalServerEnv("OAUTH_SECRETS_ENCRYPTION_KEY");
+  }
 };

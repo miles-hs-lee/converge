@@ -1,12 +1,29 @@
-function getPublicEnv(key: "NEXT_PUBLIC_SUPABASE_URL" | "NEXT_PUBLIC_SUPABASE_ANON_KEY"): string {
-  const value = process.env[key];
+function getPublicSupabaseUrl(): string {
+  const value = process.env.NEXT_PUBLIC_SUPABASE_URL;
   if (!value) {
-    throw new Error(`Missing required env: ${key}`);
+    throw new Error("Missing required env: NEXT_PUBLIC_SUPABASE_URL");
   }
   return value;
 }
 
-export const publicEnv = {
-  supabaseUrl: getPublicEnv("NEXT_PUBLIC_SUPABASE_URL"),
-  supabaseAnonKey: getPublicEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY")
+function getPublicSupabaseAnonKey(): string {
+  const value = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!value) {
+    throw new Error("Missing required env: NEXT_PUBLIC_SUPABASE_ANON_KEY");
+  }
+  return value;
+}
+
+type PublicEnv = {
+  readonly supabaseUrl: string;
+  readonly supabaseAnonKey: string;
+};
+
+export const publicEnv: PublicEnv = {
+  get supabaseUrl() {
+    return getPublicSupabaseUrl();
+  },
+  get supabaseAnonKey() {
+    return getPublicSupabaseAnonKey();
+  }
 };

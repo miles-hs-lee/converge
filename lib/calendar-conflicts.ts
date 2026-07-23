@@ -1,6 +1,3 @@
-import * as Sentry from "@sentry/nextjs";
-import { accountCountBucket } from "@/lib/observability/sentry-tags";
-
 export type CalendarEventLike = {
   id: string;
   tenantName: string;
@@ -17,13 +14,6 @@ export type CalendarConflict = {
   overlapEnd: string;
   a: CalendarEventLike;
   b: CalendarEventLike;
-};
-
-export type ConflictTraceOptions = {
-  route?: string;
-  source?: string;
-  locale?: string;
-  accountCount?: number;
 };
 
 function sortPair(a: string, b: string): [string, string] {
@@ -133,27 +123,4 @@ export function detectTenantConflicts(events: CalendarEventLike[], opts?: { minO
   const conflicts = [...conflictByKey.values()];
   conflicts.sort((x, y) => new Date(x.overlapStart).getTime() - new Date(y.overlapStart).getTime());
   return conflicts;
-}
-
-export function detectTenantConflictsTraced(
-  events: CalendarEventLike[],
-  opts?: { minOverlapMs?: number },
-  trace?: ConflictTraceOptions
-): CalendarConflict[] {
-  return Sentry.startSpan(
-    {
-      name: "conflicts.detect",
-      op: "converge.conflicts.detect",
-      attributes: {
-        "converge.route": trace?.route ?? "unknown",
-        "converge.provider": "mixed",
-        "converge.sync_mode": "calendar",
-        "converge.locale": trace?.locale ?? "unknown",
-        "converge.account_count_bucket": accountCountBucket(trace?.accountCount),
-        "converge.source": trace?.source ?? "unknown",
-        "converge.events_count": events.length
-      }
-    },
-    () => detectTenantConflicts(events, opts)
-  );
 }

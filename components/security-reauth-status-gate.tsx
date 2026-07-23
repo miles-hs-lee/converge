@@ -32,8 +32,13 @@ export function SecurityReauthStatusGate({ title, body, ctaLabel, dismissLabel }
     };
 
     void run();
+    const onReauthRequired = () => {
+      setEnabled(true);
+    };
+    window.addEventListener("converge:reauth-required", onReauthRequired);
     return () => {
       disposed = true;
+      window.removeEventListener("converge:reauth-required", onReauthRequired);
     };
   }, []);
 

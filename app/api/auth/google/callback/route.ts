@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import * as Sentry from "@sentry/nextjs";
+import { after, NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getGoogleScopeString } from "@/lib/google";
@@ -7,6 +8,7 @@ import { syncGoogleCalendarSnapshot } from "@/lib/google-sync";
 import { getOAuthConnectionSecret, upsertOAuthConnectionSecret } from "@/lib/oauth-connection-secrets";
 import { analyticsEvents } from "@/lib/analytics/events";
 import { captureServerEvent } from "@/lib/analytics/server";
+import { applyStandardSentryScopeTags } from "@/lib/observability/sentry-tags";
 
 type GoogleTokenResponse = {
   access_token?: string;
@@ -22,6 +24,91 @@ type GoogleUserInfoResponse = {
   email?: string;
   name?: string;
 };
+
+function parseRecord(raw: unknown): Record<string, unknown> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return {};
+  }
+  return raw as Record<string, unknown>;
+}
+
+function scheduleInitialGoogleSync(params: {
+  accessToken: string;
+  accountEmail: string;
+  connectionId: string;
+  existingSyncState: Record<string, unknown>;
+  scopesCount: number;
+  userId: string;
+}) {
+  after(async () => {
+    const { accessToken, accountEmail, connectionId, existingSyncState, scopesCount, userId } = params;
+    const adminClient = createAdminClient();
+    const existingCalendarState = parseRecord(existingSyncState.calendar);
+
+    try {
+      const syncResult = await syncGoogleCalendarSnapshot({
+        accessToken,
+        accountEmail,
+        connectionId,
+        calendarState: existingCalendarState,
+        adminClient
+      });
+      const attemptedAt = new Date().toISOString();
+
+      const { error: syncStateError } = await adminClient
+        .from("m365_connections")
+        .update({
+          sync_state: {
+            ...existingSyncState,
+            security: {
+              reauthRequired: false,
+              reason: null,
+              clearedAt: attemptedAt
+            },
+            calendar: {
+              ...existingCalendarState,
+              ...(syncResult.statePatch ?? {}),
+              ok: syncResult.ok,
+              partial: syncResult.partial,
+              syncedCount: syncResult.syncedCount,
+              lastAttemptAt: attemptedAt,
+              ...(syncResult.ok ? { syncedAt: attemptedAt, lastErrorAt: null } : { lastErrorAt: attemptedAt })
+            }
+          },
+          updated_at: attemptedAt
+        })
+        .eq("id", connectionId);
+      if (syncStateError) {
+        throw new Error(`initial_sync_state_update_failed:${syncStateError.message}`);
+      }
+
+      await captureServerEvent({
+        event: analyticsEvents.oauthConnected,
+        distinctId: userId,
+        properties: {
+          provider: "google",
+          tenantId: "google",
+          tenantName: "Google",
+          scopesCount,
+          syncedCount: syncResult.syncedCount,
+          partial: syncResult.partial,
+          ok: syncResult.ok
+        }
+      });
+    } catch (error) {
+      Sentry.withScope((scope) => {
+        applyStandardSentryScopeTags(scope, {
+          route: "/api/auth/google/callback",
+          provider: "google",
+          syncMode: "calendar"
+        });
+        scope.setUser({ id: userId });
+        scope.setTag("task", "initial_connection_sync");
+        Sentry.captureException(error);
+      });
+    }
+  });
+}
 
 async function redirectWithStatus(request: NextRequest, status: string, distinctId: string = "anonymous"): Promise<NextResponse> {
   const successStatuses = new Set(["google_oauth_connected", "google_oauth_connected_partial_sync"]);
@@ -195,7 +282,7 @@ export async function GET(request: NextRequest) {
 
   const { data: connectionRow, error: connectionReadError } = await adminClient
     .from("m365_connections")
-    .select("id")
+    .select("id,sync_state")
     .eq("user_id", user.id)
     .eq("provider", "google")
     .eq("tenant_id", "google")
@@ -214,44 +301,33 @@ export async function GET(request: NextRequest) {
     return redirectWithStatus(request, "db_connection_secret_upsert_failed", user.id);
   }
 
-  const syncResult = await syncGoogleCalendarSnapshot({
+  const existingSyncState = parseRecord(connectionRow.sync_state);
+  const connectedAt = new Date().toISOString();
+  const { error: securityStateError } = await adminClient
+    .from("m365_connections")
+    .update({
+      sync_state: {
+        ...existingSyncState,
+        security: {
+          reauthRequired: false,
+          reason: null,
+          clearedAt: connectedAt
+        }
+      },
+      updated_at: connectedAt
+    })
+    .eq("id", connectionRow.id);
+  if (securityStateError) {
+    return redirectWithStatus(request, "db_connection_upsert_failed", user.id);
+  }
+
+  scheduleInitialGoogleSync({
     accessToken: tokenData.access_token,
     accountEmail: profile.email,
     connectionId: connectionRow.id,
-    adminClient
-  });
-
-  if (!syncResult.ok) {
-    return redirectWithStatus(request, "google_oauth_connected_sync_failed", user.id);
-  }
-
-  if (syncResult.partial) {
-    await captureServerEvent({
-      event: analyticsEvents.oauthConnected,
-      distinctId: user.id,
-      properties: {
-        provider: "google",
-        tenantId: "google",
-        tenantName: "Google",
-        scopesCount: scopes.length,
-        syncedCount: syncResult.syncedCount,
-        partial: true
-      }
-    });
-    return redirectWithStatus(request, "google_oauth_connected_partial_sync", user.id);
-  }
-
-  await captureServerEvent({
-    event: analyticsEvents.oauthConnected,
-    distinctId: user.id,
-    properties: {
-      provider: "google",
-      tenantId: "google",
-      tenantName: "Google",
-      scopesCount: scopes.length,
-      syncedCount: syncResult.syncedCount,
-      partial: false
-    }
+    existingSyncState,
+    scopesCount: scopes.length,
+    userId: user.id
   });
 
   return redirectWithStatus(request, "google_oauth_connected", user.id);

@@ -60,18 +60,29 @@ function normalizeScopeKey(scope: string): string {
   return scope.trim().toLowerCase().replace(/^https:\/\/graph\.microsoft\.com\//, "");
 }
 
-function connectionStatusKey(status: string): I18nKey {
+function connectionNeedsReauth(connection: SettingsConnectionRecord): boolean {
+  if (connection.status === "revoked") {
+    return true;
+  }
+  const security =
+    connection.sync_state && typeof connection.sync_state.security === "object" && connection.sync_state.security
+      ? (connection.sync_state.security as Record<string, unknown>)
+      : null;
+  return security?.reauthRequired === true;
+}
+
+function connectionStatusKey(status: string, needsReauth: boolean): I18nKey {
+  if (needsReauth) return "settings.connectionStatus.revoked";
   if (status === "active") return "settings.connectionStatus.active";
-  if (status === "revoked") return "settings.connectionStatus.revoked";
   return "settings.connectionStatus.other";
 }
 
-function connectionStatusClass(status: string): string {
+function connectionStatusClass(status: string, needsReauth: boolean): string {
+  if (needsReauth) {
+    return "border-amber-200 bg-amber-50 text-amber-800";
+  }
   if (status === "active") {
     return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-  if (status === "revoked") {
-    return "border-amber-200 bg-amber-50 text-amber-800";
   }
   return "border-slate-200 bg-slate-100 text-slate-700";
 }
@@ -105,7 +116,8 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
       m365_user_principal_name: connection.principalName,
       status: connection.status,
       token_expires_at: connection.tokenExpiresAt,
-      scopes: ["User.Read", "User.Read.All", "Calendars.Read", "Calendars.Read.Shared"]
+      scopes: ["User.Read", "User.Read.All", "Calendars.Read", "Calendars.Read.Shared"],
+      sync_state: null
     }));
     const now = Date.now();
     sessionLogins = {
@@ -121,8 +133,8 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
 
   const tenantNames = connections.map((connection) => connection.tenant_name ?? "").filter(Boolean);
   const totalConnections = connections.length;
-  const activeConnections = connections.filter((connection) => connection.status === "active").length;
-  const reauthConnections = connections.filter((connection) => connection.status === "revoked").length;
+  const activeConnections = connections.filter((connection) => connection.status === "active" && !connectionNeedsReauth(connection)).length;
+  const reauthConnections = connections.filter(connectionNeedsReauth).length;
   const providerCount = new Set(connections.map((connection) => connection.provider)).size;
   const hasReauthRequired = reauthConnections > 0;
 
@@ -214,7 +226,8 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
                 {connections.map((connection) => {
                   const grantedScopes = new Set((connection.scopes ?? []).map((scope) => normalizeScopeKey(scope)));
                   const hasMissingRequired = requiredMicrosoftGraphScopes.some((scope) => !grantedScopes.has(normalizeScopeKey(scope)));
-                  const statusKey = connectionStatusKey(connection.status);
+                  const needsReauth = connectionNeedsReauth(connection);
+                  const statusKey = connectionStatusKey(connection.status, needsReauth);
                   return (
                     <article className="rounded-xl border border-line bg-white/85 p-4" key={connection.id}>
                       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -224,7 +237,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
                             <span className="badge px-2.5 py-0.5 text-[11px]">
                               {connection.provider === "google" ? tt("settings.providerGoogle") : tt("settings.providerMicrosoft")}
                             </span>
-                            <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${connectionStatusClass(connection.status)}`}>
+                            <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${connectionStatusClass(connection.status, needsReauth)}`}>
                               {tt(statusKey)}
                             </span>
                           </div>
@@ -240,7 +253,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
 
                         {!isMockMode && user ? (
                           <div className="flex items-center gap-2">
-                            {connection.status === "revoked" ? (
+                            {needsReauth ? (
                               <Link
                                 className="btn btn-primary px-3 py-1.5 text-xs"
                                 href={connection.provider === "google" ? "/api/auth/google/start" : "/api/auth/microsoft/start"}

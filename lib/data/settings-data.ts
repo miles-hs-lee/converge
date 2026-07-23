@@ -8,6 +8,7 @@ export type SettingsConnectionRecord = {
   status: string;
   token_expires_at: string;
   scopes: string[] | null;
+  sync_state: Record<string, unknown> | null;
 };
 
 export type SessionLoginTimestamps = {
@@ -34,7 +35,7 @@ export async function fetchSettingsPageData(): Promise<{
   const [connectionsResult, appUserResult] = await Promise.all([
     supabase
       .from("m365_connections")
-      .select("id,provider,tenant_name,m365_user_principal_name,status,token_expires_at,scopes")
+      .select("id,provider,tenant_name,m365_user_principal_name,status,token_expires_at,scopes,sync_state")
       .order("updated_at", { ascending: false }),
     supabase.from("app_users").select("last_login_at,prev_login_at").eq("id", user.id).maybeSingle()
   ]);

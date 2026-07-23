@@ -30,12 +30,25 @@ export function SecurityReauthModal({
     }
 
     try {
-      const dismissed = window.localStorage.getItem(DISMISS_KEY) === "1";
+      const dismissed = window.sessionStorage.getItem(DISMISS_KEY) === "1";
       setOpen(!dismissed);
     } catch {
       setOpen(true);
     }
   }, [enabled]);
+
+  useEffect(() => {
+    const onReauthRequired = () => {
+      try {
+        window.sessionStorage.removeItem(DISMISS_KEY);
+      } catch {
+        // Ignore storage failures and still display the modal.
+      }
+      setOpen(true);
+    };
+    window.addEventListener("converge:reauth-required", onReauthRequired);
+    return () => window.removeEventListener("converge:reauth-required", onReauthRequired);
+  }, []);
 
   if (!enabled || !open) {
     return null;
@@ -51,7 +64,7 @@ export function SecurityReauthModal({
             className="btn btn-secondary px-3 py-1.5 text-sm"
             onClick={() => {
               try {
-                window.localStorage.setItem(DISMISS_KEY, "1");
+                window.sessionStorage.setItem(DISMISS_KEY, "1");
               } catch {
                 // ignore localStorage failures
               }

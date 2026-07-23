@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import * as Sentry from "@sentry/nextjs";
+import { after, NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { decodeJwtPayload, getMicrosoftScopeString } from "@/lib/microsoft";
@@ -7,6 +8,7 @@ import { upsertOAuthConnectionSecret } from "@/lib/oauth-connection-secrets";
 import { serverEnv } from "@/lib/env/server";
 import { analyticsEvents } from "@/lib/analytics/events";
 import { captureServerEvent } from "@/lib/analytics/server";
+import { applyStandardSentryScopeTags } from "@/lib/observability/sentry-tags";
 
 type MicrosoftTokenResponse = {
   access_token: string;
@@ -46,6 +48,115 @@ function deriveTenantName(me: MicrosoftMeResponse, tenantId: string): string {
     return domain;
   }
   return tenantId;
+}
+
+function scheduleInitialMicrosoftSync(params: {
+  accessToken: string;
+  accountEmail: string;
+  connectionId: string;
+  existingSyncState: Record<string, unknown>;
+  userId: string;
+  tenantId: string;
+  tenantName: string;
+  scopesCount: number;
+}) {
+  after(async () => {
+    const {
+      accessToken,
+      accountEmail,
+      connectionId,
+      existingSyncState,
+      scopesCount,
+      tenantId,
+      tenantName,
+      userId
+    } = params;
+    const adminClient = createAdminClient();
+    const existingCalendarState = parseRecord(existingSyncState.calendar);
+    const existingPeopleState = parseRecord(existingSyncState.people);
+
+    try {
+      const [calendarSync, peopleSync] = await Promise.all([
+        syncMicrosoftCalendarSnapshot({
+          accessToken,
+          accountEmail,
+          connectionId,
+          calendarState: existingCalendarState,
+          adminClient
+        }),
+        syncMicrosoftPeopleSnapshot({
+          accessToken,
+          connectionId,
+          adminClient
+        })
+      ]);
+      const attemptedAt = new Date().toISOString();
+
+      const { error: syncStateError } = await adminClient
+        .from("m365_connections")
+        .update({
+          sync_state: {
+            ...existingSyncState,
+            security: {
+              reauthRequired: false,
+              reason: null,
+              clearedAt: attemptedAt
+            },
+            calendar: {
+              ...existingCalendarState,
+              ...(calendarSync.statePatch ?? {}),
+              ok: calendarSync.ok,
+              partial: calendarSync.partial,
+              syncedCount: calendarSync.syncedCount,
+              lastAttemptAt: attemptedAt,
+              ...(calendarSync.ok ? { syncedAt: attemptedAt, lastErrorAt: null } : { lastErrorAt: attemptedAt })
+            },
+            people: {
+              ...existingPeopleState,
+              ...(peopleSync.statePatch ?? {}),
+              ok: peopleSync.ok,
+              partial: peopleSync.partial,
+              syncedCount: peopleSync.syncedCount,
+              lastAttemptAt: attemptedAt,
+              ...(peopleSync.ok ? { syncedAt: attemptedAt, lastErrorAt: null } : { lastErrorAt: attemptedAt })
+            }
+          },
+          updated_at: attemptedAt
+        })
+        .eq("id", connectionId);
+      if (syncStateError) {
+        throw new Error(`initial_sync_state_update_failed:${syncStateError.message}`);
+      }
+
+      await captureServerEvent({
+        event: analyticsEvents.oauthConnected,
+        distinctId: userId,
+        properties: {
+          provider: "microsoft",
+          tenantId,
+          tenantName,
+          scopesCount,
+          calendarSyncedCount: calendarSync.syncedCount,
+          peopleSyncedCount: peopleSync.syncedCount,
+          calendarPartial: calendarSync.partial,
+          peoplePartial: peopleSync.partial,
+          calendarOk: calendarSync.ok,
+          peopleOk: peopleSync.ok
+        }
+      });
+    } catch (error) {
+      Sentry.withScope((scope) => {
+        applyStandardSentryScopeTags(scope, {
+          route: "/api/auth/microsoft/callback",
+          provider: "microsoft",
+          syncMode: "all"
+        });
+        scope.setUser({ id: userId });
+        scope.setTag("task", "initial_connection_sync");
+        Sentry.captureException(error);
+      });
+    }
+  });
 }
 
 async function redirectWithStatus(request: NextRequest, status: string, distinctId: string = "anonymous"): Promise<NextResponse> {
@@ -228,59 +339,34 @@ export async function GET(request: NextRequest) {
 
   const accountEmail = me.userPrincipalName ?? me.mail ?? user.email;
   const existingSyncState = parseRecord(connectionRow.sync_state);
-  const existingCalendarState = parseRecord(existingSyncState.calendar);
-  const [calendarSync, peopleSync] = await Promise.all([
-    syncMicrosoftCalendarSnapshot({
-      accessToken: tokenData.access_token,
-      accountEmail,
-      connectionId: connectionRow.id,
-      calendarState: existingCalendarState,
-      adminClient
-    }),
-    syncMicrosoftPeopleSnapshot({
-      accessToken: tokenData.access_token,
-      connectionId: connectionRow.id,
-      adminClient
-    })
-  ]);
-
-  await adminClient
+  const connectedAt = new Date().toISOString();
+  const { error: securityStateError } = await adminClient
     .from("m365_connections")
     .update({
       sync_state: {
         ...existingSyncState,
-        calendar: {
-          ...existingCalendarState,
-          ...(calendarSync.statePatch ?? {}),
-          ok: calendarSync.ok,
-          partial: calendarSync.partial,
-          syncedCount: calendarSync.syncedCount,
-          syncedAt: new Date().toISOString()
-        },
-        people: {
-          ok: peopleSync.ok,
-          partial: peopleSync.partial,
-          syncedCount: peopleSync.syncedCount,
-          syncedAt: new Date().toISOString()
+        security: {
+          reauthRequired: false,
+          reason: null,
+          clearedAt: connectedAt
         }
       },
-      updated_at: new Date().toISOString()
+      updated_at: connectedAt
     })
     .eq("id", connectionRow.id);
+  if (securityStateError) {
+    return redirectWithStatus(request, "db_connection_upsert_failed", user.id);
+  }
 
-  await captureServerEvent({
-    event: analyticsEvents.oauthConnected,
-    distinctId: user.id,
-    properties: {
-      provider: "microsoft",
-      tenantId,
-      tenantName,
-      scopesCount: scopes.length,
-      calendarSyncedCount: calendarSync.syncedCount,
-      peopleSyncedCount: peopleSync.syncedCount,
-      calendarPartial: calendarSync.partial,
-      peoplePartial: peopleSync.partial
-    }
+  scheduleInitialMicrosoftSync({
+    accessToken: tokenData.access_token,
+    accountEmail,
+    connectionId: connectionRow.id,
+    existingSyncState,
+    userId: user.id,
+    tenantId,
+    tenantName,
+    scopesCount: scopes.length
   });
 
   return redirectWithStatus(request, "oauth_connected", user.id);

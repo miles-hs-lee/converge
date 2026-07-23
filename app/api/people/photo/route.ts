@@ -9,13 +9,19 @@ import {
   upsertOAuthConnectionSecret,
   type OAuthConnectionSecretRow
 } from "@/lib/oauth-connection-secrets";
+import { classifyOAuthRefreshFailure } from "@/lib/oauth-refresh-error";
 
 type ConnectionRow = {
   id: string;
   provider: string;
   token_expires_at: string;
   scopes: string[] | null;
+  sync_state: Record<string, unknown> | null;
 };
+
+type PhotoAccessTokenResult =
+  | { ok: true; accessToken: string }
+  | { ok: false; error: string; reauthRequired: boolean };
 
 function tokenStillValid(tokenExpiresAt: string): boolean {
   const expiresAt = Date.parse(tokenExpiresAt);
@@ -29,7 +35,7 @@ async function refreshMicrosoftAccessToken(params: {
   admin: ReturnType<typeof createAdminClient>;
   connection: ConnectionRow;
   secret: OAuthConnectionSecretRow;
-}): Promise<string | null> {
+}): Promise<PhotoAccessTokenResult> {
   const { admin, connection, secret } = params;
   const mergedScopes = new Set<string>(connection.scopes?.length ? connection.scopes : getMicrosoftScopeString().split(" "));
   requiredMicrosoftGraphScopes.forEach((scope) => mergedScopes.add(scope));
@@ -48,7 +54,8 @@ async function refreshMicrosoftAccessToken(params: {
   });
 
   if (!response.ok) {
-    return null;
+    const text = await response.text();
+    return { ok: false, ...classifyOAuthRefreshFailure("microsoft", text) };
   }
 
   const payload = (await response.json()) as {
@@ -58,7 +65,7 @@ async function refreshMicrosoftAccessToken(params: {
     scope?: string;
   };
   if (!payload.access_token) {
-    return null;
+    return { ok: false, error: "ms_refresh_payload_invalid", reauthRequired: false };
   }
 
   const expiresIn = Number(payload.expires_in || 3600);
@@ -87,23 +94,23 @@ async function refreshMicrosoftAccessToken(params: {
   ]);
 
   if (connectionUpdate.error || !secretStored) {
-    return null;
+    return { ok: false, error: "ms_refresh_persist_failed", reauthRequired: false };
   }
 
   secret.access_token_enc = refreshedAccessToken;
   secret.refresh_token_enc = refreshedRefreshToken;
-  return refreshedAccessToken;
+  return { ok: true, accessToken: refreshedAccessToken };
 }
 
 async function ensureMicrosoftAccessToken(params: {
   admin: ReturnType<typeof createAdminClient>;
   connection: ConnectionRow;
   secret: OAuthConnectionSecretRow | null;
-}): Promise<string | null> {
+}): Promise<PhotoAccessTokenResult> {
   const { admin, connection, secret } = params;
 
   if (!secret?.refresh_token_enc) {
-    return null;
+    return { ok: false, error: "reauth_required:missing_secret", reauthRequired: true };
   }
 
   if (tokenStillValid(connection.token_expires_at) && secret.access_token_enc) {
@@ -115,7 +122,7 @@ async function ensureMicrosoftAccessToken(params: {
         adminClient: admin
       });
     }
-    return secret.access_token_enc;
+    return { ok: true, accessToken: secret.access_token_enc };
   }
   return refreshMicrosoftAccessToken({ admin, connection, secret });
 }
@@ -147,7 +154,7 @@ export async function GET(request: NextRequest) {
 
   const { data: connection } = await supabase
     .from("m365_connections")
-    .select("id,provider,token_expires_at,scopes")
+    .select("id,provider,token_expires_at,scopes,sync_state")
     .eq("id", person.connection_id)
     .eq("user_id", user.id)
     .maybeSingle();
@@ -162,14 +169,37 @@ export async function GET(request: NextRequest) {
   } catch {
     return NextResponse.json({ ok: false, error: "token_store_unavailable" }, { status: 500 });
   }
-  const accessToken = await ensureMicrosoftAccessToken({
+  const tokenResult = await ensureMicrosoftAccessToken({
     admin,
     connection: connection as ConnectionRow,
     secret
   });
-  if (!accessToken) {
+  if (!tokenResult.ok) {
+    if (tokenResult.reauthRequired) {
+      const nowIso = new Date().toISOString();
+      const syncState =
+        connection.sync_state && typeof connection.sync_state === "object" && !Array.isArray(connection.sync_state)
+          ? (connection.sync_state as Record<string, unknown>)
+          : {};
+      await admin
+        .from("m365_connections")
+        .update({
+          status: "revoked",
+          sync_state: {
+            ...syncState,
+            security: {
+              reauthRequired: true,
+              reason: tokenResult.error,
+              at: nowIso
+            }
+          },
+          updated_at: nowIso
+        })
+        .eq("id", connection.id);
+    }
     return NextResponse.json({ ok: false, error: "token_unavailable" }, { status: 401 });
   }
+  const accessToken = tokenResult.accessToken;
 
   const targetUser = (person.external_person_id || person.user_principal_name || "").trim();
   if (!targetUser) {

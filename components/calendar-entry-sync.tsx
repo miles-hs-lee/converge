@@ -52,7 +52,15 @@ export function CalendarEntrySync({ enabled }: CalendarEntrySyncProps) {
           if (!response.ok) {
             return;
           }
-          const payload = (await response.json()) as { ok?: boolean; calendarSynced?: number; failures?: number };
+          const payload = (await response.json()) as {
+            ok?: boolean;
+            calendarSynced?: number;
+            failures?: number;
+            reauthRequired?: number;
+          };
+          if ((payload.reauthRequired ?? 0) > 0) {
+            window.dispatchEvent(new Event("converge:reauth-required"));
+          }
           if (payload.ok && (payload.calendarSynced ?? 0) > 0 && (payload.failures ?? 0) === 0) {
             router.refresh();
           }

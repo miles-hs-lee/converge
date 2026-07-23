@@ -8,7 +8,7 @@ import { ModalPortal } from "@/components/modal-portal";
 import { EventDetailModal } from "@/components/event-detail-modal";
 import { useAppPreferences } from "@/components/app-preferences-provider";
 import { useT, useIntlLocale } from "@/components/locale-provider";
-import { detectTenantConflictsTraced } from "@/lib/calendar-conflicts";
+import { detectTenantConflicts } from "@/lib/calendar-conflicts";
 import { isMockMode } from "@/lib/mock-mode";
 import { getNotificationPermissionSafe, sendPwaNotification } from "@/lib/pwa-notifications";
 import { trackClientEvent } from "@/lib/analytics/client";
@@ -375,7 +375,7 @@ export function CalendarEventsOverview({
 
   const conflicts = useMemo(() => {
     if (!showConflicts) return [];
-    return detectTenantConflictsTraced(
+    return detectTenantConflicts(
       deferredConflictEvents.map((event) => ({
         id: event.id,
         tenantName: event.tenantName,
@@ -384,16 +384,9 @@ export function CalendarEventsOverview({
         endAt: event.endAt,
         location: event.location,
         sourceAccount: event.sourceAccount
-      })),
-      undefined,
-      {
-        route: "/calendar",
-        source: "calendar_events_overview",
-        locale: intl,
-        accountCount: enabledTenants.length
-      }
+      }))
     );
-  }, [deferredConflictEvents, enabledTenants.length, intl, showConflicts]);
+  }, [deferredConflictEvents, showConflicts]);
 
   useEffect(() => {
     setLocalEvents(events);

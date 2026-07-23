@@ -11,6 +11,8 @@ import {
   upsertOAuthConnectionSecret,
   type OAuthConnectionSecretRow
 } from "@/lib/oauth-connection-secrets";
+import { classifyOAuthRefreshFailure } from "@/lib/oauth-refresh-error";
+import { shouldRunByStaleness } from "@/lib/sync-staleness";
 
 export type SyncMode = "calendar" | "people" | "all";
 
@@ -31,12 +33,17 @@ type SyncResult = {
   statePatch?: Record<string, unknown>;
 };
 
+type AccessTokenResult =
+  | { ok: true; accessToken: string }
+  | { ok: false; error: string; reauthRequired: boolean };
+
 export type SyncSummary = {
   usersScanned: number;
   connectionsScanned: number;
   calendarSynced: number;
   peopleSynced: number;
   failures: number;
+  reauthRequired: number;
   partials: number;
   skipped: number;
 };
@@ -48,6 +55,7 @@ function emptySummary(): SyncSummary {
     calendarSynced: 0,
     peopleSynced: 0,
     failures: 0,
+    reauthRequired: 0,
     partials: 0,
     skipped: 0
   };
@@ -59,6 +67,7 @@ function mergeSummary(target: SyncSummary, source: SyncSummary) {
   target.calendarSynced += source.calendarSynced;
   target.peopleSynced += source.peopleSynced;
   target.failures += source.failures;
+  target.reauthRequired += source.reauthRequired;
   target.partials += source.partials;
   target.skipped += source.skipped;
 }
@@ -114,32 +123,6 @@ function parseSyncState(raw: unknown): Record<string, unknown> {
   return raw as Record<string, unknown>;
 }
 
-function readSyncedAt(raw: unknown): number | null {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
-    return null;
-  }
-  const syncedAt = (raw as Record<string, unknown>).syncedAt;
-  if (typeof syncedAt !== "string") {
-    return null;
-  }
-  const parsed = Date.parse(syncedAt);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function shouldRunByStaleness(params: { state: Record<string, unknown>; key: "calendar" | "people"; staleMs?: number }): boolean {
-  const { state, key, staleMs } = params;
-  if (!staleMs || staleMs <= 0) {
-    return true;
-  }
-
-  const section = state[key];
-  const syncedAt = readSyncedAt(section);
-  if (!syncedAt) {
-    return true;
-  }
-  return Date.now() - syncedAt >= staleMs;
-}
-
 function tokenStillValid(tokenExpiresAt: string): boolean {
   const expiresAt = Date.parse(tokenExpiresAt);
   if (!Number.isFinite(expiresAt)) {
@@ -152,7 +135,7 @@ async function refreshMicrosoftAccessToken(params: {
   admin: ReturnType<typeof createAdminClient>;
   connection: ConnectionRow;
   secret: OAuthConnectionSecretRow;
-}): Promise<{ ok: true; accessToken: string } | { ok: false; error: string }> {
+}): Promise<AccessTokenResult> {
   const { admin, connection, secret } = params;
   const mergedScopes = new Set<string>(connection.scopes?.length ? connection.scopes : getMicrosoftScopeString().split(" "));
   requiredMicrosoftGraphScopes.forEach((scope) => mergedScopes.add(scope));
@@ -172,7 +155,7 @@ async function refreshMicrosoftAccessToken(params: {
 
   if (!response.ok) {
     const text = await response.text();
-    return { ok: false, error: `ms_refresh_failed:${text.slice(0, 160)}` };
+    return { ok: false, ...classifyOAuthRefreshFailure("microsoft", text) };
   }
 
   const payload = (await response.json()) as {
@@ -182,7 +165,7 @@ async function refreshMicrosoftAccessToken(params: {
     scope?: string;
   };
   if (!payload.access_token) {
-    return { ok: false, error: "ms_refresh_payload_invalid" };
+    return { ok: false, error: "ms_refresh_payload_invalid", reauthRequired: false };
   }
 
   const expiresIn = Number(payload.expires_in || 3600);
@@ -211,7 +194,7 @@ async function refreshMicrosoftAccessToken(params: {
   ]);
 
   if (connectionUpdate.error || !secretStored) {
-    return { ok: false, error: "ms_refresh_persist_failed" };
+    return { ok: false, error: "ms_refresh_persist_failed", reauthRequired: false };
   }
 
   connection.token_expires_at = tokenExpiresAt;
@@ -226,10 +209,10 @@ async function refreshGoogleAccessToken(params: {
   admin: ReturnType<typeof createAdminClient>;
   connection: ConnectionRow;
   secret: OAuthConnectionSecretRow;
-}): Promise<{ ok: true; accessToken: string } | { ok: false; error: string }> {
+}): Promise<AccessTokenResult> {
   const { admin, connection, secret } = params;
   if (!serverEnv.googleClientId || !serverEnv.googleClientSecret) {
-    return { ok: false, error: "google_env_missing" };
+    return { ok: false, error: "google_env_missing", reauthRequired: false };
   }
 
   const response = await fetch("https://oauth2.googleapis.com/token", {
@@ -245,7 +228,7 @@ async function refreshGoogleAccessToken(params: {
 
   if (!response.ok) {
     const text = await response.text();
-    return { ok: false, error: `google_refresh_failed:${text.slice(0, 160)}` };
+    return { ok: false, ...classifyOAuthRefreshFailure("google", text) };
   }
 
   const payload = (await response.json()) as {
@@ -254,7 +237,7 @@ async function refreshGoogleAccessToken(params: {
     scope?: string;
   };
   if (!payload.access_token) {
-    return { ok: false, error: "google_refresh_payload_invalid" };
+    return { ok: false, error: "google_refresh_payload_invalid", reauthRequired: false };
   }
 
   const expiresIn = Number(payload.expires_in || 3600);
@@ -282,7 +265,7 @@ async function refreshGoogleAccessToken(params: {
   ]);
 
   if (connectionUpdate.error || !secretStored) {
-    return { ok: false, error: "google_refresh_persist_failed" };
+    return { ok: false, error: "google_refresh_persist_failed", reauthRequired: false };
   }
 
   connection.token_expires_at = tokenExpiresAt;
@@ -296,11 +279,11 @@ async function ensureAccessToken(params: {
   admin: ReturnType<typeof createAdminClient>;
   connection: ConnectionRow;
   secret: OAuthConnectionSecretRow | null;
-}): Promise<{ ok: true; accessToken: string } | { ok: false; error: string }> {
+}): Promise<AccessTokenResult> {
   const { admin, connection, secret } = params;
 
   if (!secret?.refresh_token_enc) {
-    return { ok: false, error: "reauth_required:missing_secret" };
+    return { ok: false, error: "reauth_required:missing_secret", reauthRequired: true };
   }
 
   if (tokenStillValid(connection.token_expires_at) && secret.access_token_enc) {
@@ -321,7 +304,7 @@ async function ensureAccessToken(params: {
   if (connection.provider === "google") {
     return refreshGoogleAccessToken({ admin, connection, secret });
   }
-  return { ok: false, error: `unsupported_provider:${connection.provider}` };
+  return { ok: false, error: `unsupported_provider:${connection.provider}`, reauthRequired: false };
 }
 
 async function insertSyncJob(params: {
@@ -379,7 +362,8 @@ async function runConnectionSync(params: RunConnectionParams): Promise<SyncSumma
 
   const token = await ensureAccessToken({ admin, connection, secret: connectionSecret });
   if (!token.ok) {
-    if (token.error.startsWith("reauth_required:")) {
+    if (token.reauthRequired) {
+      summary.reauthRequired += 1;
       const nowIso = new Date().toISOString();
       await admin
         .from("m365_connections")
@@ -421,7 +405,16 @@ async function runConnectionSync(params: RunConnectionParams): Promise<SyncSumma
   }
 
   const nowIso = new Date().toISOString();
-  const nextSyncState: Record<string, unknown> = { ...syncState };
+  const currentSecurityState = parseSyncState(syncState.security);
+  const nextSyncState: Record<string, unknown> = {
+    ...syncState,
+    security: {
+      ...currentSecurityState,
+      reauthRequired: false,
+      reason: null,
+      clearedAt: nowIso
+    }
+  };
 
   if (runCalendar) {
     const currentCalendarState = parseSyncState(syncState.calendar);
@@ -501,11 +494,13 @@ async function runConnectionSync(params: RunConnectionParams): Promise<SyncSumma
       ok: calendarResult.ok,
       partial: calendarResult.partial,
       syncedCount: calendarResult.syncedCount,
-      syncedAt: nowIso
+      lastAttemptAt: nowIso,
+      ...(calendarResult.ok ? { syncedAt: nowIso, lastErrorAt: null } : { lastErrorAt: nowIso })
     };
   }
 
   if (runPeople) {
+    const currentPeopleState = parseSyncState(syncState.people);
     let peopleResult: SyncResult = { ok: true, partial: false, syncedCount: 0 };
     if (connection.provider === "microsoft") {
       peopleResult = await Sentry.startSpan(
@@ -555,10 +550,13 @@ async function runConnectionSync(params: RunConnectionParams): Promise<SyncSumma
     }
 
     nextSyncState.people = {
+      ...currentPeopleState,
+      ...(peopleResult.statePatch ?? {}),
       ok: peopleResult.ok,
       partial: peopleResult.partial,
       syncedCount: peopleResult.syncedCount,
-      syncedAt: nowIso
+      lastAttemptAt: nowIso,
+      ...(peopleResult.ok ? { syncedAt: nowIso, lastErrorAt: null } : { lastErrorAt: nowIso })
     };
   }
 
@@ -620,6 +618,7 @@ export async function syncUserConnections(params: {
         calendarSynced: 0,
         peopleSynced: 0,
         failures: 1,
+        reauthRequired: 0,
         partials: 0,
         skipped: 0
       } satisfies SyncSummary;
@@ -663,6 +662,7 @@ export async function syncAllUsers(params: {
         calendarSynced: 0,
         peopleSynced: 0,
         failures: 1,
+        reauthRequired: 0,
         partials: 0,
         skipped: 0
       } satisfies SyncSummary;

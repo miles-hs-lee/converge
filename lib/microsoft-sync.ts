@@ -15,6 +15,7 @@ type GraphCalendar = {
 
 type GraphCalendarListResponse = {
   value?: GraphCalendar[];
+  "@odata.nextLink"?: string;
 };
 
 type GraphEvent = {
@@ -68,10 +69,6 @@ type GraphEvent = {
     time?: string;
   };
   recurrence?: Record<string, unknown>;
-};
-
-type GraphCalendarEventsResponse = {
-  value?: GraphEvent[];
 };
 
 type GraphCalendarDeltaResponse = {
@@ -248,6 +245,48 @@ function chunkValues<T>(values: T[], size: number): T[][] {
   return chunks;
 }
 
+async function removeStalePeopleRows(params: {
+  adminClient: ReturnType<typeof createAdminClient>;
+  connectionId: string;
+  currentExternalIds: Set<string>;
+}): Promise<boolean> {
+  const { adminClient, connectionId, currentExternalIds } = params;
+  const staleRowIds: string[] = [];
+  const pageSize = 1000;
+  let offset = 0;
+
+  while (true) {
+    const { data, error } = await adminClient
+      .from("people_cache")
+      .select("id,external_person_id")
+      .eq("connection_id", connectionId)
+      .order("id", { ascending: true })
+      .range(offset, offset + pageSize - 1);
+    if (error) {
+      return false;
+    }
+
+    const rows = data ?? [];
+    rows.forEach((row) => {
+      if (!currentExternalIds.has(row.external_person_id)) {
+        staleRowIds.push(row.id);
+      }
+    });
+    if (rows.length < pageSize) {
+      break;
+    }
+    offset += pageSize;
+  }
+
+  for (const chunk of chunkValues(staleRowIds, 400)) {
+    const { error } = await adminClient.from("people_cache").delete().in("id", chunk);
+    if (error) {
+      return false;
+    }
+  }
+  return true;
+}
+
 const CALENDAR_DELTA_SCHEMA_VERSION = 5;
 const UNTITLED_PLACEHOLDER = "(제목 없음)";
 
@@ -321,17 +360,38 @@ export async function syncMicrosoftCalendarSnapshot(params: {
   const toIsoDate = windowOutdated ? defaultToIso : previousWindowEnd!;
   const previousDeltaByCalendar = windowOutdated || shouldResetDeltaBySchema ? {} : parseDeltaByCalendar(currentCalendarState.deltaByCalendar);
 
-  const calendarsResponse = await fetchGraphJson<GraphCalendarListResponse>(
-    "https://graph.microsoft.com/v1.0/me/calendars?$top=8&$select=id,name,color,isDefaultCalendar",
-    accessToken
-  );
-  if (!calendarsResponse.ok) {
-    return { ok: false, partial: false, syncedCount: 0 };
+  const calendars: Array<Required<Pick<GraphCalendar, "id">> & GraphCalendar> = [];
+  const seenCalendarIds = new Set<string>();
+  let calendarListUrl: string | null =
+    "https://graph.microsoft.com/v1.0/me/calendars?$top=50&$select=id,name,color,isDefaultCalendar";
+  let calendarListPageCount = 0;
+  let calendarListPartial = false;
+
+  while (calendarListUrl && calendarListPageCount < 10) {
+    const calendarsResponse: { ok: boolean; status: number; data?: GraphCalendarListResponse } =
+      await fetchGraphJson<GraphCalendarListResponse>(calendarListUrl, accessToken);
+    if (!calendarsResponse.ok) {
+      if (calendars.length === 0) {
+        return { ok: false, partial: false, syncedCount: 0 };
+      }
+      calendarListPartial = true;
+      break;
+    }
+
+    (calendarsResponse.data?.value ?? []).forEach((calendar) => {
+      if (!calendar.id || seenCalendarIds.has(calendar.id)) {
+        return;
+      }
+      seenCalendarIds.add(calendar.id);
+      calendars.push(calendar as Required<Pick<GraphCalendar, "id">> & GraphCalendar);
+    });
+    calendarListUrl = calendarsResponse.data?.["@odata.nextLink"] ?? null;
+    calendarListPageCount += 1;
   }
 
-  const calendars = (calendarsResponse.data?.value ?? []).filter(
-    (calendar): calendar is Required<Pick<GraphCalendar, "id">> & GraphCalendar => Boolean(calendar.id)
-  );
+  if (calendarListUrl) {
+    calendarListPartial = true;
+  }
 
   if (calendars.length === 0) {
     return { ok: true, partial: false, syncedCount: 0 };
@@ -341,12 +401,8 @@ export async function syncMicrosoftCalendarSnapshot(params: {
   const sourceSelectionInitialized = Boolean(currentCalendarState.sourceSelectionInitialized);
   const { data: existingSourceData, error: existingSourceError } = await adminClient
     .from("calendar_sources")
-    .select("external_calendar_id,is_selected")
-    .eq("connection_id", connectionId)
-    .in(
-      "external_calendar_id",
-      calendars.map((calendar) => calendar.id!)
-    );
+    .select("id,external_calendar_id,is_selected")
+    .eq("connection_id", connectionId);
   if (existingSourceError) {
     return { ok: false, partial: false, syncedCount: 0 };
   }
@@ -354,6 +410,19 @@ export async function syncMicrosoftCalendarSnapshot(params: {
   (existingSourceData ?? []).forEach((row) => {
     existingSelectedByExternalId.set(row.external_calendar_id, Boolean(row.is_selected));
   });
+
+  if (!calendarListPartial) {
+    const staleSourceIds = (existingSourceData ?? [])
+      .filter((row) => !seenCalendarIds.has(row.external_calendar_id))
+      .map((row) => row.id);
+    for (const chunk of chunkValues(staleSourceIds, 400)) {
+      const staleDelete = await adminClient.from("calendar_sources").delete().in("id", chunk);
+      if (staleDelete.error) {
+        calendarListPartial = true;
+        break;
+      }
+    }
+  }
 
   const sourceRows = calendars.map((calendar) => {
     const defaultSelected = Boolean(calendar.isDefaultCalendar);
@@ -402,7 +471,7 @@ export async function syncMicrosoftCalendarSnapshot(params: {
   const nextDeltaByCalendar: Record<string, string> = { ...previousDeltaByCalendar };
   const deltaPageGuardLimitRaw = typeof maxDeltaPagesPerCalendar === "number" ? maxDeltaPagesPerCalendar : NaN;
   const deltaPageGuardLimit = Number.isFinite(deltaPageGuardLimitRaw) && deltaPageGuardLimitRaw > 0 ? Math.floor(deltaPageGuardLimitRaw) : 60;
-  let partialFailure = false;
+  let partialFailure = calendarListPartial;
 
   for (const calendar of calendars) {
     const sourceId = sourceByExternalId.get(calendar.id!);
@@ -712,10 +781,16 @@ export async function syncMicrosoftPeopleSnapshot(params: {
   let pageCount = 0;
 
   while (nextUrl && rows.length < MAX_PEOPLE_ROWS && pageCount < MAX_PAGES) {
-    const graphPage: { ok: boolean; data?: GraphUsersResponse } = await fetchGraphJson<GraphUsersResponse>(nextUrl, accessToken);
+    const graphPage: { ok: boolean; status: number; data?: GraphUsersResponse } =
+      await fetchGraphJson<GraphUsersResponse>(nextUrl, accessToken);
     if (!graphPage.ok) {
       if (rows.length === 0) {
-        break;
+        return {
+          ok: false,
+          partial: false,
+          syncedCount: 0,
+          statePatch: { error: `graph_users_failed:${graphPage.status}` }
+        };
       }
       partial = true;
       break;
@@ -723,7 +798,7 @@ export async function syncMicrosoftPeopleSnapshot(params: {
 
     const users: GraphUser[] = graphPage.data?.value ?? [];
     users.forEach((person) => {
-      if (!person.id || !person.displayName) {
+      if (!person.id || !person.displayName || rows.length >= MAX_PEOPLE_ROWS) {
         return;
       }
 
@@ -762,49 +837,26 @@ export async function syncMicrosoftPeopleSnapshot(params: {
     partial = true;
   }
 
-  if (rows.length === 0) {
-    const meResponse = await fetchGraphJson<GraphUser>(
-      "https://graph.microsoft.com/v1.0/me?$select=id,displayName,givenName,surname,mail,userPrincipalName,jobTitle,department,companyName,employeeId,city,state,country,preferredLanguage,userType,accountEnabled,officeLocation,mobilePhone,businessPhones",
-      accessToken
-    );
-    if (!meResponse.ok || !meResponse.data?.id || !meResponse.data?.displayName) {
-      return { ok: false, partial: false, syncedCount: 0 };
-    }
+  if (rows.length > 0) {
+    const peopleUpsert = await adminClient.from("people_cache").upsert(rows, { onConflict: "connection_id,external_person_id" });
 
-    rows.push({
-      connection_id: connectionId,
-      external_person_id: meResponse.data.id,
-      display_name: meResponse.data.displayName,
-      given_name: meResponse.data.givenName ?? null,
-      surname: meResponse.data.surname ?? null,
-      user_principal_name: meResponse.data.userPrincipalName ?? null,
-      mail: meResponse.data.mail ?? meResponse.data.userPrincipalName ?? null,
-      job_title: meResponse.data.jobTitle ?? null,
-      department: meResponse.data.department ?? null,
-      company_name: meResponse.data.companyName ?? null,
-      employee_id: meResponse.data.employeeId ?? null,
-      preferred_language: meResponse.data.preferredLanguage ?? null,
-      city: meResponse.data.city ?? null,
-      state: meResponse.data.state ?? null,
-      country: meResponse.data.country ?? null,
-      user_type: meResponse.data.userType ?? null,
-      account_enabled: typeof meResponse.data.accountEnabled === "boolean" ? meResponse.data.accountEnabled : null,
-      office_location: meResponse.data.officeLocation ?? null,
-      mobile_phone: meResponse.data.mobilePhone ?? null,
-      business_phones: meResponse.data.businessPhones ?? [],
-      manager_external_id: null,
-      raw: meResponse.data,
-      synced_at: nowIso
-    });
+    if (peopleUpsert.error) {
+      const fallbackRows = rows.map(upsertPeopleFallbackRows);
+      const fallbackUpsert = await adminClient.from("people_cache").upsert(fallbackRows, { onConflict: "connection_id,external_person_id" });
+      if (fallbackUpsert.error) {
+        return { ok: false, partial, syncedCount: 0 };
+      }
+    }
   }
 
-  const peopleUpsert = await adminClient.from("people_cache").upsert(rows, { onConflict: "connection_id,external_person_id" });
-
-  if (peopleUpsert.error) {
-    const fallbackRows = rows.map(upsertPeopleFallbackRows);
-    const fallbackUpsert = await adminClient.from("people_cache").upsert(fallbackRows, { onConflict: "connection_id,external_person_id" });
-    if (fallbackUpsert.error) {
-      return { ok: false, partial, syncedCount: 0 };
+  if (!partial) {
+    const reconciled = await removeStalePeopleRows({
+      adminClient,
+      connectionId,
+      currentExternalIds: new Set(rows.map((row) => String(row.external_person_id)))
+    });
+    if (!reconciled) {
+      partial = true;
     }
   }
 

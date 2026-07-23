@@ -177,7 +177,8 @@ You can test the UI without Microsoft admin consent in two ways:
 - `npm run build`: production build
 - `npm run start`: run production server locally
 - `npm run typecheck`: TypeScript typecheck
-- `npm run lint`: lint (requires an ESLint config; `next lint` may prompt on first run)
+- `npm run lint`: non-interactive ESLint validation
+- `npm test`: Vitest regression suite
 
 ## Data Sync (Calendar / People)
 

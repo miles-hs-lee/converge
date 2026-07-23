@@ -1,6 +1,6 @@
 import { type EmailOtpType, type User } from "@supabase/supabase-js";
 import * as Sentry from "@sentry/nextjs";
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { syncUserConnections } from "@/lib/connection-sync";
 import { applyStandardSentryScopeTags } from "@/lib/observability/sentry-tags";
@@ -36,15 +36,11 @@ async function recordLastLoginTimestamps(supabase: Awaited<ReturnType<typeof cre
   );
 }
 
-async function runPostLoginCalendarSync(supabase: Awaited<ReturnType<typeof createClient>>, locale?: string) {
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return;
-  }
-
+async function runPostLoginCalendarSync(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  user: User,
+  locale?: string
+) {
   try {
     await recordLastLoginTimestamps(supabase, user);
   } catch (error) {
@@ -85,6 +81,47 @@ async function runPostLoginCalendarSync(supabase: Awaited<ReturnType<typeof crea
   }
 }
 
+function captureAuthCallbackError(params: {
+  error: unknown;
+  method: "pkce" | "otp";
+  locale?: string;
+}) {
+  const { error, method, locale } = params;
+  Sentry.withScope((scope) => {
+    applyStandardSentryScopeTags(scope, {
+      route: "/auth/callback",
+      provider: "supabase",
+      syncMode: "none",
+      locale
+    });
+    scope.setTag("task", "auth_callback_exchange");
+    scope.setTag("auth_method", method);
+    if (error && typeof error === "object") {
+      const candidate = error as { code?: unknown; name?: unknown; status?: unknown };
+      if (typeof candidate.code === "string") {
+        scope.setTag("auth_error_code", candidate.code.slice(0, 80));
+      }
+      if (typeof candidate.name === "string") {
+        scope.setTag("auth_error_name", candidate.name.slice(0, 80));
+      }
+      if (typeof candidate.status === "number") {
+        scope.setTag("auth_error_status", String(candidate.status));
+      }
+    }
+    Sentry.captureException(error instanceof Error ? error : new Error("auth_callback_exchange_failed"));
+  });
+}
+
+function schedulePostLoginTasks(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  user: User,
+  locale?: string
+) {
+  after(async () => {
+    await runPostLoginCalendarSync(supabase, user, locale);
+  });
+}
+
 function sanitizeNextPath(raw: string | null): string {
   if (!raw) {
     return "/calendar";
@@ -118,19 +155,27 @@ export async function GET(request: NextRequest) {
   const supabase = await createClient();
 
   if (code) {
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
-      await runPostLoginCalendarSync(supabase, locale);
+      const user = data.user ?? data.session?.user;
+      if (user) {
+        schedulePostLoginTasks(supabase, user, locale);
+      }
       return NextResponse.redirect(new URL(nextPath, request.url));
     }
+    captureAuthCallbackError({ error, method: "pkce", locale });
   }
 
   if (tokenHash && type) {
-    const { error } = await supabase.auth.verifyOtp({ type, token_hash: tokenHash });
+    const { data, error } = await supabase.auth.verifyOtp({ type, token_hash: tokenHash });
     if (!error) {
-      await runPostLoginCalendarSync(supabase, locale);
+      const user = data.user ?? data.session?.user;
+      if (user) {
+        schedulePostLoginTasks(supabase, user, locale);
+      }
       return NextResponse.redirect(new URL(nextPath, request.url));
     }
+    captureAuthCallbackError({ error, method: "otp", locale });
   }
 
   return NextResponse.redirect(new URL("/login?status=auth_callback_error", request.url));

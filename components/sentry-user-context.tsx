@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect } from "react";
-import * as Sentry from "@sentry/nextjs";
 import { buildStandardSentryTags } from "@/lib/observability/sentry-tags";
 
 type SentryUserContextProps = {
@@ -11,21 +10,29 @@ type SentryUserContextProps = {
 
 export function SentryUserContext({ userId, locale }: SentryUserContextProps) {
   useEffect(() => {
-    const baseTags = buildStandardSentryTags({
-      route: typeof window !== "undefined" ? window.location.pathname : undefined,
-      provider: "mixed",
-      syncMode: "all",
-      locale: locale ?? undefined
-    });
-    Object.entries(baseTags).forEach(([key, value]) => {
-      Sentry.setTag(key, value);
-    });
+    let cancelled = false;
+    const timerId = window.setTimeout(() => {
+      void import("@sentry/nextjs").then((Sentry) => {
+        if (cancelled) {
+          return;
+        }
+        const baseTags = buildStandardSentryTags({
+          route: window.location.pathname,
+          provider: "mixed",
+          syncMode: "all",
+          locale: locale ?? undefined
+        });
+        Object.entries(baseTags).forEach(([key, value]) => {
+          Sentry.setTag(key, value);
+        });
+        Sentry.setUser(userId ? { id: userId } : null);
+      });
+    }, 2_000);
 
-    if (!userId) {
-      Sentry.setUser(null);
-      return;
-    }
-    Sentry.setUser({ id: userId });
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timerId);
+    };
   }, [locale, userId]);
 
   return null;

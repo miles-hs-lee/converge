@@ -10,6 +10,7 @@ type GoogleCalendarListItem = {
 
 type GoogleCalendarListResponse = {
   items?: GoogleCalendarListItem[];
+  nextPageToken?: string;
 };
 
 type GoogleEventDateField = {
@@ -47,6 +48,7 @@ type GoogleCalendarEvent = {
 
 type GoogleCalendarEventsResponse = {
   items?: GoogleCalendarEvent[];
+  nextPageToken?: string;
 };
 
 export type CalendarSyncResult = {
@@ -102,6 +104,59 @@ function fallbackEnd(startIso: string, isAllDay: boolean): string {
   return start.toISOString();
 }
 
+function chunkValues<T>(values: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < values.length; i += size) {
+    chunks.push(values.slice(i, i + size));
+  }
+  return chunks;
+}
+
+async function removeStaleGoogleEvents(params: {
+  adminClient: ReturnType<typeof createAdminClient>;
+  sourceId: string;
+  fromIso: string;
+  toIso: string;
+  currentExternalIds: Set<string>;
+}): Promise<{ ok: boolean; deletedCount: number }> {
+  const { adminClient, sourceId, fromIso, toIso, currentExternalIds } = params;
+  const staleRowIds: string[] = [];
+  const pageSize = 1000;
+  let offset = 0;
+
+  while (true) {
+    const { data, error } = await adminClient
+      .from("calendar_events_cache")
+      .select("id,external_event_id")
+      .eq("calendar_source_id", sourceId)
+      .lte("start_at", toIso)
+      .gte("end_at", fromIso)
+      .order("id", { ascending: true })
+      .range(offset, offset + pageSize - 1);
+    if (error) {
+      return { ok: false, deletedCount: 0 };
+    }
+    const rows = data ?? [];
+    rows.forEach((row) => {
+      if (!currentExternalIds.has(row.external_event_id)) {
+        staleRowIds.push(row.id);
+      }
+    });
+    if (rows.length < pageSize) {
+      break;
+    }
+    offset += pageSize;
+  }
+
+  for (const chunk of chunkValues(staleRowIds, 400)) {
+    const { error } = await adminClient.from("calendar_events_cache").delete().in("id", chunk);
+    if (error) {
+      return { ok: false, deletedCount: 0 };
+    }
+  }
+  return { ok: true, deletedCount: staleRowIds.length };
+}
+
 export async function syncGoogleCalendarSnapshot(params: {
   accessToken: string;
   accountEmail: string;
@@ -111,15 +166,43 @@ export async function syncGoogleCalendarSnapshot(params: {
 }): Promise<CalendarSyncResult> {
   const { accessToken, accountEmail, connectionId, calendarState, adminClient } = params;
 
-  const calendarListResponse = await fetch("https://www.googleapis.com/calendar/v3/users/me/calendarList?maxResults=16", {
-    headers: { Authorization: `Bearer ${accessToken}` }
-  });
-  if (!calendarListResponse.ok) {
-    return { ok: false, partial: false, syncedCount: 0 };
-  }
+  const calendars: Array<Required<Pick<GoogleCalendarListItem, "id">> & GoogleCalendarListItem> = [];
+  const seenCalendarIds = new Set<string>();
+  let calendarPageToken: string | null = null;
+  let calendarPageCount = 0;
+  let calendarListPartial = false;
 
-  const calendarListData = (await calendarListResponse.json()) as GoogleCalendarListResponse;
-  const calendars = (calendarListData.items ?? []).filter((calendar): calendar is Required<Pick<GoogleCalendarListItem, "id">> & GoogleCalendarListItem => Boolean(calendar.id));
+  do {
+    const query = new URLSearchParams({ maxResults: "250" });
+    if (calendarPageToken) {
+      query.set("pageToken", calendarPageToken);
+    }
+    const calendarListResponse = await fetch(`https://www.googleapis.com/calendar/v3/users/me/calendarList?${query.toString()}`, {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+    if (!calendarListResponse.ok) {
+      if (calendars.length === 0) {
+        return { ok: false, partial: false, syncedCount: 0 };
+      }
+      calendarListPartial = true;
+      break;
+    }
+
+    const calendarListData = (await calendarListResponse.json()) as GoogleCalendarListResponse;
+    (calendarListData.items ?? []).forEach((calendar) => {
+      if (!calendar.id || seenCalendarIds.has(calendar.id)) {
+        return;
+      }
+      seenCalendarIds.add(calendar.id);
+      calendars.push(calendar as Required<Pick<GoogleCalendarListItem, "id">> & GoogleCalendarListItem);
+    });
+    calendarPageToken = calendarListData.nextPageToken ?? null;
+    calendarPageCount += 1;
+  } while (calendarPageToken && calendarPageCount < 10);
+
+  if (calendarPageToken) {
+    calendarListPartial = true;
+  }
 
   if (calendars.length === 0) {
     return { ok: true, partial: false, syncedCount: 0 };
@@ -129,12 +212,8 @@ export async function syncGoogleCalendarSnapshot(params: {
   const sourceSelectionInitialized = Boolean(calendarState && calendarState.sourceSelectionInitialized);
   const { data: existingSourceData, error: existingSourceError } = await adminClient
     .from("calendar_sources")
-    .select("external_calendar_id,is_selected")
-    .eq("connection_id", connectionId)
-    .in(
-      "external_calendar_id",
-      calendars.map((calendar) => calendar.id!)
-    );
+    .select("id,external_calendar_id,is_selected")
+    .eq("connection_id", connectionId);
   if (existingSourceError) {
     return { ok: false, partial: false, syncedCount: 0 };
   }
@@ -142,6 +221,19 @@ export async function syncGoogleCalendarSnapshot(params: {
   (existingSourceData ?? []).forEach((row) => {
     existingSelectedByExternalId.set(row.external_calendar_id, Boolean(row.is_selected));
   });
+
+  if (!calendarListPartial) {
+    const staleSourceIds = (existingSourceData ?? [])
+      .filter((row) => !seenCalendarIds.has(row.external_calendar_id))
+      .map((row) => row.id);
+    for (const chunk of chunkValues(staleSourceIds, 400)) {
+      const staleDelete = await adminClient.from("calendar_sources").delete().in("id", chunk);
+      if (staleDelete.error) {
+        calendarListPartial = true;
+        break;
+      }
+    }
+  }
 
   const sourceRows = calendars.map((calendar) => ({
     connection_id: connectionId,
@@ -185,7 +277,8 @@ export async function syncGoogleCalendarSnapshot(params: {
   const { fromIso, toIso: toIsoDate } = buildCalendarWindow();
 
   const eventRows: Array<Record<string, unknown>> = [];
-  let partialFailure = false;
+  const completedCalendarSnapshots: Array<{ sourceId: string; currentExternalIds: Set<string> }> = [];
+  let partialFailure = calendarListPartial;
 
   for (const calendar of calendars) {
     const sourceId = sourceByExternalId.get(calendar.id!);
@@ -194,86 +287,113 @@ export async function syncGoogleCalendarSnapshot(params: {
       continue;
     }
 
-    const query = new URLSearchParams({
-      singleEvents: "true",
-      orderBy: "startTime",
-      maxResults: "250",
-      timeMin: fromIso,
-      timeMax: toIsoDate
-    });
+    const currentExternalIds = new Set<string>();
+    let eventPageToken: string | null = null;
+    let eventPageCount = 0;
+    let snapshotComplete = true;
 
-    const eventsResponse = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendar.id!)}/events?${query.toString()}`, {
-      headers: { Authorization: `Bearer ${accessToken}` }
-    });
-
-    if (!eventsResponse.ok) {
-      partialFailure = true;
-      continue;
-    }
-
-    const eventsData = (await eventsResponse.json()) as GoogleCalendarEventsResponse;
-    const events = eventsData.items ?? [];
-
-    events.forEach((event) => {
-      if (!event.id || event.status === "cancelled") {
-        return;
-      }
-
-      const isAllDay = Boolean(event.start?.date && !event.start?.dateTime);
-      const startAt = toIso(event.start);
-      if (!startAt) {
-        return;
-      }
-      const endAt = toIso(event.end) ?? fallbackEnd(startAt, isAllDay);
-
-      const attendees = (event.attendees ?? [])
-        .map((attendee) => ({
-          email: attendee.email ?? null,
-          name: attendee.displayName ?? null,
-          type: "required",
-          response: attendee.responseStatus ?? null,
-          respondedAt: null
-        }))
-        .filter((attendee) => Boolean(attendee.email || attendee.name));
-
-      const createdExternal =
-        event.created && Number.isFinite(new Date(event.created).getTime()) ? new Date(event.created).toISOString() : null;
-      const lastModifiedExternal =
-        event.updated && Number.isFinite(new Date(event.updated).getTime()) ? new Date(event.updated).toISOString() : null;
-
-      eventRows.push({
-        connection_id: connectionId,
-        calendar_source_id: sourceId,
-        external_event_id: `${calendar.id}:${event.id}`,
-        subject: event.summary ?? "(제목 없음)",
-        body_preview: event.description?.slice(0, 1200) ?? null,
-        importance: "normal",
-        sensitivity: "normal",
-        categories: event.colorId ? [event.colorId] : [],
-        event_type: event.eventType ?? (event.recurringEventId ? "occurrence" : "singleInstance"),
-        start_at: startAt,
-        end_at: endAt,
-        timezone_start: null,
-        timezone_end: null,
-        is_all_day: isAllDay,
-        is_cancelled: event.status === "cancelled",
-        is_online_meeting: Boolean(event.hangoutLink),
-        online_meeting_url: event.hangoutLink ?? null,
-        show_as: null,
-        response_status: null,
-        response_time: null,
-        location: event.location ?? null,
-        organizer: event.organizer?.email ?? accountEmail,
-        organizer_name: null,
-        attendees,
-        web_link: event.htmlLink ?? null,
-        created_external: createdExternal,
-        last_modified_external: lastModifiedExternal,
-        recurrence: {},
-        raw: event,
-        synced_at: nowIso
+    do {
+      const query = new URLSearchParams({
+        singleEvents: "true",
+        showDeleted: "true",
+        orderBy: "startTime",
+        maxResults: "250",
+        timeMin: fromIso,
+        timeMax: toIsoDate
       });
-    });
+      if (eventPageToken) {
+        query.set("pageToken", eventPageToken);
+      }
+
+      const eventsResponse = await fetch(
+        `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendar.id!)}/events?${query.toString()}`,
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      );
+      if (!eventsResponse.ok) {
+        partialFailure = true;
+        snapshotComplete = false;
+        break;
+      }
+
+      const eventsData = (await eventsResponse.json()) as GoogleCalendarEventsResponse;
+      (eventsData.items ?? []).forEach((event) => {
+        if (!event.id) {
+          return;
+        }
+
+        const externalEventId = `${calendar.id}:${event.id}`;
+        if (event.status === "cancelled") {
+          return;
+        }
+        currentExternalIds.add(externalEventId);
+
+        const isAllDay = Boolean(event.start?.date && !event.start?.dateTime);
+        const startAt = toIso(event.start);
+        if (!startAt) {
+          return;
+        }
+        const endAt = toIso(event.end) ?? fallbackEnd(startAt, isAllDay);
+
+        const attendees = (event.attendees ?? [])
+          .map((attendee) => ({
+            email: attendee.email ?? null,
+            name: attendee.displayName ?? null,
+            type: "required",
+            response: attendee.responseStatus ?? null,
+            respondedAt: null
+          }))
+          .filter((attendee) => Boolean(attendee.email || attendee.name));
+
+        const createdExternal =
+          event.created && Number.isFinite(new Date(event.created).getTime()) ? new Date(event.created).toISOString() : null;
+        const lastModifiedExternal =
+          event.updated && Number.isFinite(new Date(event.updated).getTime()) ? new Date(event.updated).toISOString() : null;
+
+        eventRows.push({
+          connection_id: connectionId,
+          calendar_source_id: sourceId,
+          external_event_id: externalEventId,
+          subject: event.summary ?? "(제목 없음)",
+          body_preview: event.description?.slice(0, 1200) ?? null,
+          importance: "normal",
+          sensitivity: "normal",
+          categories: event.colorId ? [event.colorId] : [],
+          event_type: event.eventType ?? (event.recurringEventId ? "occurrence" : "singleInstance"),
+          start_at: startAt,
+          end_at: endAt,
+          timezone_start: null,
+          timezone_end: null,
+          is_all_day: isAllDay,
+          is_cancelled: false,
+          is_online_meeting: Boolean(event.hangoutLink),
+          online_meeting_url: event.hangoutLink ?? null,
+          show_as: null,
+          response_status: null,
+          response_time: null,
+          location: event.location ?? null,
+          organizer: event.organizer?.email ?? accountEmail,
+          organizer_name: null,
+          attendees,
+          web_link: event.htmlLink ?? null,
+          created_external: createdExternal,
+          last_modified_external: lastModifiedExternal,
+          recurrence: {},
+          raw: event,
+          synced_at: nowIso
+        });
+      });
+
+      eventPageToken = eventsData.nextPageToken ?? null;
+      eventPageCount += 1;
+    } while (eventPageToken && eventPageCount < 20);
+
+    if (eventPageToken) {
+      partialFailure = true;
+      snapshotComplete = false;
+    }
+    if (snapshotComplete) {
+      completedCalendarSnapshots.push({ sourceId, currentExternalIds });
+    }
   }
 
   if (eventRows.length > 0) {
@@ -287,10 +407,26 @@ export async function syncGoogleCalendarSnapshot(params: {
     }
   }
 
+  let deletedCount = 0;
+  for (const snapshot of completedCalendarSnapshots) {
+    const reconcileResult = await removeStaleGoogleEvents({
+      adminClient,
+      sourceId: snapshot.sourceId,
+      fromIso,
+      toIso: toIsoDate,
+      currentExternalIds: snapshot.currentExternalIds
+    });
+    if (!reconcileResult.ok) {
+      partialFailure = true;
+      continue;
+    }
+    deletedCount += reconcileResult.deletedCount;
+  }
+
   return {
     ok: true,
     partial: partialFailure,
-    syncedCount: eventRows.length,
+    syncedCount: eventRows.length + deletedCount,
     statePatch: {
       sourceSelectionInitialized: true
     }

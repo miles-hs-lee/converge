@@ -1,9 +1,11 @@
+import * as Sentry from "@sentry/nextjs";
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { detectTenantConflictsTraced } from "@/lib/calendar-conflicts";
+import { detectTenantConflicts } from "@/lib/calendar-conflicts";
 import { getWebPush } from "@/lib/web-push";
 import { serverEnv } from "@/lib/env/server";
 import { normalizeLocale, t } from "@/lib/i18n";
+import { accountCountBucket } from "@/lib/observability/sentry-tags";
 
 function isAuthorized(request: NextRequest): boolean {
   const configured = serverEnv.cronSecret;
@@ -104,21 +106,28 @@ export async function GET(request: NextRequest) {
       continue;
     }
 
-    const conflicts = detectTenantConflictsTraced(
-      events.map((e) => ({
+    const conflictEvents = events.map((e) => ({
         id: e.id,
         tenantName: tenantByConn.get(e.connection_id) ?? "Connected Account",
         subject: e.subject ?? "(Untitled)",
         startAt: e.start_at,
         endAt: e.end_at
-      })),
-      undefined,
+      }));
+    const conflicts = Sentry.startSpan(
       {
-        route: "/api/cron/conflicts",
-        source: "cron_conflicts",
-        locale,
-        accountCount: connIds.length
-      }
+        name: "conflicts.detect",
+        op: "converge.conflicts.detect",
+        attributes: {
+          "converge.route": "/api/cron/conflicts",
+          "converge.provider": "mixed",
+          "converge.sync_mode": "calendar",
+          "converge.locale": locale,
+          "converge.account_count_bucket": accountCountBucket(connIds.length),
+          "converge.source": "cron_conflicts",
+          "converge.events_count": conflictEvents.length
+        }
+      },
+      () => detectTenantConflicts(conflictEvents)
     );
 
     if (conflicts.length === 0) {
